@@ -1,0 +1,46 @@
+{
+  "id": "siac_construction_dispute",
+  "name": "SIAC — Construction Dispute",
+  "description": "Standard SIAC international construction dispute. Higher SOC, default quantum bands, SIAC challenge tree with HC → COA path, and higher legal costs for international arbitration.",
+  "jurisdiction": "siac_singapore",
+  "claim_type": "breach_of_contract",
+  "soc_value_cr": 800,
+  "currency": "INR",
+  "claimant_share_pct": 1.0,
+  "claimant": "TATA Projects Ltd",
+  "respondent": "Counterparty",
+  "arbitration": {
+    "win_probability": 0.70,
+    "re_arb_win_probability": 0.70
+  },
+  "quantum": {
+    "bands": [
+      { "low": 0.80, "high": 1.00, "probability": 0.25 },
+      { "low": 0.50, "high": 0.80, "probability": 0.45 },
+      { "low": 0.20, "high": 0.50, "probability": 0.20 },
+      { "low": 0.05, "high": 0.20, "probability": 0.10 }
+    ]
+  },
+  "timeline": {
+    "pre_arb_stages": [
+      { "name": "notice_negotiation", "duration_low": 2, "duration_high": 4, "legal_cost_low": 1.0, "legal_cost_high": 2.0 },
+      { "name": "siac_arbitration", "duration_low": 18, "duration_high": 36, "legal_cost_low": 8.0, "legal_cost_high": 15.0 }
+    ],
+    "payment_delay_months": 4,
+    "max_horizon_months": 96
+  },
+  "legal_costs": {
+    "one_time_tribunal_cr": 12.0,
+    "one_time_expert_cr": 5.0,
+    "per_stage_costs": {},
+    "overrun_alpha": 2.0,
+    "overrun_beta": 5.0,
+    "overrun_low": -0.05,
+    "overrun_high": 0.50
+  },
+  "interest": {
+    "enabled": false,
+    "rate": 0.06,
+    "compounding": "simple"
+  }
+}

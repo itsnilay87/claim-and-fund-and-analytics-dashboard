@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Light mode default */
+body {
+  @apply bg-gray-50 text-slate-900 antialiased;
+  min-height: 100vh;
+}
+
+/* Dark mode */
+.dark body {
+  @apply bg-slate-950 text-white;
+}
+
+/* Custom scrollbar – Light */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
+
+/* Custom scrollbar – Dark */
+.dark ::-webkit-scrollbar-track {
+  @apply bg-slate-900;
+}
+.dark ::-webkit-scrollbar-thumb {
+  @apply bg-slate-700;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-600;
+}
+
+/* Gradient text utility */
+.gradient-text {
+  @apply bg-gradient-to-r from-teal-500 via-cyan-400 to-teal-400 bg-clip-text text-transparent;
+}
+
+/* Glass card – Light */
+.glass-card {
+  @apply bg-white/80 backdrop-blur-xl border border-slate-200 rounded-2xl shadow-sm;
+}
+.dark .glass-card {
+  @apply bg-white/5 backdrop-blur-xl border-white/10 shadow-none;
+}
+
+/* Glow effects */
+.glow-teal {
+  box-shadow: 0 0 40px rgba(20, 184, 166, 0.15);
+}
+.glow-cyan {
+  box-shadow: 0 0 40px rgba(34, 211, 238, 0.15);
+}
+
+/* Grid background pattern */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+.dark .bg-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Fade in animation */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out forwards;
+}
+
+/* Stagger children */
+.stagger-children > * {
+  opacity: 0;
+  animation: fade-in-up 0.5s ease-out forwards;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.2s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.3s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.4s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.5s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.6s; }
+
+/* Input focus ring */
+input:focus, select:focus, textarea:focus {
+  @apply outline-none ring-2 ring-teal-500/50 border-teal-500;
+}
+
+/* Slide-in animation for downloads panel */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.25s ease-out;
+}
+
+/* Shimmer animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}

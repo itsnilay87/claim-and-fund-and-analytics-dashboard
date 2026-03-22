@@ -1,0 +1,86 @@
+"""
+engine.config — Configuration schema, defaults, and loader.
+"""
+
+from .defaults import (
+    DEFAULT_ARBITRATION_CONFIG,
+    DEFAULT_DOMESTIC_TREE,
+    DEFAULT_LEGAL_COSTS,
+    DEFAULT_QUANTUM_BANDS,
+    DEFAULT_QUANTUM_CONFIG,
+    DEFAULT_SIAC_TREE,
+    DEFAULT_SIMULATION_CONFIG,
+    get_default_claim_config,
+)
+from .loader import (
+    load_claim_config,
+    load_claims_dir,
+    load_portfolio_config,
+    merge_with_defaults,
+    validate_portfolio,
+)
+from .schema import (
+    ArbitrationConfig,
+    ChallengeTreeConfig,
+    ClaimConfig,
+    FullPurchaseParams,
+    GridCellMetrics,
+    InterestConfig,
+    JurisdictionTemplate,
+    LegalCostConfig,
+    LitFundingParams,
+    MilestonePayment,
+    PathResult,
+    PortfolioConfig,
+    PortfolioStructure,
+    QuantumBand,
+    QuantumConfig,
+    ScenarioTree,
+    SimulationConfig,
+    StagedPaymentParams,
+    StageConfig,
+    TimelineConfig,
+    TreeNode,
+    UpfrontTailParams,
+)
+
+__all__ = [
+    # Schema models
+    "ArbitrationConfig",
+    "ChallengeTreeConfig",
+    "ClaimConfig",
+    "FullPurchaseParams",
+    "GridCellMetrics",
+    "InterestConfig",
+    "JurisdictionTemplate",
+    "LegalCostConfig",
+    "LitFundingParams",
+    "MilestonePayment",
+    "PathResult",
+    "PortfolioConfig",
+    "PortfolioStructure",
+    "QuantumBand",
+    "QuantumConfig",
+    "ScenarioTree",
+    "SimulationConfig",
+    "StagedPaymentParams",
+    "StageConfig",
+    "TimelineConfig",
+    "TreeNode",
+    "UpfrontTailParams",
+    # Defaults
+    "DEFAULT_ARBITRATION_CONFIG",
+    "DEFAULT_DOMESTIC_TREE",
+    "DEFAULT_LEGAL_COSTS",
+    "DEFAULT_QUANTUM_BANDS",
+    "DEFAULT_QUANTUM_CONFIG",
+    "DEFAULT_SIAC_TREE",
+    "DEFAULT_SIMULATION_CONFIG",
+    "get_default_claim_config",
+    # Loader
+    "load_claim_config",
+    "load_claims_dir",
+    "load_portfolio_config",
+    "merge_with_defaults",
+    "validate_portfolio",
+]

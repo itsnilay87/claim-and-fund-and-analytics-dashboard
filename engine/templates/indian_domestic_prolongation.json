@@ -1,0 +1,46 @@
+{
+  "id": "indian_domestic_prolongation",
+  "name": "Indian Domestic — Prolongation Claim",
+  "description": "Standard Indian prolongation claim with typical SOC, default quantum bands, full domestic challenge tree, and typical legal costs.",
+  "jurisdiction": "indian_domestic",
+  "claim_type": "prolongation",
+  "soc_value_cr": 500,
+  "currency": "INR",
+  "claimant_share_pct": 1.0,
+  "claimant": "TATA Projects Ltd",
+  "respondent": "Counterparty",
+  "arbitration": {
+    "win_probability": 0.70,
+    "re_arb_win_probability": 0.70
+  },
+  "quantum": {
+    "bands": [
+      { "low": 0.80, "high": 1.00, "probability": 0.25 },
+      { "low": 0.50, "high": 0.80, "probability": 0.45 },
+      { "low": 0.20, "high": 0.50, "probability": 0.20 },
+      { "low": 0.05, "high": 0.20, "probability": 0.10 }
+    ]
+  },
+  "timeline": {
+    "pre_arb_stages": [
+      { "name": "dab", "duration_low": 3, "duration_high": 6, "legal_cost_low": 0.5, "legal_cost_high": 1.0 },
+      { "name": "arbitration", "duration_low": 18, "duration_high": 30, "legal_cost_low": 3.0, "legal_cost_high": 5.0 }
+    ],
+    "payment_delay_months": 6,
+    "max_horizon_months": 96
+  },
+  "legal_costs": {
+    "one_time_tribunal_cr": 6.0,
+    "one_time_expert_cr": 2.0,
+    "per_stage_costs": {},
+    "overrun_alpha": 2.0,
+    "overrun_beta": 5.0,
+    "overrun_low": -0.10,
+    "overrun_high": 0.60
+  },
+  "interest": {
+    "enabled": false,
+    "rate": 0.09,
+    "compounding": "simple"
+  }
+}

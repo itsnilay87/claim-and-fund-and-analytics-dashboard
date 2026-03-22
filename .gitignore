@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs (built in CI/CD pipeline)
+app/dist/
+dashboard/dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+
+# Environment
+.env
+.env.*
+!deploy/.env.example
+
+# Simulation run outputs (runtime data)
+server/runs/
+test_outputs/
+outputs_test/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

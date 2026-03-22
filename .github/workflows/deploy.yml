@@ -1,0 +1,88 @@
+# ─────────────────────────────────────────────────────────
+#  CI/CD Pipeline — Build & Deploy to Hetzner
+#
+#  Triggers on push to main branch or manual dispatch.
+#  Builds Docker image → pushes to GHCR → deploys to server.
+#
+#  Required GitHub Secrets:
+#    DEPLOY_SSH_KEY  — Private SSH key for root@server
+#    DEPLOY_HOST     — Server IP (e.g. 178.104.35.208)
+#    GHCR_PAT        — Personal Access Token with read:packages
+# ─────────────────────────────────────────────────────────
+
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ghcr.io/itsnilay87/claim-analytics-platform
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1
+        env:
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: GHCR_PAT
+          script: |
+            echo "$GHCR_PAT" | docker login ghcr.io -u itsnilay87 --password-stdin
+            docker pull ghcr.io/itsnilay87/claim-analytics-platform:latest
+
+            # Stop old manual deployment if it exists
+            cd /root/claim-analytics-platform/deploy 2>/dev/null && docker compose down 2>/dev/null || true
+
+            mkdir -p /opt/claim-analytics
+            cat > /opt/claim-analytics/docker-compose.yml << 'EOF'
+            services:
+              web:
+                image: ghcr.io/itsnilay87/claim-analytics-platform:latest
+                ports:
+                  - "80:80"
+                volumes:
+                  - runs-data:/app/server/runs
+                restart: unless-stopped
+                environment:
+                  - NODE_ENV=production
+                  - PORT=3001
+            volumes:
+              runs-data:
+            EOF
+
+            cd /opt/claim-analytics
+            docker compose down 2>/dev/null || true
+            docker compose up -d
+            docker image prune -f
+            echo "Deploy complete at $(date)"

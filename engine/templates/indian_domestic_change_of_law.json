@@ -1,0 +1,46 @@
+{
+  "id": "indian_domestic_change_of_law",
+  "name": "Indian Domestic — Change of Law Claim",
+  "description": "Change of law claim under Indian domestic arbitration. Lower SOC, higher win probability, lower quantum recovery typical of regulatory change disputes.",
+  "jurisdiction": "indian_domestic",
+  "claim_type": "change_of_law",
+  "soc_value_cr": 25,
+  "currency": "INR",
+  "claimant_share_pct": 1.0,
+  "claimant": "TATA Projects Ltd",
+  "respondent": "Counterparty",
+  "arbitration": {
+    "win_probability": 0.75,
+    "re_arb_win_probability": 0.75
+  },
+  "quantum": {
+    "bands": [
+      { "low": 0.85, "high": 1.00, "probability": 0.35 },
+      { "low": 0.60, "high": 0.85, "probability": 0.40 },
+      { "low": 0.30, "high": 0.60, "probability": 0.20 },
+      { "low": 0.10, "high": 0.30, "probability": 0.05 }
+    ]
+  },
+  "timeline": {
+    "pre_arb_stages": [
+      { "name": "dab", "duration_low": 2, "duration_high": 4, "legal_cost_low": 0.3, "legal_cost_high": 0.5 },
+      { "name": "arbitration", "duration_low": 12, "duration_high": 24, "legal_cost_low": 1.5, "legal_cost_high": 3.0 }
+    ],
+    "payment_delay_months": 6,
+    "max_horizon_months": 96
+  },
+  "legal_costs": {
+    "one_time_tribunal_cr": 3.0,
+    "one_time_expert_cr": 1.0,
+    "per_stage_costs": {},
+    "overrun_alpha": 2.0,
+    "overrun_beta": 5.0,
+    "overrun_low": -0.10,
+    "overrun_high": 0.50
+  },
+  "interest": {
+    "enabled": false,
+    "rate": 0.09,
+    "compounding": "simple"
+  }
+}

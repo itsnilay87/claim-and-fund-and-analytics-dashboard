@@ -1,0 +1,18 @@
+# Claim Analytics Platform — Docker build exclusions
+node_modules
+**/node_modules
+**/.git
+**/.vscode
+**/__pycache__
+**/.pytest_cache
+**/dist
+*.pyc
+*.pyo
+.env
+.env.*
+!deploy/.env.example
+**/runs
+test_outputs
+outputs_test
+.mypy_cache
+*.egg-info

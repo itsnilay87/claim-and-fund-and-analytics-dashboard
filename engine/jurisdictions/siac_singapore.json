@@ -1,0 +1,219 @@
+{
+  "id": "siac_singapore",
+  "name": "SIAC Singapore Arbitration",
+  "description": "Singapore International Arbitration Centre (SIAC) arbitration under Singapore International Arbitration Act (IAA). Post-award challenge path: High Court (setting aside) → Court of Appeal. 8 terminal paths across two scenarios. Setting aside under IAA is final — no further appeal beyond COA.",
+  "country": "SG",
+  "institution": "SIAC (Singapore International Arbitration Centre)",
+
+  "default_challenge_tree": {
+    "scenario_a": {
+      "description": "Claimant WON SIAC arbitration — counterparty challenges in Singapore courts. 4 terminal paths. P(TRUE_WIN)=0.8200, P(LOSE)=0.1800.",
+      "root": {
+        "name": "High Court",
+        "probability": 1.0,
+        "children": [
+          {
+            "name": "HC Award Upheld",
+            "probability": 0.80,
+            "duration_distribution": {"type": "fixed", "value": 6.0},
+            "legal_cost": {"low": 3.0, "high": 4.0},
+            "children": [
+              {
+                "name": "COA Award Upheld (SA1)",
+                "probability": 0.90,
+                "outcome": "TRUE_WIN",
+                "duration_distribution": {"type": "fixed", "value": 6.0},
+                "legal_cost": {"low": 2.0, "high": 2.0}
+              },
+              {
+                "name": "COA Award Set Aside (SA2)",
+                "probability": 0.10,
+                "outcome": "LOSE",
+                "duration_distribution": {"type": "fixed", "value": 6.0},
+                "legal_cost": {"low": 2.0, "high": 2.0}
+              }
+            ]
+          },
+          {
+            "name": "HC Award Set Aside",
+            "probability": 0.20,
+            "duration_distribution": {"type": "fixed", "value": 6.0},
+            "legal_cost": {"low": 3.0, "high": 4.0},
+            "children": [
+              {
+                "name": "COA Restores Award (SA3)",
+                "probability": 0.50,
+                "outcome": "TRUE_WIN",
+                "duration_distribution": {"type": "fixed", "value": 6.0},
+                "legal_cost": {"low": 2.0, "high": 2.0}
+              },
+              {
+                "name": "COA Upholds Setting Aside (SA4)",
+                "probability": 0.50,
+                "outcome": "LOSE",
+                "duration_distribution": {"type": "fixed", "value": 6.0},
+                "legal_cost": {"low": 2.0, "high": 2.0}
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "scenario_b": {
+      "description": "Claimant LOST SIAC arbitration — claimant challenges in Singapore courts. 4 terminal paths. P(RESTART)=0.4200, P(LOSE)=0.5800.",
+      "root": {
+        "name": "High Court",
+        "probability": 1.0,
+        "children": [
+          {
+            "name": "HC Overturns Adverse Award",
+            "probability": 0.20,
+            "duration_distribution": {"type": "fixed", "value": 6.0},
+            "legal_cost": {"low": 3.0, "high": 4.0},
+            "children": [
+              {
+                "name": "COA Upholds Overturn (SB1)",
+                "probability": 0.10,
+                "outcome": "RESTART",
+                "duration_distribution": {"type": "fixed", "value": 6.0},
+                "legal_cost": {"low": 2.0, "high": 2.0}
+              },
+              {
+                "name": "COA Restores Adverse Award (SB2)",
+                "probability": 0.90,
+                "outcome": "LOSE",
+                "duration_distribution": {"type": "fixed", "value": 6.0},
+                "legal_cost": {"low": 2.0, "high": 2.0}
+              }
+            ]
+          },
+          {
+            "name": "HC Upholds Adverse Award",
+            "probability": 0.80,
+            "duration_distribution": {"type": "fixed", "value": 6.0},
+            "legal_cost": {"low": 3.0, "high": 4.0},
+            "children": [
+              {
+                "name": "COA Overturns Adverse (SB3)",
+                "probability": 0.50,
+                "outcome": "RESTART",
+                "duration_distribution": {"type": "fixed", "value": 6.0},
+                "legal_cost": {"low": 2.0, "high": 2.0}
+              },
+              {
+                "name": "COA Upholds Adverse (SB4)",
+                "probability": 0.50,
+                "outcome": "LOSE",
+                "duration_distribution": {"type": "fixed", "value": 6.0},
+                "legal_cost": {"low": 2.0, "high": 2.0}
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+
+  "default_timeline": {
+    "pre_arb_stages": [
+      {
+        "name": "dab",
+        "duration_low": 4.8,
+        "duration_high": 13.1,
+        "legal_cost_low": 0.50,
+        "legal_cost_high": 1.0
+      },
+      {
+        "name": "arbitration",
+        "duration_low": 20.3,
+        "duration_high": 23.4,
+        "legal_cost_low": 8.0,
+        "legal_cost_high": 8.0
+      }
+    ],
+    "payment_delay_months": 4.0,
+    "max_horizon_months": 96
+  },
+
+  "available_stages": [
+    {
+      "name": "dab",
+      "label": "DAB (Dispute Adjudication Board)",
+      "duration_low": 4.8,
+      "duration_high": 13.1,
+      "legal_cost_low": 0.50,
+      "legal_cost_high": 1.0,
+      "pipeline_after": ["arbitration"]
+    },
+    {
+      "name": "arbitration",
+      "label": "Arbitration",
+      "duration_low": 20.3,
+      "duration_high": 23.4,
+      "legal_cost_low": 8.0,
+      "legal_cost_high": 8.0,
+      "pipeline_after": []
+    },
+    {
+      "name": "re_referral",
+      "label": "Re-Referral",
+      "duration_low": 3.0,
+      "duration_high": 7.0,
+      "legal_cost_low": 0.25,
+      "legal_cost_high": 0.50,
+      "pipeline_after": ["dab", "arbitration"]
+    },
+    {
+      "name": "re_arbitration",
+      "label": "Re-Arbitration",
+      "duration_low": 20.3,
+      "duration_high": 23.4,
+      "legal_cost_low": 8.0,
+      "legal_cost_high": 8.0,
+      "pipeline_after": []
+    }
+  ],
+
+  "default_legal_costs": {
+    "one_time_tribunal_cr": 6.0,
+    "one_time_expert_cr": 2.0,
+    "per_stage_costs": {
+      "dab": {
+        "name": "dab",
+        "duration_low": 4.8,
+        "duration_high": 13.1,
+        "legal_cost_low": 0.50,
+        "legal_cost_high": 1.0
+      },
+      "arb_counsel": {
+        "name": "arb_counsel",
+        "duration_low": 20.3,
+        "duration_high": 23.4,
+        "legal_cost_low": 8.0,
+        "legal_cost_high": 8.0
+      },
+      "siac_hc": {
+        "name": "siac_hc",
+        "duration_low": 6.0,
+        "duration_high": 6.0,
+        "legal_cost_low": 3.0,
+        "legal_cost_high": 4.0
+      },
+      "siac_coa": {
+        "name": "siac_coa",
+        "duration_low": 6.0,
+        "duration_high": 6.0,
+        "legal_cost_low": 2.0,
+        "legal_cost_high": 2.0
+      }
+    },
+    "overrun_alpha": 2.0,
+    "overrun_beta": 5.0,
+    "overrun_low": -0.10,
+    "overrun_high": 0.60
+  },
+
+  "default_payment_delay_months": 4.0,
+  "supports_restart": true,
+  "enforcement_notes": "Awards enforced under Singapore International Arbitration Act (IAA) and New York Convention. Setting aside under IAA is final — no appeal beyond Court of Appeal. SIAC awards enjoy strong international enforceability. Payment typically within 4 months of final resolution."
+}

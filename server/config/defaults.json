@@ -1,0 +1,79 @@
+{
+  "simulation": {
+    "n_paths": 10000,
+    "seed": 42,
+    "discount_rate": 0.12,
+    "risk_free_rate": 0.07,
+    "start_date": "2026-04-30",
+    "sims_per_combo": 2000,
+    "pricing_surface": {
+      "enabled": true,
+      "upfront_min": 5,
+      "upfront_max": 35,
+      "tail_min": 0,
+      "tail_max": 40,
+      "step": 1,
+      "pricing_basis": "soc"
+    }
+  },
+  "arbitration": {
+    "win_probability": 0.70,
+    "re_arb_win_probability": 0.70
+  },
+  "quantum": {
+    "bands": [
+      { "low": 0.00, "high": 0.20, "probability": 0.15 },
+      { "low": 0.20, "high": 0.40, "probability": 0.05 },
+      { "low": 0.40, "high": 0.60, "probability": 0.05 },
+      { "low": 0.60, "high": 0.80, "probability": 0.05 },
+      { "low": 0.80, "high": 1.00, "probability": 0.70 }
+    ]
+  },
+  "timeline": {
+    "pre_arb_stages": [
+      { "name": "dab", "duration_low": 4.8, "duration_high": 13.1, "legal_cost_low": 0.50, "legal_cost_high": 1.0 },
+      { "name": "arbitration", "duration_low": 20.3, "duration_high": 23.4, "legal_cost_low": 8.0, "legal_cost_high": 8.0 }
+    ],
+    "payment_delay_months": 6.0,
+    "max_horizon_months": 96
+  },
+  "payment_delays": {
+    "domestic": 6.0,
+    "siac": 4.0,
+    "re_arb": 6.0
+  },
+  "legal_costs": {
+    "one_time_tribunal_cr": 6.0,
+    "one_time_expert_cr": 2.0,
+    "arb_counsel_cr": 8.0,
+    "per_stage_costs": {
+      "dab": { "name": "dab", "duration_low": 4.8, "duration_high": 13.1, "legal_cost_low": 0.50, "legal_cost_high": 1.0 },
+      "arb_counsel": { "name": "arb_counsel", "duration_low": 20.3, "duration_high": 23.4, "legal_cost_low": 8.0, "legal_cost_high": 8.0 },
+      "s34": { "name": "s34", "duration_low": 9.0, "duration_high": 18.0, "legal_cost_low": 2.0, "legal_cost_high": 3.0 },
+      "s37": { "name": "s37", "duration_low": 6.0, "duration_high": 12.0, "legal_cost_low": 1.0, "legal_cost_high": 2.0 },
+      "slp_dismissed": { "name": "slp_dismissed", "duration_low": 4.0, "duration_high": 4.0, "legal_cost_low": 0.50, "legal_cost_high": 1.0 },
+      "slp_admitted": { "name": "slp_admitted", "duration_low": 24.0, "duration_high": 24.0, "legal_cost_low": 2.0, "legal_cost_high": 3.0 },
+      "siac_hc": { "name": "siac_hc", "duration_low": 6.0, "duration_high": 6.0, "legal_cost_low": 3.0, "legal_cost_high": 4.0 },
+      "siac_coa": { "name": "siac_coa", "duration_low": 6.0, "duration_high": 6.0, "legal_cost_low": 2.0, "legal_cost_high": 2.0 }
+    },
+    "overrun_alpha": 2.0,
+    "overrun_beta": 5.0,
+    "overrun_low": -0.10,
+    "overrun_high": 0.60
+  },
+  "interest": {
+    "enabled": false,
+    "rate": 0.09,
+    "compounding": "simple",
+    "start_basis": "award_date",
+    "rate_bands": [{ "rate": 0.09, "type": "simple", "probability": 1.0 }]
+  },
+  "claim_defaults": {
+    "jurisdiction": "indian_domestic",
+    "claim_type": "prolongation",
+    "soc_value_cr": 1000.0,
+    "currency": "INR",
+    "claimant_share_pct": 1.0,
+    "perspective": "claimant"
+  }
+}
