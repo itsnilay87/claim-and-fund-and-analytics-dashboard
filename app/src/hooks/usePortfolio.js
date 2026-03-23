@@ -230,8 +230,8 @@ export function usePortfolioBuilder(wsId, portfolioId) {
       structurePayload = {
         type: 'monetisation_upfront_tail',
         params: {
-          upfront_range: { start: ur.min / 100, stop: ur.max / 100, step: ur.step / 100 },
-          tail_range: { start: tr.min / 100, stop: tr.max / 100, step: tr.step / 100 },
+          upfront_range: { min: ur.min / 100, max: ur.max / 100, step: ur.step / 100 },
+          tail_range: { min: tr.min / 100, max: tr.max / 100, step: tr.step / 100 },
           pricing_basis: structureConfig.pricing_basis,
         },
       };

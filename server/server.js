@@ -28,6 +28,7 @@ const jurisdictionsRouter = require('./routes/jurisdictions');
 const claimsRouter = require('./routes/claims');
 const templatesRouter = require('./routes/templates');
 const { getDefaults } = require('./services/configService');
+const { listRuns } = require('./services/simulationRunner');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -78,6 +79,21 @@ app.get('/api/defaults', (_req, res) => {
 // ── Health check ──
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ── Legacy runs list (backward-compat with claim-analytics old app) ──
+app.get('/api/runs', (_req, res) => {
+  try {
+    const runs = listRuns();
+    res.json({ runs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── 404 handler — always return JSON, never HTML ──
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Not found' });
 });
 
 // ── Error handling middleware ──

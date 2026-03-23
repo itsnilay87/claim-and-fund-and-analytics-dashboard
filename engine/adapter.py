@@ -342,10 +342,10 @@ def _patch_timeline_durations(
     else:
         MI.SIAC_PAYMENT_DELAY = tl.payment_delay_months
 
-    # Pre-arb stage durations
+    # Pre-arb stage durations (normalize to lowercase for lookup)
     stage_map: dict[str, StageConfig] = {}
     for s in tl.pre_arb_stages:
-        stage_map[s.name] = s
+        stage_map[s.name.lower()] = s
 
     if "dab" in stage_map:
         MI.DAB_DURATION = {"low": stage_map["dab"].duration_low, "high": stage_map["dab"].duration_high}
@@ -689,6 +689,16 @@ def _is_tata_favorable(name: str, is_scenario_a: bool) -> bool:
     Looks for keyword patterns in the node name.
     """
     name_l = name.lower()
+
+    # --- Handle "adverse" keyword combinations (SIAC trees) ---
+    # "upholds adverse" / "restores adverse" = bad for TATA
+    if "adverse" in name_l:
+        if any(w in name_l for w in ["upholds", "upheld", "restores", "restore"]):
+            return False
+        # "overturns adverse" = good for TATA
+        if any(w in name_l for w in ["overturn", "overturns"]):
+            return True
+
     # Explicit TATA/claimant win indicators
     if any(w in name_l for w in ["tata win", "claim win", "claimant win",
                                   "claim wins", "claimant wins", "tata wins"]):
@@ -711,12 +721,19 @@ def _is_tata_favorable(name: str, is_scenario_a: bool) -> bool:
     if any(w in name_l for w in ["respondent win", "resp win", "dfccil win",
                                   "respondent wins", "resp wins"]):
         return False
-    # "Restored" / "upheld" in Scenario A context = good for TATA
-    if is_scenario_a and any(w in name_l for w in ["restored", "upheld", "upholds"]):
+    # "Restored" / "upheld" / "upholds" in Scenario A context = good for TATA
+    # UNLESS the phrase also contains "setting aside" (upholds setting aside = bad)
+    if is_scenario_a and any(w in name_l for w in ["restored", "restores",
+                                                    "upheld", "upholds"]):
+        if "set" in name_l and "aside" in name_l:
+            return False  # "upholds setting aside" = bad for TATA
         return True
     # "Set aside" / "sets aside" in Scenario A = bad for TATA
     if is_scenario_a and "set" in name_l and "aside" in name_l:
         return False
+    # "Overturns" in Scenario B (without "adverse") = good for TATA
+    if not is_scenario_a and any(w in name_l for w in ["overturn", "overturns"]):
+        return True
     # Fallback: first child in list = TATA wins (common convention)
     return True
 

@@ -1,280 +1,76 @@
 # Claim Analytics Platform
 
-A professional litigation finance analytics platform for modelling, simulating, and valuing arbitration claims. Think **Morningstar Direct — but for arbitration portfolios**. Users create workspaces, define claims with jurisdiction-specific challenge trees, run Monte Carlo simulations across investment structures, and explore results through rich interactive dashboards.
+> Morningstar Direct-style litigation claim analytics platform for Monte Carlo valuation of arbitration claims.
 
-<!-- TODO: Replace with actual screenshot once dashboard is deployed -->
-![Dashboard Screenshot](docs/screenshot_placeholder.png)
+## Essential Documentation
 
----
+| Document | Purpose |
+|----------|---------|
+| **[DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md)** | How to deploy code changes to production (CI/CD pipeline, server info, debugging) |
+| **[AGENT_DEVELOPMENT_PLAYBOOK.md](./AGENT_DEVELOPMENT_PLAYBOOK.md)** | How to fix bugs and add features safely — full codebase map, data flows, gotchas |
+| [deploy/README.md](./deploy/README.md) | Docker build, manual deploy, HTTPS setup, troubleshooting |
 
-## Quick Start (Local Development)
-
-### Prerequisites
-
-| Tool | Version |
-|------|---------|
-| Python | 3.11+ |
-| Node.js | 18+ |
-| npm | 9+ |
-
-### Step-by-step setup
+## Quick Start (Development)
 
 ```bash
-# 1. Clone the repository
-git clone <repo-url>
 cd claim-analytics-platform
-
-# 2. Create a Python virtual environment and install engine dependencies
-python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# macOS/Linux:
-source .venv/bin/activate
-
-pip install -r engine/requirements.txt
+npm run dev                    # Starts server (:3001) + app (:5180) + dashboard (:5173)
 ```
 
-Expected output: `Successfully installed numpy scipy pydantic ...`
+## Quick Start (Deploy to Production)
 
 ```bash
-# 3. Install all Node.js dependencies
-npm install              # root (concurrently)
-cd server && npm install && cd ..
-cd app && npm install && cd ..
-cd dashboard && npm install && cd ..
+git add . && git commit -m "fix: description" && git push
+# CI/CD auto-deploys to http://178.104.35.208 in ~4 minutes
+gh run watch                   # monitor pipeline
 ```
 
-Expected output: `added XXX packages` for each directory.
+## Implementation Guide
 
-```bash
-# 4. Start all services (from project root)
-npm run dev
-```
+Built using Claude Opus 4.6 agent prompts.
 
-Expected output:
-```
-[server]  Claim Analytics API listening on port 3001
-[app]     VITE v5.x  ready in XXXms — Local: http://localhost:5180/
-[dashboard] VITE v6.x  ready in XXXms — Local: http://localhost:5173/
-```
+**See:** [IMPLEMENTATION_PROMPTS.md](./IMPLEMENTATION_PROMPTS.md) — 25-phase sequential prompts for complete implementation.
 
-**Open http://localhost:5180** in your browser to see the application.
+## Phase Overview
 
-### First-time walkthrough
+| Phase | Description | Est. Time |
+|-------|-------------|-----------|
+| 0 | Project Setup & Context | 30 min |
+| 1 | Python Config & Schemas | 2 hrs |
+| 2 | Python Core Models | 3 hrs |
+| 3 | Monte Carlo Simulation | 2 hrs |
+| 4 | Analysis Modules | 3 hrs |
+| 5 | Export & CLI | 2 hrs |
+| 6 | Node.js Server | 2 hrs |
+| 7 | Dashboard Components | 4 hrs |
+| 8 | Main App Shell | 4 hrs |
+| 9 | Integration & Testing | 3 hrs |
+| 10 | Documentation & Deployment | 2 hrs |
+| 11 | Final Polish | 2 hrs |
 
-1. Log in with any name (demo auth — no real credentials needed)
-2. Click **"Load Demo"** → select **"TATA Steel Portfolio"**
-3. Explore the 6 pre-configured claims
-4. Open a claim → click **Simulate** → view single-claim results
-5. Navigate to Portfolios → open **"All Claims — Upfront+Tail"** → run analysis
-6. Explore the full results dashboard with 12+ visualization tabs
+**Total:** ~29 hours of active development
 
----
+## Project Status
 
-## Architecture
-
-The platform follows a **4-tier architecture**:
-
-```
-┌─────────────────────────────────────────────────┐
-│            App Shell (React, port 5180)          │
-│   Workspace • Claim Editor • Portfolio Builder   │
-├──────────────┬──────────────────────────────────┤
-│  API Server  │   Dashboard Shell (port 5173)     │
-│ (Express,    │   12+ visualization tabs          │
-│  port 3001)  │   Recharts, D3, Plotly            │
-├──────────────┴──────────────────────────────────┤
-│         Python Simulation Engine                 │
-│   Monte Carlo • Probability Trees • Analysis     │
-│   Investment Grid • Risk Metrics • Export        │
-└─────────────────────────────────────────────────┘
-```
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed module maps, data flow diagrams, and component relationships.
-
----
+- [ ] Phase 0: Project Initialization
+- [ ] Phase 1: Configuration & Schemas
+- [ ] Phase 2: Core Models
+- [ ] Phase 3: Monte Carlo Engine
+- [ ] Phase 4: Analysis Modules
+- [ ] Phase 5: Export & CLI
+- [ ] Phase 6: Server
+- [ ] Phase 7: Dashboard
+- [ ] Phase 8: App Shell
+- [ ] Phase 9: Integration
+- [ ] Phase 10: Documentation
+- [ ] Phase 11: Final Polish
 
 ## Tech Stack
 
-| Component | Technology | Port |
-|-----------|-----------|------|
-| **Simulation Engine** | Python 3.11+, NumPy, SciPy, Pydantic v2 | — |
-| **API Server** | Node.js 18+, Express, AJV, CORS | 3001 |
-| **App Shell** | React 18, Vite 5, React Router 6, Zustand, Tailwind CSS 3 | 5180 |
-| **Results Dashboard** | React 18, Vite 6, Recharts, D3.js, Plotly.js | 5173 |
-| **Deployment** | Docker, Docker Compose, Nginx, Supervisor | 80 |
-
----
-
-## Project Structure
-
-```
-claim-analytics-platform/
-├── engine/                   # Python simulation engine
-│   ├── config/               #   Pydantic schemas, defaults, config loader
-│   ├── models/               #   Probability tree, quantum, timeline, legal costs
-│   ├── simulation/           #   Monte Carlo loop, cashflow builder, metrics
-│   ├── analysis/             #   Investment grid, pricing surface, risk, sensitivity
-│   ├── export/               #   JSON exporters (claim + portfolio)
-│   ├── jurisdictions/        #   Jurisdiction templates (indian_domestic, siac)
-│   ├── tests/                #   pytest unit tests
-│   └── run.py                #   CLI orchestrator
-├── server/                   # Express API server
-│   ├── routes/               #   simulate, results, jurisdictions, claims, templates
-│   ├── services/             #   simulationRunner, configService, storageService
-│   └── server.js             #   Entry point
-├── app/                      # React application shell
-│   └── src/
-│       ├── pages/            #   Landing, Login, WorkspaceHome, ClaimEditor, etc.
-│       ├── components/       #   claim/, portfolio/, workspace/, layout/
-│       ├── store/            #   Zustand stores (auth, workspace, claim, portfolio)
-│       └── hooks/            #   Custom hooks (useClaims, useSimulation, etc.)
-├── dashboard/                # React results dashboard
-│   └── src/components/       #   18 visualization components
-├── demo/                     # Pre-built demo workspaces (importable JSON)
-├── docs/                     # Documentation
-│   ├── ARCHITECTURE.md       #   System architecture & module maps
-│   ├── API_CONTRACTS.md      #   API endpoint specifications
-│   ├── DESIGN_DECISIONS.md   #   Architectural rationale
-│   ├── JURISDICTION_GUIDE.md #   How to add new jurisdictions
-│   └── SCHEMA_REFERENCE.md   #   Auto-generated Pydantic model reference
-├── scripts/                  # Tooling
-│   ├── benchmark.py          #   Performance benchmarks
-│   ├── e2e_test.sh           #   End-to-end integration test
-│   └── update_docs.py        #   Auto-update generated docs
-├── deploy/                   # Deployment
-│   ├── Dockerfile            #   Multi-stage Docker build
-│   ├── docker-compose.yml    #   Compose config
-│   ├── nginx.conf            #   Nginx reverse proxy config
-│   └── README.md             #   Deployment guide
-└── package.json              # Root convenience scripts
-```
-
----
-
-## Development Workflow
-
-### Modifying the Engine
-
-1. Edit Python files in `engine/` (models, simulation, analysis, export)
-2. Run unit tests: `python -m pytest engine/tests/ -v`
-3. The engine is invoked by the Express server via `engine/run.py`
-4. Configuration schemas live in `engine/config/schema.py` (21 Pydantic models)
-5. After schema changes, run `python scripts/update_docs.py` to regenerate docs
-
-### Adding a Dashboard Tab
-
-1. Create a new component in `dashboard/src/components/YourTab.jsx`
-2. Register it in `dashboard/src/App.jsx` under the appropriate structure category
-3. The dashboard receives data via the JSON contract defined in [docs/API_CONTRACTS.md](docs/API_CONTRACTS.md)
-
-### Adding a New Jurisdiction
-
-Follow the step-by-step guide in [docs/JURISDICTION_GUIDE.md](docs/JURISDICTION_GUIDE.md) (includes a worked ICC Paris example):
-
-1. Create `engine/jurisdictions/your_jurisdiction.json` with challenge tree templates
-2. The registry auto-discovers JSON files at startup
-3. Add default timeline, legal cost, and tree parameters
-4. Update `engine/config/defaults.py` with jurisdiction defaults
-
-### Adding a New Investment Structure
-
-1. Define the Pydantic model in `engine/config/schema.py` (params + validation)
-2. Add analysis logic in `engine/analysis/` (grid evaluation, cashflow computation)
-3. Add cashflow generation in `engine/simulation/cashflow_builder.py`
-4. Add JSON export handling in `engine/export/`
-5. Create dashboard visualization in `dashboard/src/components/`
-6. Register the tab in `dashboard/src/App.jsx`
-
----
-
-## Deployment
-
-### Docker
-
-```bash
-# Build the Docker image
-npm run docker:build
-# or directly:
-docker build -t claim-analytics -f deploy/Dockerfile .
-
-# Run locally
-npm run docker:run
-# or directly:
-docker run -p 8080:80 claim-analytics
-
-# Open http://localhost:8080
-```
-
-### Production (Hetzner / VPS)
-
-1. SSH into the server
-2. Clone the repo and `cd claim-analytics-platform`
-3. Copy `deploy/.env.example` to `deploy/.env` and configure
-4. Run `docker compose -f deploy/docker-compose.yml up -d`
-5. Nginx serves the frontend on port 80, proxies API requests to the Express server
-
-See [deploy/README.md](deploy/README.md) for detailed deployment instructions, SSL setup, and monitoring.
-
----
-
-## Running Tests
-
-### Python Engine Tests
-
-```bash
-# Run all tests with verbose output
-python -m pytest engine/tests/ -v
-
-# Run a specific test module
-python -m pytest engine/tests/test_monte_carlo.py -v
-
-# Run with coverage
-python -m pytest engine/tests/ -v --cov=engine --cov-report=term-missing
-```
-
-### End-to-End Integration Test
-
-```bash
-# Runs server, simulates claims/portfolios via API, verifies outputs
-bash scripts/e2e_test.sh
-```
-
-### Performance Benchmarks
-
-```bash
-# Times 1K, 6K, and 60K path simulations
-python scripts/benchmark.py
-```
-
----
-
-## Contributing
-
-### Code Style
-
-- **Python**: Follow PEP 8. Use type hints. Pydantic v2 for all data models.
-- **JavaScript/React**: Functional components, hooks, Zustand for state. Tailwind for styling.
-- **Commits**: Use conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`).
-
-### Pull Request Process
-
-1. Create a feature branch from `main`
-2. Ensure all tests pass: `python -m pytest engine/tests/ -v`
-3. Run the E2E test if touching server/engine: `bash scripts/e2e_test.sh`
-4. Update documentation if adding new models, routes, or components
-5. Submit PR with a clear description of changes
-
-### Documentation
-
-After structural changes (new routes, models, jurisdictions), update auto-generated docs:
-
-```bash
-python scripts/update_docs.py
-```
-
----
-
-## License
-
-Proprietary — 5 Rivers Capital. All rights reserved.
+| Layer | Technology |
+|-------|-----------|
+| Simulation Engine | Python 3.11+, NumPy, SciPy, Pydantic |
+| API Server | Node.js, Express 4 |
+| Dashboard | React 18, Vite 6, Recharts, D3 7, Plotly |
+| App Shell | React 18, Vite 5, Tailwind 3, Zustand, React Router |
+| Deployment | Docker, Nginx, Supervisor, GitHub Actions CI/CD → Hetzner |

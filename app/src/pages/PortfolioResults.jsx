@@ -143,7 +143,7 @@ export default function PortfolioResults() {
           {/* Open in full dashboard link */}
           <div className="flex justify-end">
             <a
-              href={`/dashboard/?runId=${encodeURIComponent(effectiveRunId)}`}
+              href={`/dashboard/?runId=${encodeURIComponent(effectiveRunId)}&apiBase=${encodeURIComponent(window.location.origin)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-400 transition-colors"
@@ -155,7 +155,7 @@ export default function PortfolioResults() {
           {/* Embedded dashboard via iframe for isolation */}
           <div className="glass-card overflow-hidden" style={{ minHeight: '80vh' }}>
             <iframe
-              src={`/dashboard/?runId=${encodeURIComponent(effectiveRunId)}`}
+              src={`/dashboard/?runId=${encodeURIComponent(effectiveRunId)}&apiBase=${encodeURIComponent(window.location.origin)}`}
               className="w-full border-0"
               style={{ height: '85vh' }}
               title="Portfolio Results Dashboard"

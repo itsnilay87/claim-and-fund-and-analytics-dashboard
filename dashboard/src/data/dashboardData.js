@@ -109,6 +109,7 @@ function normalizeStochasticData(stoch) {
 }
 
 function _rekey(grid) {
+  if (!grid || typeof grid !== 'object' || Array.isArray(grid)) return grid;
   const out = {};
   for (const [key, value] of Object.entries(grid)) {
     const norm = key.split('_').map(p => {
@@ -118,6 +119,78 @@ function _rekey(grid) {
     out[norm] = value;
   }
   return out;
+}
+
+/**
+ * Normalize V2 engine output to platform dashboard format.
+ * V2 outputs investment_grid_soc as a flat list; dashboard expects a dict keyed by "up_tail".
+ * V2 also lacks a top-level risk section and structure_type.
+ */
+function normalizeV2Data(obj) {
+  if (!obj) return obj;
+
+  // Convert investment_grid_soc list → investment_grid dict
+  if (!obj.investment_grid && Array.isArray(obj.investment_grid_soc)) {
+    const grid = {};
+    for (const row of obj.investment_grid_soc) {
+      const up = Math.round((row.upfront_pct || 0) * 100);
+      const tail = Math.round((row.tata_tail_pct || 0) * 100);
+      grid[`${up}_${tail}`] = row;
+    }
+    obj.investment_grid = grid;
+  }
+
+  // Also convert investment_grid_eq if present
+  if (!obj.investment_grid_eq_dict && Array.isArray(obj.investment_grid_eq)) {
+    const grid = {};
+    for (const row of obj.investment_grid_eq) {
+      const up = Math.round((row.upfront_pct || 0) * 100);
+      const tail = Math.round((row.tata_tail_pct || 0) * 100);
+      grid[`${up}_${tail}`] = row;
+    }
+    obj.investment_grid_eq_dict = grid;
+  }
+
+  // Build risk section from grid data if missing
+  if (!obj.risk && obj.investment_grid && typeof obj.investment_grid === 'object') {
+    const cells = Object.values(obj.investment_grid);
+    if (cells.length > 0) {
+      const moics = cells.map(c => c.mean_moic).filter(v => v != null).sort((a, b) => a - b);
+      const xirrs = cells.map(c => c.mean_xirr).filter(v => v != null).sort((a, b) => a - b);
+      const pLosses = cells.map(c => c.p_loss).filter(v => v != null);
+      const pctile = (arr, p) => arr.length > 0 ? arr[Math.min(Math.floor(p * arr.length), arr.length - 1)] : 0;
+      obj.risk = {
+        moic_distribution: {
+          p5: pctile(moics, 0.05),
+          p25: pctile(moics, 0.25),
+          p50: pctile(moics, 0.50),
+          p75: pctile(moics, 0.75),
+          p95: pctile(moics, 0.95),
+          mean: moics.length > 0 ? moics.reduce((a, b) => a + b, 0) / moics.length : 0,
+        },
+        irr_distribution: {
+          p5: pctile(xirrs, 0.05),
+          p25: pctile(xirrs, 0.25),
+          p50: pctile(xirrs, 0.50),
+          p75: pctile(xirrs, 0.75),
+          p95: pctile(xirrs, 0.95),
+          mean: xirrs.length > 0 ? xirrs.reduce((a, b) => a + b, 0) / xirrs.length : 0,
+        },
+        concentration: {
+          mean_p_loss: pLosses.length > 0 ? pLosses.reduce((a, b) => a + b, 0) / pLosses.length : 0,
+        },
+      };
+    }
+  }
+
+  // Add structure_type if missing
+  if (!obj.structure_type) {
+    obj.structure_type = obj.simulation_meta?.structure_type
+      || obj.simulation_meta?.portfolio_mode
+      || 'monetisation_upfront_tail';
+  }
+
+  return obj;
 }
 
 export function useDashboardData() {
@@ -150,8 +223,8 @@ export function useDashboardData() {
     if (simContext) {
       const { runId, apiBase } = simContext;
       try {
-        // Fetch dashboard data from simulation API
-        const dashUrl = `${apiBase}/api/results/${runId}/${mode}/dashboard_data.json`;
+        // Fetch dashboard data from simulation API (no mode prefix — server handles routing)
+        const dashUrl = `${apiBase}/api/results/${runId}/dashboard_data.json`;
         const dashRes = await fetch(dashUrl);
         if (!dashRes.ok) {
           throw new Error(`Failed to load results: ${dashRes.status}`);
@@ -162,7 +235,7 @@ export function useDashboardData() {
         let stochData = mainData.stochastic_pricing || null;
         if (!stochData) {
           try {
-            const stochUrl = `${apiBase}/api/results/${runId}/${mode}/stochastic_pricing.json`;
+            const stochUrl = `${apiBase}/api/results/${runId}/stochastic_pricing.json`;
             const stochRes = await fetch(stochUrl);
             if (stochRes.ok) {
               stochData = await stochRes.json();
@@ -175,7 +248,7 @@ export function useDashboardData() {
         // Fetch pricing surface data from API (optional)
         let surfaceData = null;
         try {
-          const surfaceUrl = `${apiBase}/api/results/${runId}/${mode}/pricing_surface.json`;
+          const surfaceUrl = `${apiBase}/api/results/${runId}/pricing_surface.json`;
           const surfaceRes = await fetch(surfaceUrl);
           if (surfaceRes.ok) {
             surfaceData = await surfaceRes.json();
@@ -184,6 +257,7 @@ export function useDashboardData() {
           // Pricing surface data is optional
         }
 
+        normalizeV2Data(mainData);
         normalizeGridKeys(mainData);
         normalizeStochasticData(stochData);
         if (surfaceData?.grid) surfaceData.grid = _rekey(surfaceData.grid);
@@ -256,7 +330,8 @@ export function useDashboardData() {
       }
     }
 
-    // Normalize grid keys and cache
+    // Normalize V2 data format and grid keys, then cache
+    normalizeV2Data(mainData);
     normalizeGridKeys(mainData);
     normalizeStochasticData(stochData);
     if (surfaceData?.grid) surfaceData.grid = _rekey(surfaceData.grid);
@@ -302,6 +377,9 @@ export function useDashboardData() {
     loadPortfolio(portfolioMode);
   }, [portfolioMode, loadPortfolio]);
 
+  const nClaims = data?.simulation_meta?.n_claims;
+  const claimMode = nClaims === 1;
+
   return {
     data,
     stochasticData,
@@ -309,6 +387,7 @@ export function useDashboardData() {
     loading,
     error,
     structureType: data?.structure_type || data?.simulation_meta?.structure_type || 'monetisation_upfront_tail',
+    claimMode,
     mcDistributions: data?.mc_distributions || null,
     portfolioMode,
     setPortfolioMode,

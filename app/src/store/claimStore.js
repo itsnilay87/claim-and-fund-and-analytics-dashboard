@@ -89,14 +89,23 @@ export const useClaimStore = create((set, get) => ({
 
   /** Update an existing claim */
   updateClaim: (id, updates) => {
+    // Fields that affect simulation results — only these trigger stale marking
+    const CALC_FIELDS = new Set([
+      'soc_value_cr', 'jurisdiction', 'claim_type', 'current_stage',
+      'claimant_share_pct', 'quantum', 'arbitration', 'interest',
+      'timeline', 'legal_costs', 'probability_tree', 'dab',
+    ]);
     set((state) => {
       const claims = state.claims.map((c) => {
         if (c.id !== id) return c;
         const wasSimulated = c.status === 'simulated';
         const merged = { ...c, ...updates, updated_at: new Date().toISOString() };
-        // If config changed on a simulated claim → stale
+        // Only mark stale if a calculation-relevant field changed
         if (wasSimulated && updates.status === undefined) {
-          merged.status = 'stale';
+          const hasCalcChange = Object.keys(updates).some((k) => CALC_FIELDS.has(k));
+          if (hasCalcChange) {
+            merged.status = 'stale';
+          }
         }
         return merged;
       });

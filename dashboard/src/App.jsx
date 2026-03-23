@@ -24,6 +24,16 @@ import MilestoneAnalysis from './components/MilestoneAnalysis';
 import ComparativeView from './components/ComparativeView';
 import ExportPanel from './components/ExportPanel';
 
+/* ── Single-Claim components ── */
+import ClaimExecutiveSummary from './components/claim/ClaimExecutiveSummary';
+import ClaimProbabilityOutcomes from './components/claim/ClaimProbabilityOutcomes';
+import ClaimQuantumTimeline from './components/claim/ClaimQuantumTimeline';
+import ClaimInvestmentAnalysis from './components/claim/ClaimInvestmentAnalysis';
+import ClaimCashflow from './components/claim/ClaimCashflow';
+import ClaimRiskAnalytics from './components/claim/ClaimRiskAnalytics';
+import ClaimSensitivityBreakeven from './components/claim/ClaimSensitivityBreakeven';
+import ClaimExport from './components/claim/ClaimExport';
+
 /* ── V2 components (rich, data-driven) ── */
 import {
   V2ProbabilityOutcomes,
@@ -47,6 +57,17 @@ const UNIVERSAL_TABS = [
   { id: 'cashflow',     label: 'Cashflow & Waterfall',   icon: '💰' },
   { id: 'risk',         label: 'Risk Analytics',         icon: '⚠️' },
   { id: 'export',       label: 'Export & Reports',       icon: '📤' },
+];
+
+const SINGLE_CLAIM_TABS = [
+  { id: 'claim_executive',    label: 'Executive Summary',       icon: '📋' },
+  { id: 'claim_probability',  label: 'Probability & Outcomes',  icon: '🎲' },
+  { id: 'claim_quantum',      label: 'Quantum & Timeline',      icon: '⏱️' },
+  { id: 'claim_investment',   label: 'Investment Analysis',     icon: '📊' },
+  { id: 'claim_cashflow',     label: 'Cashflow & Waterfall',    icon: '💰' },
+  { id: 'claim_risk',         label: 'Risk Analytics',          icon: '⚠️' },
+  { id: 'claim_sensitivity',  label: 'Sensitivity & Breakeven', icon: '📈' },
+  { id: 'claim_export',       label: 'Export & Reports',        icon: '📤' },
 ];
 
 const STRUCTURE_TABS = {
@@ -73,7 +94,8 @@ const STRUCTURE_TABS = {
   ],
 };
 
-function getTabsForStructure(structureType) {
+function getTabsForStructure(structureType, claimMode) {
+  if (claimMode) return SINGLE_CLAIM_TABS;
   const extra = STRUCTURE_TABS[structureType] || [];
   // Insert structure-specific tabs before the last two universal tabs (Risk, Export)
   const universal = [...UNIVERSAL_TABS];
@@ -92,19 +114,20 @@ const STRUCTURE_LABELS = {
 };
 
 export default function App() {
-  const { data, stochasticData, pricingSurfaceData, loading, error, structureType, retry } = useDashboardData();
+  const { data, stochasticData, pricingSurfaceData, loading, error, structureType, claimMode, retry } = useDashboardData();
   const { ui, settings, setTextScale, reset } = useUISettings();
   const [activeTab, setActiveTab] = useState('executive');
 
   if (loading) return <LoadingScreen />;
   if (error)   return <ErrorScreen message={error} onRetry={retry} />;
 
-  const tabs = getTabsForStructure(structureType);
+  const tabs = getTabsForStructure(structureType, claimMode);
   const meta = data?.simulation_meta || {};
 
   // Ensure active tab is valid for current structure
+  const defaultTab = claimMode ? 'claim_executive' : 'executive';
   if (!tabs.find(t => t.id === activeTab)) {
-    setActiveTab('executive');
+    setActiveTab(defaultTab);
   }
 
   const renderTab = () => {
@@ -148,6 +171,24 @@ export default function App() {
         return <V2ReportView stochasticData={stochasticData} />;
       case 'prob_sensitivity':
         return <V2ProbabilitySensitivity data={data} />;
+
+      /* ── Single-Claim tabs ── */
+      case 'claim_executive':
+        return <ClaimExecutiveSummary data={data} stochasticData={stochasticData} />;
+      case 'claim_probability':
+        return <ClaimProbabilityOutcomes data={data} stochasticData={stochasticData} />;
+      case 'claim_quantum':
+        return <ClaimQuantumTimeline data={data} />;
+      case 'claim_investment':
+        return <ClaimInvestmentAnalysis data={data} />;
+      case 'claim_cashflow':
+        return <ClaimCashflow data={data} />;
+      case 'claim_risk':
+        return <ClaimRiskAnalytics data={data} />;
+      case 'claim_sensitivity':
+        return <ClaimSensitivityBreakeven data={data} />;
+      case 'claim_export':
+        return <ClaimExport data={data} />;
 
       /* ── Staged tabs ── */
       case 'milestone':
@@ -205,9 +246,9 @@ export default function App() {
               fontSize: ui.sizes.md,
               color: COLORS.textMuted,
             }}>
-              {STRUCTURE_LABELS[structureType] || structureType}
-              {' — '}
-              {meta.n_claims || '?'} claims
+              {claimMode
+                ? `Single Claim Analysis${data?.claims?.[0]?.name ? ` — ${data.claims[0].name}` : ''}`
+                : `${STRUCTURE_LABELS[structureType] || structureType} — ${meta.n_claims || '?'} claims`}
               {' — '}
               {(meta.n_paths || 0).toLocaleString()} MC paths
             </p>
@@ -222,7 +263,7 @@ export default function App() {
               borderRadius: 6,
               fontWeight: 600,
             }}>
-              {STRUCTURE_LABELS[structureType] || structureType}
+              {claimMode ? 'Single Claim' : (STRUCTURE_LABELS[structureType] || structureType)}
             </span>
             <span style={{
               fontSize: ui.sizes.xs,

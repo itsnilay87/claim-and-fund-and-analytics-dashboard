@@ -14,6 +14,9 @@ const RUNS_DIR = path.resolve(__dirname, '..', 'runs');
 const ENGINE_DIR = path.resolve(__dirname, '..', '..', 'engine');
 const PLATFORM_DIR = path.resolve(__dirname, '..', '..');
 const WORKSPACE_ROOT = path.resolve(__dirname, '..', '..', '..');
+// Legacy TATA v2 runner constants
+const TATA_PARENT = path.resolve(WORKSPACE_ROOT, '..'); // parent of TATA_code_v2 (run -m TATA_code_v2.v2_run from here)
+const SIM_SERVER_DEFAULTS = path.join(WORKSPACE_ROOT, 'simulation-server', 'config', 'defaults.json');
 
 /**
  * Resolve the Python executable — prefer the project venv, then global.
@@ -180,8 +183,9 @@ function _spawnPython(runId, configPath, outputDir, mode) {
 
   const child = spawn(pythonCmd, args, {
     cwd: PLATFORM_DIR,
-    env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+    env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUNBUFFERED: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 600000, // 10 minute hard timeout
   });
 
   child.stdout.on('data', (data) => {
@@ -303,4 +307,157 @@ function _categorize(ext) {
   return map[ext] || 'other';
 }
 
-module.exports = { startRun, getStatus, listRunFiles, getResultFilePath, listRuns };
+// ── Legacy TATA v2 compatibility (for claim-analytics old app) ──
+
+function _deepMergeLegacy(target, source) {
+  for (const key of Object.keys(source)) {
+    if (
+      source[key] && typeof source[key] === 'object' && !Array.isArray(source[key]) &&
+      target[key] && typeof target[key] === 'object' && !Array.isArray(target[key])
+    ) {
+      _deepMergeLegacy(target[key], source[key]);
+    } else {
+      target[key] = source[key];
+    }
+  }
+  return target;
+}
+
+/**
+ * Start a legacy TATA v2 simulation run (backward-compat with old claim-analytics app).
+ * Accepts the old flat config format and runs `python -m TATA_code_v2.v2_run`.
+ * @param {object} overrides - Partial TATA v2 config overrides
+ * @param {string[]} portfolios - e.g. ['all'], ['siac','domestic']
+ * @returns {{ runId: string }}
+ */
+function startLegacyRun(overrides, portfolios = ['all']) {
+  const runId = uuidv4();
+  const runDir = path.join(RUNS_DIR, runId);
+  fs.mkdirSync(runDir, { recursive: true });
+
+  // Merge overrides onto simulation-server defaults
+  let mergedConfig;
+  try {
+    const simDefaults = JSON.parse(fs.readFileSync(SIM_SERVER_DEFAULTS, 'utf-8'));
+    mergedConfig = _deepMergeLegacy(simDefaults, overrides || {});
+  } catch {
+    mergedConfig = overrides || {};
+  }
+
+  const configPath = path.join(runDir, 'config.json');
+  fs.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2), 'utf-8');
+
+  const status = {
+    runId,
+    status: 'queued',
+    mode: 'legacy',
+    startedAt: new Date().toISOString(),
+    completedAt: null,
+    progress: 0,
+    error: null,
+    portfolios,
+    completedPortfolios: [],
+  };
+  runStatus.set(runId, status);
+  _writeStatus(runDir, status);
+
+  setImmediate(() => _runLegacyPortfolios(runId, runDir, configPath, mergedConfig, portfolios));
+  return { runId };
+}
+
+async function _runLegacyPortfolios(runId, runDir, configPath, config, portfolios) {
+  const status = runStatus.get(runId);
+  status.status = 'running';
+  _writeStatus(runDir, status);
+
+  const pythonCmd = _findPython();
+
+  for (const portfolio of portfolios) {
+    try {
+      await _runLegacyPortfolio(runId, runDir, configPath, config, portfolio, pythonCmd);
+      status.completedPortfolios.push(portfolio);
+      status.progress = Math.round((status.completedPortfolios.length / portfolios.length) * 95);
+      runStatus.set(runId, status);
+      _writeStatus(runDir, status);
+    } catch (err) {
+      status.status = 'failed';
+      status.error = `Portfolio '${portfolio}' failed: ${err.message}`;
+      status.completedAt = new Date().toISOString();
+      runStatus.set(runId, status);
+      _writeStatus(runDir, status);
+      return;
+    }
+  }
+
+  status.status = 'completed';
+  status.progress = 100;
+  status.completedAt = new Date().toISOString();
+  runStatus.set(runId, status);
+  _writeStatus(runDir, status);
+}
+
+function _runLegacyPortfolio(runId, runDir, configPath, config, portfolio, pythonCmd) {
+  return new Promise((resolve, reject) => {
+    const outputDir = path.join(runDir, portfolio);
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    const nSims = config.simulation?.n_simulations || config.simulation?.n_paths || 10000;
+    const seed = config.simulation?.random_seed || config.simulation?.seed || 42;
+
+    const args = [
+      '-m', 'TATA_code_v2.v2_run',
+      '--config', configPath,
+      '--portfolio', portfolio,
+      '--output-dir', outputDir,
+      '--n', String(nSims),
+      '--seed', String(seed),
+    ];
+    if (config.simulation?.no_restart_mode) args.push('--no-restart');
+
+    console.log(`[LegacyRun ${runId.slice(0, 8)}] Portfolio '${portfolio}': ${pythonCmd} ${args.join(' ')}`);
+
+    const child = spawn(pythonCmd, args, {
+      cwd: TATA_PARENT,
+      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONIOENCODING: 'utf-8' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+
+    child.on('close', (code) => {
+      const logPath = path.join(outputDir, 'run_log.txt');
+      try { fs.writeFileSync(logPath, stdout + '\n--- stderr ---\n' + stderr, 'utf-8'); } catch {}
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error((stderr || stdout).slice(-500) || `Exit code ${code}`));
+      }
+    });
+
+    child.on('error', (err) => reject(new Error(`Failed to spawn Python: ${err.message}`)));
+  });
+}
+
+/**
+ * Resolve a file within a legacy run's per-portfolio directory.
+ * Files live at runs/:runId/:portfolio/:filePath
+ * @param {string} runId
+ * @param {string} portfolio - e.g. 'all', 'siac', 'domestic'
+ * @param {string} filePath  - relative path within the portfolio dir
+ * @returns {string|null}
+ */
+function getLegacyResultFilePath(runId, portfolio, filePath) {
+  const allowed = ['all', 'siac', 'domestic', 'compare'];
+  if (!allowed.includes(portfolio)) return null;
+  const portDir = path.join(RUNS_DIR, runId, portfolio);
+  const resolved = path.resolve(portDir, filePath);
+  if (!resolved.startsWith(portDir + path.sep) && resolved !== portDir) return null;
+  if (!fs.existsSync(resolved)) return null;
+  return resolved;
+}
+
+module.exports = { startRun, startLegacyRun, getStatus, listRunFiles, getResultFilePath, getLegacyResultFilePath, listRuns };

@@ -48,7 +48,7 @@ function serveTestOutputs() {
 
 export default defineConfig({
   plugins: [react(), serveTestOutputs()],
-  base: process.env.VITE_BASE_PATH || '/',
+  base: process.env.VITE_BASE_PATH || '/dashboard/',
   server: {
     port: 5173,
     proxy: {

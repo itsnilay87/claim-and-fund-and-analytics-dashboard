@@ -10,7 +10,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const { getStatus, listRunFiles, getResultFilePath } = require('../services/simulationRunner');
+const { getStatus, listRunFiles, getResultFilePath, getLegacyResultFilePath, listRuns } = require('../services/simulationRunner');
 
 /**
  * GET /api/status/:runId
@@ -33,6 +33,9 @@ router.get('/status/:runId', (req, res) => {
     startedAt: status.startedAt,
     completedAt: status.completedAt,
     error: status.error,
+    // Legacy TATA v2 fields (used by the claim-analytics app for result navigation)
+    portfolios: status.portfolios || null,
+    completedPortfolios: status.completedPortfolios || null,
   });
 });
 
@@ -155,13 +158,21 @@ router.get('/results/:runId/*', (req, res) => {
 
   let absPath = getResultFilePath(runId, filePath);
 
-  // Fallback: strip portfolio-mode prefix (e.g. "all/dashboard_data.json" → "dashboard_data.json")
+  // Fallback 1: strip portfolio-mode prefix (e.g. "all/dashboard_data.json" → "dashboard_data.json")
   // Single-claim runs output files at root level, but the dashboard requests with mode prefix.
   if (!absPath) {
     const segments = filePath.split('/');
     if (segments.length > 1) {
       const stripped = segments.slice(1).join('/');
       absPath = getResultFilePath(runId, stripped);
+    }
+  }
+
+  // Fallback 2: legacy TATA v2 runs store files at runs/:runId/:portfolio/
+  if (!absPath) {
+    const segments = filePath.split('/');
+    if (segments.length > 1) {
+      absPath = getLegacyResultFilePath(runId, segments[0], segments.slice(1).join('/'));
     }
   }
 

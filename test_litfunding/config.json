@@ -1,0 +1,680 @@
+{
+    "id":  "claim_run_1774251568444",
+    "name":  "TPL 102",
+    "claim_ids":  [
+                      "4e99c2cf-2179-4c1c-afb2-ad00228153be"
+                  ],
+    "structure":  {
+                      "type":  "litigation_funding",
+                      "params":  {
+                                     "award_ratio_range":  {
+                                                               "step":  0.05,
+                                                               "min":  0.1,
+                                                               "max":  0.5
+                                                           },
+                                     "cost_multiple_range":  {
+                                                                 "step":  0.5,
+                                                                 "min":  1,
+                                                                 "max":  5
+                                                             },
+                                     "waterfall_type":  "min"
+                                 }
+                  },
+    "simulation":  {
+                       "n_paths":  103,
+                       "seed":  42,
+                       "discount_rate":  0.12,
+                       "risk_free_rate":  0.07,
+                       "start_date":  "2026-04-30",
+                       "sims_per_combo":  2000,
+                       "pricing_surface":  {
+                                               "enabled":  true,
+                                               "upfront_min":  5,
+                                               "upfront_max":  35,
+                                               "tail_min":  0,
+                                               "tail_max":  40,
+                                               "step":  1,
+                                               "pricing_basis":  "soc"
+                                           }
+                   },
+    "claims":  [
+                   {
+                       "id":  "4e99c2cf-2179-4c1c-afb2-ad00228153be",
+                       "workspace_id":  "bfb3068b-84ca-422f-949f-1506d7cb16d2",
+                       "name":  "TPL 102",
+                       "claimant":  "TATA Projects",
+                       "respondent":  "DFCCIL",
+                       "jurisdiction":  "indian_domestic",
+                       "claim_type":  "prolongation",
+                       "soc_value_cr":  1400,
+                       "currency":  "INR",
+                       "claimant_share_pct":  1,
+                       "current_stage":  "dab",
+                       "perspective":  "claimant",
+                       "description":  "",
+                       "status":  "simulated",
+                       "arbitration":  {
+                                           "win_probability":  0.8,
+                                           "re_arb_win_probability":  0.8
+                                       },
+                       "quantum":  {
+                                       "bands":  [
+                                                     {
+                                                         "low":  0,
+                                                         "high":  0.2,
+                                                         "probability":  0.1
+                                                     },
+                                                     {
+                                                         "low":  0.2,
+                                                         "high":  0.4,
+                                                         "probability":  0.015
+                                                     },
+                                                     {
+                                                         "low":  0.4,
+                                                         "high":  0.6,
+                                                         "probability":  0.015
+                                                     },
+                                                     {
+                                                         "low":  0.6,
+                                                         "high":  0.8,
+                                                         "probability":  0.02
+                                                     },
+                                                     {
+                                                         "low":  0.8,
+                                                         "high":  1,
+                                                         "probability":  0.85
+                                                     }
+                                                 ]
+                                   },
+                       "challenge_tree":  {
+                                              "scenario_a":  {
+                                                                 "description":  "Claimant WON arbitration â€” respondent (DFCCIL) challenges through Indian courts. 12 terminal paths. P(TRUE_WIN)=0.7360, P(LOSE)=0.2640.",
+                                                                 "root":  {
+                                                                              "name":  "S.34",
+                                                                              "probability":  1,
+                                                                              "children":  [
+                                                                                               {
+                                                                                                   "name":  "Respondent Fails S.34",
+                                                                                                   "probability":  0.7,
+                                                                                                   "duration_distribution":  {
+                                                                                                                                 "type":  "uniform",
+                                                                                                                                 "low":  9,
+                                                                                                                                 "high":  18
+                                                                                                                             },
+                                                                                                   "legal_cost":  {
+                                                                                                                      "low":  2,
+                                                                                                                      "high":  3
+                                                                                                                  },
+                                                                                                   "children":  [
+                                                                                                                    {
+                                                                                                                        "name":  "Respondent Fails S.37",
+                                                                                                                        "probability":  0.8,
+                                                                                                                        "duration_distribution":  {
+                                                                                                                                                      "type":  "uniform",
+                                                                                                                                                      "low":  6,
+                                                                                                                                                      "high":  12
+                                                                                                                                                  },
+                                                                                                                        "legal_cost":  {
+                                                                                                                                           "low":  1,
+                                                                                                                                           "high":  2
+                                                                                                                                       },
+                                                                                                                        "children":  [
+                                                                                                                                         {
+                                                                                                                                             "name":  "SLP Dismissed (A1)",
+                                                                                                                                             "probability":  0.9,
+                                                                                                                                             "outcome":  "TRUE_WIN",
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  4
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  0.5,
+                                                                                                                                                                "high":  1
+                                                                                                                                                            }
+                                                                                                                                         },
+                                                                                                                                         {
+                                                                                                                                             "name":  "SLP Admitted",
+                                                                                                                                             "probability":  0.1,
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  24
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  2,
+                                                                                                                                                                "high":  3
+                                                                                                                                                            },
+                                                                                                                                             "children":  [
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Respondent Wins SLP Merits (A2)",
+                                                                                                                                                                  "probability":  0.1,
+                                                                                                                                                                  "outcome":  "LOSE"
+                                                                                                                                                              },
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Claimant Wins SLP Merits (A3)",
+                                                                                                                                                                  "probability":  0.9,
+                                                                                                                                                                  "outcome":  "TRUE_WIN"
+                                                                                                                                                              }
+                                                                                                                                                          ]
+                                                                                                                                         }
+                                                                                                                                     ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "name":  "Respondent Wins S.37",
+                                                                                                                        "probability":  0.2,
+                                                                                                                        "duration_distribution":  {
+                                                                                                                                                      "type":  "uniform",
+                                                                                                                                                      "low":  6,
+                                                                                                                                                      "high":  12
+                                                                                                                                                  },
+                                                                                                                        "legal_cost":  {
+                                                                                                                                           "low":  1,
+                                                                                                                                           "high":  2
+                                                                                                                                       },
+                                                                                                                        "children":  [
+                                                                                                                                         {
+                                                                                                                                             "name":  "Claimant SLP Dismissed (A4)",
+                                                                                                                                             "probability":  0.5,
+                                                                                                                                             "outcome":  "LOSE",
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  4
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  0.5,
+                                                                                                                                                                "high":  1
+                                                                                                                                                            }
+                                                                                                                                         },
+                                                                                                                                         {
+                                                                                                                                             "name":  "Claimant SLP Admitted",
+                                                                                                                                             "probability":  0.5,
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  24
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  2,
+                                                                                                                                                                "high":  3
+                                                                                                                                                            },
+                                                                                                                                             "children":  [
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Claimant Wins SLP Merits (A5)",
+                                                                                                                                                                  "probability":  0.5,
+                                                                                                                                                                  "outcome":  "TRUE_WIN"
+                                                                                                                                                              },
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Claimant Loses SLP Merits (A6)",
+                                                                                                                                                                  "probability":  0.5,
+                                                                                                                                                                  "outcome":  "LOSE"
+                                                                                                                                                              }
+                                                                                                                                                          ]
+                                                                                                                                         }
+                                                                                                                                     ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                               },
+                                                                                               {
+                                                                                                   "name":  "Respondent Wins S.34",
+                                                                                                   "probability":  0.3,
+                                                                                                   "duration_distribution":  {
+                                                                                                                                 "type":  "uniform",
+                                                                                                                                 "low":  9,
+                                                                                                                                 "high":  18
+                                                                                                                             },
+                                                                                                   "legal_cost":  {
+                                                                                                                      "low":  2,
+                                                                                                                      "high":  3
+                                                                                                                  },
+                                                                                                   "children":  [
+                                                                                                                    {
+                                                                                                                        "name":  "Claimant Wins S.37",
+                                                                                                                        "probability":  0.5,
+                                                                                                                        "duration_distribution":  {
+                                                                                                                                                      "type":  "uniform",
+                                                                                                                                                      "low":  6,
+                                                                                                                                                      "high":  12
+                                                                                                                                                  },
+                                                                                                                        "legal_cost":  {
+                                                                                                                                           "low":  1,
+                                                                                                                                           "high":  2
+                                                                                                                                       },
+                                                                                                                        "children":  [
+                                                                                                                                         {
+                                                                                                                                             "name":  "Respondent SLP Dismissed (A7)",
+                                                                                                                                             "probability":  0.75,
+                                                                                                                                             "outcome":  "TRUE_WIN",
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  4
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  0.5,
+                                                                                                                                                                "high":  1
+                                                                                                                                                            }
+                                                                                                                                         },
+                                                                                                                                         {
+                                                                                                                                             "name":  "Respondent SLP Admitted",
+                                                                                                                                             "probability":  0.25,
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  24
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  2,
+                                                                                                                                                                "high":  3
+                                                                                                                                                            },
+                                                                                                                                             "children":  [
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Respondent Wins SLP Merits (A8)",
+                                                                                                                                                                  "probability":  0.25,
+                                                                                                                                                                  "outcome":  "LOSE"
+                                                                                                                                                              },
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Claimant Wins SLP Merits (A9)",
+                                                                                                                                                                  "probability":  0.75,
+                                                                                                                                                                  "outcome":  "TRUE_WIN"
+                                                                                                                                                              }
+                                                                                                                                                          ]
+                                                                                                                                         }
+                                                                                                                                     ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "name":  "Claimant Loses S.37",
+                                                                                                                        "probability":  0.5,
+                                                                                                                        "duration_distribution":  {
+                                                                                                                                                      "type":  "uniform",
+                                                                                                                                                      "low":  6,
+                                                                                                                                                      "high":  12
+                                                                                                                                                  },
+                                                                                                                        "legal_cost":  {
+                                                                                                                                           "low":  1,
+                                                                                                                                           "high":  2
+                                                                                                                                       },
+                                                                                                                        "children":  [
+                                                                                                                                         {
+                                                                                                                                             "name":  "Claimant SLP Dismissed (A10)",
+                                                                                                                                             "probability":  0.8,
+                                                                                                                                             "outcome":  "LOSE",
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  4
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  0.5,
+                                                                                                                                                                "high":  1
+                                                                                                                                                            }
+                                                                                                                                         },
+                                                                                                                                         {
+                                                                                                                                             "name":  "Claimant SLP Admitted",
+                                                                                                                                             "probability":  0.2,
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  24
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  2,
+                                                                                                                                                                "high":  3
+                                                                                                                                                            },
+                                                                                                                                             "children":  [
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Claimant Wins SLP Merits (A11)",
+                                                                                                                                                                  "probability":  0.2,
+                                                                                                                                                                  "outcome":  "TRUE_WIN"
+                                                                                                                                                              },
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Claimant Loses SLP Merits (A12)",
+                                                                                                                                                                  "probability":  0.8,
+                                                                                                                                                                  "outcome":  "LOSE"
+                                                                                                                                                              }
+                                                                                                                                                          ]
+                                                                                                                                         }
+                                                                                                                                     ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                               }
+                                                                                           ]
+                                                                          }
+                                                             },
+                                              "scenario_b":  {
+                                                                 "description":  "Claimant LOST arbitration â€” claimant (TATA) challenges through Indian courts. 12 terminal paths. P(RESTART)=0.2966, P(LOSE)=0.7034.",
+                                                                 "root":  {
+                                                                              "name":  "S.34",
+                                                                              "probability":  1,
+                                                                              "children":  [
+                                                                                               {
+                                                                                                   "name":  "Claimant Wins S.34",
+                                                                                                   "probability":  0.3,
+                                                                                                   "duration_distribution":  {
+                                                                                                                                 "type":  "uniform",
+                                                                                                                                 "low":  9,
+                                                                                                                                 "high":  18
+                                                                                                                             },
+                                                                                                   "legal_cost":  {
+                                                                                                                      "low":  2,
+                                                                                                                      "high":  3
+                                                                                                                  },
+                                                                                                   "children":  [
+                                                                                                                    {
+                                                                                                                        "name":  "Respondent Wins S.37",
+                                                                                                                        "probability":  0.5,
+                                                                                                                        "duration_distribution":  {
+                                                                                                                                                      "type":  "uniform",
+                                                                                                                                                      "low":  6,
+                                                                                                                                                      "high":  12
+                                                                                                                                                  },
+                                                                                                                        "legal_cost":  {
+                                                                                                                                           "low":  1,
+                                                                                                                                           "high":  2
+                                                                                                                                       },
+                                                                                                                        "children":  [
+                                                                                                                                         {
+                                                                                                                                             "name":  "Claimant SLP Dismissed (B7)",
+                                                                                                                                             "probability":  0.75,
+                                                                                                                                             "outcome":  "LOSE",
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  4
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  0.5,
+                                                                                                                                                                "high":  1
+                                                                                                                                                            }
+                                                                                                                                         },
+                                                                                                                                         {
+                                                                                                                                             "name":  "Claimant SLP Admitted",
+                                                                                                                                             "probability":  0.25,
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  24
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  2,
+                                                                                                                                                                "high":  3
+                                                                                                                                                            },
+                                                                                                                                             "children":  [
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Claimant Wins SLP Merits (B8)",
+                                                                                                                                                                  "probability":  0.75,
+                                                                                                                                                                  "outcome":  "RESTART"
+                                                                                                                                                              },
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Claimant Loses SLP Merits (B9)",
+                                                                                                                                                                  "probability":  0.25,
+                                                                                                                                                                  "outcome":  "LOSE"
+                                                                                                                                                              }
+                                                                                                                                                          ]
+                                                                                                                                         }
+                                                                                                                                     ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "name":  "Claimant Wins S.37",
+                                                                                                                        "probability":  0.5,
+                                                                                                                        "duration_distribution":  {
+                                                                                                                                                      "type":  "uniform",
+                                                                                                                                                      "low":  6,
+                                                                                                                                                      "high":  12
+                                                                                                                                                  },
+                                                                                                                        "legal_cost":  {
+                                                                                                                                           "low":  1,
+                                                                                                                                           "high":  2
+                                                                                                                                       },
+                                                                                                                        "children":  [
+                                                                                                                                         {
+                                                                                                                                             "name":  "Respondent SLP Dismissed (B10)",
+                                                                                                                                             "probability":  0.8,
+                                                                                                                                             "outcome":  "RESTART",
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  4
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  0.5,
+                                                                                                                                                                "high":  1
+                                                                                                                                                            }
+                                                                                                                                         },
+                                                                                                                                         {
+                                                                                                                                             "name":  "Respondent SLP Admitted",
+                                                                                                                                             "probability":  0.2,
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  24
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  2,
+                                                                                                                                                                "high":  3
+                                                                                                                                                            },
+                                                                                                                                             "children":  [
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Respondent Wins SLP Merits (B11)",
+                                                                                                                                                                  "probability":  0.8,
+                                                                                                                                                                  "outcome":  "LOSE"
+                                                                                                                                                              },
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Respondent Loses SLP Merits (B12)",
+                                                                                                                                                                  "probability":  0.2,
+                                                                                                                                                                  "outcome":  "RESTART"
+                                                                                                                                                              }
+                                                                                                                                                          ]
+                                                                                                                                         }
+                                                                                                                                     ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                               },
+                                                                                               {
+                                                                                                   "name":  "Claimant Fails S.34",
+                                                                                                   "probability":  0.7,
+                                                                                                   "duration_distribution":  {
+                                                                                                                                 "type":  "uniform",
+                                                                                                                                 "low":  9,
+                                                                                                                                 "high":  18
+                                                                                                                             },
+                                                                                                   "legal_cost":  {
+                                                                                                                      "low":  2,
+                                                                                                                      "high":  3
+                                                                                                                  },
+                                                                                                   "children":  [
+                                                                                                                    {
+                                                                                                                        "name":  "Claimant Loses S.37",
+                                                                                                                        "probability":  0.8,
+                                                                                                                        "duration_distribution":  {
+                                                                                                                                                      "type":  "uniform",
+                                                                                                                                                      "low":  6,
+                                                                                                                                                      "high":  12
+                                                                                                                                                  },
+                                                                                                                        "legal_cost":  {
+                                                                                                                                           "low":  1,
+                                                                                                                                           "high":  2
+                                                                                                                                       },
+                                                                                                                        "children":  [
+                                                                                                                                         {
+                                                                                                                                             "name":  "Claimant SLP Dismissed (B1)",
+                                                                                                                                             "probability":  0.9,
+                                                                                                                                             "outcome":  "LOSE",
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  4
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  0.5,
+                                                                                                                                                                "high":  1
+                                                                                                                                                            }
+                                                                                                                                         },
+                                                                                                                                         {
+                                                                                                                                             "name":  "Claimant SLP Admitted",
+                                                                                                                                             "probability":  0.1,
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  24
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  2,
+                                                                                                                                                                "high":  3
+                                                                                                                                                            },
+                                                                                                                                             "children":  [
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Claimant Wins SLP Merits (B2)",
+                                                                                                                                                                  "probability":  0.2,
+                                                                                                                                                                  "outcome":  "RESTART"
+                                                                                                                                                              },
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Claimant Loses SLP Merits (B3)",
+                                                                                                                                                                  "probability":  0.8,
+                                                                                                                                                                  "outcome":  "LOSE"
+                                                                                                                                                              }
+                                                                                                                                                          ]
+                                                                                                                                         }
+                                                                                                                                     ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "name":  "Claimant Wins S.37",
+                                                                                                                        "probability":  0.2,
+                                                                                                                        "duration_distribution":  {
+                                                                                                                                                      "type":  "uniform",
+                                                                                                                                                      "low":  6,
+                                                                                                                                                      "high":  12
+                                                                                                                                                  },
+                                                                                                                        "legal_cost":  {
+                                                                                                                                           "low":  1,
+                                                                                                                                           "high":  2
+                                                                                                                                       },
+                                                                                                                        "children":  [
+                                                                                                                                         {
+                                                                                                                                             "name":  "Respondent SLP Dismissed (B4)",
+                                                                                                                                             "probability":  0.75,
+                                                                                                                                             "outcome":  "RESTART",
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  4
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  0.5,
+                                                                                                                                                                "high":  1
+                                                                                                                                                            }
+                                                                                                                                         },
+                                                                                                                                         {
+                                                                                                                                             "name":  "Respondent SLP Admitted",
+                                                                                                                                             "probability":  0.25,
+                                                                                                                                             "duration_distribution":  {
+                                                                                                                                                                           "type":  "fixed",
+                                                                                                                                                                           "value":  24
+                                                                                                                                                                       },
+                                                                                                                                             "legal_cost":  {
+                                                                                                                                                                "low":  2,
+                                                                                                                                                                "high":  3
+                                                                                                                                                            },
+                                                                                                                                             "children":  [
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Respondent Wins SLP Merits (B5)",
+                                                                                                                                                                  "probability":  0.25,
+                                                                                                                                                                  "outcome":  "LOSE"
+                                                                                                                                                              },
+                                                                                                                                                              {
+                                                                                                                                                                  "name":  "Respondent Loses SLP Merits (B6)",
+                                                                                                                                                                  "probability":  0.75,
+                                                                                                                                                                  "outcome":  "RESTART"
+                                                                                                                                                              }
+                                                                                                                                                          ]
+                                                                                                                                         }
+                                                                                                                                     ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                               }
+                                                                                           ]
+                                                                          }
+                                                             }
+                                          },
+                       "timeline":  {
+                                        "pre_arb_stages":  [
+                                                               {
+                                                                   "name":  "dab",
+                                                                   "duration_low":  4.8,
+                                                                   "duration_high":  13.1,
+                                                                   "legal_cost_low":  0.5,
+                                                                   "legal_cost_high":  1
+                                                               },
+                                                               {
+                                                                   "name":  "arbitration",
+                                                                   "duration_low":  20.3,
+                                                                   "duration_high":  23.4,
+                                                                   "legal_cost_low":  8,
+                                                                   "legal_cost_high":  8
+                                                               }
+                                                           ],
+                                        "payment_delay_months":  6,
+                                        "max_horizon_months":  96
+                                    },
+                       "legal_costs":  {
+                                           "one_time_tribunal_cr":  6,
+                                           "one_time_expert_cr":  2,
+                                           "per_stage_costs":  {
+                                                                   "dab":  {
+                                                                               "name":  "dab",
+                                                                               "duration_low":  4.8,
+                                                                               "duration_high":  13.1,
+                                                                               "legal_cost_low":  0.5,
+                                                                               "legal_cost_high":  1
+                                                                           },
+                                                                   "arb_counsel":  {
+                                                                                       "name":  "arb_counsel",
+                                                                                       "duration_low":  20.3,
+                                                                                       "duration_high":  23.4,
+                                                                                       "legal_cost_low":  8,
+                                                                                       "legal_cost_high":  8
+                                                                                   },
+                                                                   "s34":  {
+                                                                               "name":  "s34",
+                                                                               "duration_low":  9,
+                                                                               "duration_high":  18,
+                                                                               "legal_cost_low":  2,
+                                                                               "legal_cost_high":  3
+                                                                           },
+                                                                   "s37":  {
+                                                                               "name":  "s37",
+                                                                               "duration_low":  6,
+                                                                               "duration_high":  12,
+                                                                               "legal_cost_low":  1,
+                                                                               "legal_cost_high":  2
+                                                                           },
+                                                                   "slp_dismissed":  {
+                                                                                         "name":  "slp_dismissed",
+                                                                                         "duration_low":  4,
+                                                                                         "duration_high":  4,
+                                                                                         "legal_cost_low":  0.5,
+                                                                                         "legal_cost_high":  1
+                                                                                     },
+                                                                   "slp_admitted":  {
+                                                                                        "name":  "slp_admitted",
+                                                                                        "duration_low":  24,
+                                                                                        "duration_high":  24,
+                                                                                        "legal_cost_low":  2,
+                                                                                        "legal_cost_high":  3
+                                                                                    }
+                                                               },
+                                           "overrun_alpha":  2,
+                                           "overrun_beta":  5,
+                                           "overrun_low":  -0.1,
+                                           "overrun_high":  0.6
+                                       },
+                       "interest":  {
+                                        "enabled":  true,
+                                        "rate":  0.13,
+                                        "compounding":  "simple",
+                                        "start_basis":  "dab_commencement",
+                                        "rate_bands":  [
+                                                           {
+                                                               "rate":  0.09,
+                                                               "type":  "simple",
+                                                               "probability":  1
+                                                           }
+                                                       ],
+                                        "commencement_date":  "2025-01-01"
+                                    },
+                       "no_restart_mode":  false,
+                       "simulation_seed":  42,
+                       "n_simulations":  103,
+                       "created_at":  "2026-03-21T09:12:36.241Z",
+                       "updated_at":  "2026-03-21T09:15:15.512Z",
+                       "sims_per_combo":  100,
+                       "run_id":  "aa90c472-1a27-4cb8-97e7-ee7f3599c74d"
+                   }
+               ]
+}

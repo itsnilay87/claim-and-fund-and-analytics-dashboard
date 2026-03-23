@@ -1,13 +1,14 @@
 /**
  * Simulation Routes
  *
+ * POST /api/simulate           — Legacy TATA v2 format (claim-analytics backward-compat)
  * POST /api/simulate/claim     — Run single-claim simulation
  * POST /api/simulate/portfolio  — Run portfolio simulation
  */
 
 const express = require('express');
 const router = express.Router();
-const { startRun } = require('../services/simulationRunner');
+const { startRun, startLegacyRun } = require('../services/simulationRunner');
 const { mergeConfig, getDefaults, loadDefaults, validateConfig } = require('../services/configService');
 const fs = require('fs');
 const path = require('path');
@@ -40,6 +41,11 @@ function enrichClaimConfig(claim) {
     }
   }
 
+  // Map UI timeline.stages → engine timeline.pre_arb_stages
+  if (claim.timeline && Array.isArray(claim.timeline.stages) && !claim.timeline.pre_arb_stages) {
+    claim.timeline.pre_arb_stages = claim.timeline.stages;
+  }
+
   // Merge other defaults from jurisdiction
   if (jurisdictionDefaults) {
     if (!claim.timeline || !claim.timeline.pre_arb_stages?.length) {
@@ -59,6 +65,14 @@ function enrichClaimConfig(claim) {
     }
   }
 
+  // Map UI field names to engine field names
+  if (claim.statementOfClaim != null && claim.soc_value_cr == null) {
+    claim.soc_value_cr = claim.statementOfClaim;
+  }
+  if (claim.archetype && !claim.claim_type) {
+    claim.claim_type = claim.archetype;
+  }
+
   // Ensure required scalar fields have defaults
   if (!claim.claim_type) claim.claim_type = 'prolongation';
   if (!claim.currency) claim.currency = 'INR';
@@ -75,6 +89,15 @@ function enrichClaimConfig(claim) {
         if (band.rate != null && band.rate > 1) {
           band.rate = band.rate / 100;
         }
+      }
+    }
+  }
+
+  // Normalize timeline stage names to lowercase for the Python adapter
+  if (claim.timeline && Array.isArray(claim.timeline.pre_arb_stages)) {
+    for (const stage of claim.timeline.pre_arb_stages) {
+      if (stage.name) {
+        stage.name = stage.name.toLowerCase();
       }
     }
   }
@@ -117,11 +140,11 @@ router.post('/claim', (req, res) => {
       name: enrichedClaim.name || 'Single Claim Run',
       claim_ids: [enrichedClaim.id || 'claim_1'],
       structure: {
-        type: 'monetisation_upfront_tail',
+        type: 'litigation_funding',
         params: {
-          upfront_range: { min: 0.05, max: 0.50, step: 0.05 },
-          tail_range: { min: 0.0, max: 0.50, step: 0.05 },
-          pricing_basis: 'soc',
+          cost_multiple_range: { min: 1.0, max: 5.0, step: 0.5 },
+          award_ratio_range: { min: 0.10, max: 0.50, step: 0.05 },
+          waterfall_type: 'min',
         },
       },
       simulation: simConfig,
@@ -151,6 +174,9 @@ router.post('/portfolio', (req, res) => {
       return res.status(400).json({ error: 'claims array is required and must not be empty' });
     }
 
+    // Enrich each claim with jurisdiction defaults (challenge_tree, timeline, etc.)
+    const enrichedClaims = claims.map(c => enrichClaimConfig({ ...c }));
+
     // Build full config for engine
     const defaults = getDefaults();
     const simConfig = portfolio_config.simulation
@@ -164,7 +190,7 @@ router.post('/portfolio', (req, res) => {
       ...portfolio_config,
       simulation: simConfig,
       structure: { type: structureType, ...(portfolio_config.structure || {}) },
-      claims,
+      claims: enrichedClaims,
     };
 
     const { valid, errors } = validateConfig(config);
@@ -174,7 +200,7 @@ router.post('/portfolio', (req, res) => {
 
     // Validate V2-specific fields
     const v2Errors = _validateV2SimConfig(simConfig);
-    for (const claim of claims) {
+    for (const claim of enrichedClaims) {
       v2Errors.push(..._validateV2ClaimFields(claim));
     }
     if (v2Errors.length > 0) {
@@ -258,5 +284,33 @@ function _validateV2ClaimFields(claim) {
 
   return errors;
 }
+
+/**
+ * POST /api/simulate  (legacy — backward-compatible with claim-analytics old app)
+ *
+ * Accepts the old TATA v2 flat format:
+ *   Body: { config: { simulation, arbitration, quantum_bands, ... }, portfolios: ['all'] }
+ * Returns: { runId, status: 'queued', portfolios }
+ *
+ * This endpoint runs python -m TATA_code_v2.v2_run using the simulation-server runner.
+ */
+router.post('/', (req, res) => {
+  try {
+    const { config: overrides = {}, portfolios = ['all'] } = req.body;
+
+    const validPortfolios = ['all', 'siac', 'domestic', 'compare'];
+    for (const p of portfolios) {
+      if (!validPortfolios.includes(p)) {
+        return res.status(400).json({ error: `Invalid portfolio: '${p}'. Must be one of: ${validPortfolios.join(', ')}` });
+      }
+    }
+
+    const { runId } = startLegacyRun(overrides, portfolios);
+    res.status(202).json({ runId, status: 'queued', portfolios, message: 'Simulation queued' });
+  } catch (err) {
+    console.error('[POST /api/simulate (legacy)]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;
