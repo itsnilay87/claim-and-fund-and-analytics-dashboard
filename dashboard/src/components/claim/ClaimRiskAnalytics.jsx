@@ -6,14 +6,13 @@
  *   2. MOIC Percentile Bar Chart
  *   3. IRR Percentile Bar Chart
  *   4. Capital at Risk Timeline (area chart)
- *   5. Probability Sensitivity Curve
- *   6. Stress Scenarios Table
+ *   5. Stress Scenarios Table
  */
 
 import React, { useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Cell, ReferenceLine, AreaChart, Area, Line, ComposedChart, Legend,
+  Cell, ReferenceLine, AreaChart, Area,
 } from 'recharts';
 import { COLORS, FONT, CHART_HEIGHT, useUISettings, fmtCr, fmtPct, fmtMOIC, fmtMo } from '../../theme';
 import { Card, SectionTitle, KPI, DataTable, CustomTooltip } from '../Shared';
@@ -182,99 +181,7 @@ function CapitalAtRiskTimeline({ data }) {
 }
 
 /* ═══════════════════════════════════════════════════════════
- *  § 5 — Probability Sensitivity Curve
- * ═══════════════════════════════════════════════════════════ */
-function SensitivityCurve({ data }) {
-  const { ui } = useUISettings();
-  const sensitivity = data?.sensitivity;
-  const claim = data?.claims?.[0] || {};
-
-  const chartData = useMemo(() => {
-    if (!sensitivity || sensitivity.length === 0) return [];
-    return sensitivity.map(s => ({
-      pWin: (s.arb_win_prob * 100).toFixed(0) + '%',
-      pWinRaw: s.arb_win_prob,
-      eMoic: s.e_moic,
-      pLoss: s.p_loss,
-    }));
-  }, [sensitivity]);
-
-  const breakevenProb = useMemo(() => {
-    if (!sensitivity || sensitivity.length < 2) return null;
-    for (let i = 1; i < sensitivity.length; i++) {
-      const prev = sensitivity[i - 1];
-      const curr = sensitivity[i];
-      if (prev.e_moic < 1.0 && curr.e_moic >= 1.0) {
-        // Linear interpolation
-        const frac = (1.0 - prev.e_moic) / (curr.e_moic - prev.e_moic);
-        return prev.arb_win_prob + frac * (curr.arb_win_prob - prev.arb_win_prob);
-      }
-    }
-    // If all are above or below 1.0
-    if (sensitivity[0].e_moic >= 1.0) return sensitivity[0].arb_win_prob;
-    return null;
-  }, [sensitivity]);
-
-  if (chartData.length === 0) return null;
-
-  const currentWinProb = claim.win_rate || claim.effective_win_rate;
-
-  return (
-    <Card>
-      <SectionTitle number="5" title="Probability Sensitivity Curve"
-        subtitle="E[MOIC] and P(Loss) as functions of arbitration win probability" />
-      <ResponsiveContainer width="100%" height={ui.chartHeight.lg}>
-        <ComposedChart data={chartData} margin={{ top: 10, right: 60, left: 20, bottom: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
-          <XAxis
-            dataKey="pWin"
-            tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm, fontFamily: FONT }}
-            label={{ value: 'P(Arb Win)', position: 'insideBottom', offset: -4, fill: COLORS.text, fontSize: ui.sizes.md, fontWeight: 600 }}
-          />
-          <YAxis
-            yAxisId="moic"
-            tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm, fontFamily: FONT }}
-            tickFormatter={v => `${v.toFixed(1)}×`}
-            label={{ value: 'E[MOIC]', angle: -90, position: 'insideLeft', offset: 10, fill: COLORS.accent6, fontSize: ui.sizes.md, fontWeight: 600 }}
-          />
-          <YAxis
-            yAxisId="ploss"
-            orientation="right"
-            tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm, fontFamily: FONT }}
-            tickFormatter={v => `${(v * 100).toFixed(0)}%`}
-            label={{ value: 'P(Loss)', angle: 90, position: 'insideRight', offset: 10, fill: COLORS.accent5, fontSize: ui.sizes.md, fontWeight: 600 }}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          <Legend wrapperStyle={{ fontFamily: FONT, fontSize: ui.sizes.sm }} />
-          <ReferenceLine yAxisId="moic" y={1.0} stroke={COLORS.accent3} strokeDasharray="6 3" strokeWidth={1.5} label={{ value: '1.0× Breakeven', fill: COLORS.accent3, fontSize: ui.sizes.xs }} />
-          {currentWinProb && (
-            <ReferenceLine
-              x={`${(currentWinProb * 100).toFixed(0)}%`}
-              stroke={COLORS.accent1}
-              strokeDasharray="4 4"
-              strokeWidth={1.5}
-              label={{ value: 'Current', fill: COLORS.accent1, fontSize: ui.sizes.xs, position: 'top' }}
-            />
-          )}
-          {breakevenProb != null && (
-            <ReferenceLine
-              x={`${(breakevenProb * 100).toFixed(0)}%`}
-              stroke={COLORS.accent3}
-              strokeDasharray="4 4"
-              strokeWidth={1.5}
-              label={{ value: 'Breakeven', fill: COLORS.accent3, fontSize: ui.sizes.xs, position: 'top' }}
-            />
-          )}
-          <Line yAxisId="moic" dataKey="eMoic" stroke={COLORS.accent6} strokeWidth={2.5} dot={{ r: 3 }} name="E[MOIC]" />
-          <Line yAxisId="ploss" dataKey="pLoss" stroke={COLORS.accent5} strokeWidth={2} strokeDasharray="6 3" dot={{ r: 3 }} name="P(Loss)" />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </Card>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════
- *  § 6 — Stress Scenarios Table
+ *  § 5 — Stress Scenarios Table
  * ═══════════════════════════════════════════════════════════ */
 function StressScenarios({ data }) {
   const stress = data?.risk?.stress_scenarios;
@@ -291,7 +198,7 @@ function StressScenarios({ data }) {
 
   return (
     <Card>
-      <SectionTitle number="6" title="Stress Scenarios"
+      <SectionTitle number="5" title="Stress Scenarios"
         subtitle="MOIC and IRR under adverse conditions" />
       <DataTable headers={headers} rows={rows} />
     </Card>
@@ -314,7 +221,6 @@ export default function ClaimRiskAnalytics({ data }) {
       <MOICPercentileChart data={data} />
       <IRRPercentileChart data={data} />
       <CapitalAtRiskTimeline data={data} />
-      <SensitivityCurve data={data} />
       <StressScenarios data={data} />
     </div>
   );

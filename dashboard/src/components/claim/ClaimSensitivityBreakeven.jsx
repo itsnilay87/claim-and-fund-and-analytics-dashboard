@@ -110,6 +110,7 @@ function SensitivityChart({ data }) {
 
           {currentWinProb && (
             <ReferenceLine
+              yAxisId="moic"
               x={`${(currentWinProb * 100).toFixed(0)}%`}
               stroke={COLORS.accent1}
               strokeDasharray="4 4"
@@ -119,6 +120,7 @@ function SensitivityChart({ data }) {
           )}
           {breakevenProb != null && (
             <ReferenceLine
+              yAxisId="moic"
               x={`${(breakevenProb * 100).toFixed(0)}%`}
               stroke={COLORS.accent3}
               strokeDasharray="4 4"
