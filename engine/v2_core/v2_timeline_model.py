@@ -150,9 +150,15 @@ def validate_timeline_ranges() -> None:
             elif stage == "challenge_tree":
                 # Domestic: S.34 + S.37 + SLP = (9+6+4) to (18+12+24)
                 # SIAC: HC + COA = 6+6 = 12
+                # HKIAC: CFI + CA + CFA = (6+6+2) to (12+9+15)
                 if claim.jurisdiction == "domestic":
                     lo = MI.S34_DURATION["low"] + MI.S37_DURATION["low"] + MI.SLP_DISMISSED_DURATION
                     hi = MI.S34_DURATION["high"] + MI.S37_DURATION["high"] + MI.SLP_ADMITTED_DURATION
+                elif claim.jurisdiction == "hkiac_hongkong":
+                    lo = (MI.HK_CFI_DURATION["low"] + MI.HK_CA_DURATION["low"]
+                          + MI.HK_CFA_REFUSED_DURATION)
+                    hi = (MI.HK_CFI_DURATION["high"] + MI.HK_CA_DURATION["high"]
+                          + MI.HK_CFA_GRANTED_DURATION["high"])
                 else:
                     lo = MI.SIAC_HC_DURATION + MI.SIAC_COA_DURATION
                     hi = MI.SIAC_HC_DURATION + MI.SIAC_COA_DURATION

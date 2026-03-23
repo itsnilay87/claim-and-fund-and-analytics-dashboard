@@ -30,6 +30,7 @@ export default function TimelineEditor({ draft, updateField }) {
   const jurisdiction = draft?.jurisdiction || '';
   const isDomestic = jurisdiction.includes('domestic') || !jurisdiction;
   const isSiac = jurisdiction.includes('siac');
+  const isHkiac = jurisdiction.includes('hkiac');
 
   const updateStage = (idx, key, value) => {
     const next = stages.map((s, i) => (i === idx ? { ...s, [key]: value } : s));
@@ -84,10 +85,14 @@ export default function TimelineEditor({ draft, updateField }) {
       courtEst = s34Mid + s37Mid + (court.slp_dismissed ?? 4);
     } else if (isSiac) {
       courtEst = (court.siac_hc ?? 6) + (court.siac_coa ?? 6);
+    } else if (isHkiac) {
+      const cfiMid = ((court.hk_cfi?.low ?? 6) + (court.hk_cfi?.high ?? 12)) / 2;
+      const caMid = ((court.hk_ca?.low ?? 6) + (court.hk_ca?.high ?? 9)) / 2;
+      courtEst = cfiMid + caMid + (court.hk_cfa_refused ?? 2);
     }
     total += courtEst + paymentDelay;
     return { totalDuration: total, stageWidths: widths };
-  }, [stages, timeline.payment_delay_months, draft?.current_stage, court, isDomestic, isSiac]);
+  }, [stages, timeline.payment_delay_months, draft?.current_stage, court, isDomestic, isSiac, isHkiac]);
 
   return (
     <div className="space-y-6">
@@ -150,6 +155,18 @@ export default function TimelineEditor({ draft, updateField }) {
                   }}
                 >
                   enforce
+                </div>
+              )}
+              {isHkiac && (
+                <div
+                  className="h-full flex items-center justify-center text-[9px] font-bold text-white/60 bg-purple-600/60"
+                  style={{
+                    width: totalDuration > 0
+                      ? ((((court.hk_cfi?.low??6)+(court.hk_cfi?.high??12))/2 + ((court.hk_ca?.low??6)+(court.hk_ca?.high??9))/2 + (court.hk_cfa_refused??2)) / totalDuration * 100) + '%'
+                      : '0%',
+                  }}
+                >
+                  courts
                 </div>
               )}
               {(timeline.payment_delay_months || 0) > 0 && (
@@ -271,6 +288,61 @@ export default function TimelineEditor({ draft, updateField }) {
         </div>
       )}
 
+      {/* ── Section 3b: HKIAC Court Durations ── */}
+      {isHkiac && (
+        <div className="p-4 rounded-xl border border-white/5 bg-slate-800/30">
+          <h4 className="text-sm font-semibold text-white mb-1">HKIAC Court Durations</h4>
+          <p className="text-xs text-slate-500 mb-4">
+            Post-award challenge court stage durations in Hong Kong (CFI → CA → CFA).
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+            <RangeField
+              label="CFI (Court of First Instance)"
+              low={court.hk_cfi?.low ?? 6}
+              high={court.hk_cfi?.high ?? 12}
+              onLowChange={(v) => updateCourtRange('hk_cfi', 'low', v)}
+              onHighChange={(v) => updateCourtRange('hk_cfi', 'high', v)}
+              min={1}
+              max={24}
+              step={1}
+              unit="months"
+            />
+            <RangeField
+              label="CA (Court of Appeal)"
+              low={court.hk_ca?.low ?? 6}
+              high={court.hk_ca?.high ?? 9}
+              onLowChange={(v) => updateCourtRange('hk_ca', 'low', v)}
+              onHighChange={(v) => updateCourtRange('hk_ca', 'high', v)}
+              min={1}
+              max={24}
+              step={1}
+              unit="months"
+            />
+            <NumberField
+              label="CFA Leave Refused Duration"
+              value={court.hk_cfa_refused ?? 2.0}
+              onChange={(v) => updateCourt('hk_cfa_refused', v)}
+              min={0}
+              max={12}
+              step={0.5}
+              unit="months"
+              help="Time for CFA to refuse leave to appeal"
+            />
+            <RangeField
+              label="CFA Leave Granted Duration"
+              low={court.hk_cfa_granted?.low ?? 9}
+              high={court.hk_cfa_granted?.high ?? 15}
+              onLowChange={(v) => updateCourtRange('hk_cfa_granted', 'low', v)}
+              onHighChange={(v) => updateCourtRange('hk_cfa_granted', 'high', v)}
+              min={1}
+              max={36}
+              step={1}
+              unit="months"
+            />
+          </div>
+        </div>
+      )}
+
       {/* ── Section 4: Re-Arbitration Durations ── */}
       {(() => {
         const currentStage = draft?.current_stage || '';
@@ -358,6 +430,18 @@ export default function TimelineEditor({ draft, updateField }) {
                   step={0.5}
                   unit="months"
                   help="Delay for SIAC claims"
+                />
+              )}
+              {isHkiac && (
+                <NumberField
+                  label="HKIAC Payment Delay"
+                  value={delays.hkiac ?? 3.0}
+                  onChange={(v) => updateDelay('hkiac', v)}
+                  min={0}
+                  max={24}
+                  step={0.5}
+                  unit="months"
+                  help="Delay for HKIAC Hong Kong claims"
                 />
               )}
               <NumberField

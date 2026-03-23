@@ -35,6 +35,7 @@ from .v2_quantum_model import draw_quantum, compute_expected_quantum, compute_in
 from .v2_probability_tree import (
     simulate_domestic_challenge,
     simulate_siac_challenge,
+    simulate_hkiac_challenge,
 )
 from .v2_legal_cost_model import (
     build_monthly_legal_burn,
@@ -109,15 +110,18 @@ def _simulate_claim_path(
     # ── Step 4: Traverse challenge tree ──
     if claim.jurisdiction == "domestic":
         challenge = simulate_domestic_challenge(arb_won, rng)
+    elif claim.jurisdiction == "hkiac_hongkong":
+        challenge = simulate_hkiac_challenge(arb_won, rng)
     else:
         challenge = simulate_siac_challenge(arb_won, rng)
 
     # ── Step 5: Handle outcome ──
-    payment_delay = (
-        MI.DOMESTIC_PAYMENT_DELAY
-        if claim.jurisdiction == "domestic"
-        else MI.SIAC_PAYMENT_DELAY
-    )
+    if claim.jurisdiction == "domestic":
+        payment_delay = MI.DOMESTIC_PAYMENT_DELAY
+    elif claim.jurisdiction == "hkiac_hongkong":
+        payment_delay = MI.HKIAC_PAYMENT_DELAY
+    else:
+        payment_delay = MI.SIAC_PAYMENT_DELAY
 
     # ── NO_RESTART_MODE: remap RESTART → LOSE at MC level ──
     if MI.NO_RESTART_MODE and challenge.outcome == "RESTART":
@@ -159,10 +163,13 @@ def _simulate_claim_path(
 
         # Estimate post-re-arb challenge duration for 96m cap check.
         # Domestic: ~22.5m (S34+S37+SLP average), SIAC: 12m (HC+COA fixed)
-        est_post_challenge = (
-            12.0 if claim.jurisdiction == "siac"
-            else 22.5
-        )
+        # HKIAC: ~22.0m (CFI avg 9 + CA avg 7.5 + CFA avg ~5.5)
+        if claim.jurisdiction == "siac":
+            est_post_challenge = 12.0
+        elif claim.jurisdiction == "hkiac_hongkong":
+            est_post_challenge = 22.0
+        else:
+            est_post_challenge = 22.5
         projected_total = (
             timeline_so_far + re_arb_dur
             + est_post_challenge + re_arb_payment_delay
@@ -190,6 +197,8 @@ def _simulate_claim_path(
                 # challenge tree (same jurisdiction as original claim).
                 if claim.jurisdiction == "domestic":
                     post_challenge = simulate_domestic_challenge(True, rng)
+                elif claim.jurisdiction == "hkiac_hongkong":
+                    post_challenge = simulate_hkiac_challenge(True, rng)
                 else:
                     post_challenge = simulate_siac_challenge(True, rng)
                 re_arb_challenge = post_challenge
@@ -238,6 +247,8 @@ def _simulate_claim_path(
         # ── Draw rate & type from stochastic band distribution ──
         if claim.jurisdiction == "domestic":
             bands = MI.INTEREST_RATE_BANDS_DOMESTIC
+        elif claim.jurisdiction == "hkiac_hongkong":
+            bands = MI.INTEREST_RATE_BANDS_HKIAC
         else:
             bands = MI.INTEREST_RATE_BANDS_SIAC
 
@@ -462,6 +473,8 @@ def print_numerical_audit(sim: SimulationResults) -> bool:
     domestic_tw_post = []
     siac_tw_pre = []
     siac_tw_post = []
+    hkiac_tw_pre = []
+    hkiac_tw_post = []
 
     for cid in sim.claim_ids:
         paths = sim.results[cid]
@@ -503,6 +516,9 @@ def print_numerical_audit(sim: SimulationResults) -> bool:
         if claim.jurisdiction == "domestic":
             domestic_tw_pre.append(p_tw_pre)
             domestic_tw_post.append(p_tw_post)
+        elif claim.jurisdiction == "hkiac_hongkong":
+            hkiac_tw_pre.append(p_tw_pre)
+            hkiac_tw_post.append(p_tw_post)
         else:
             siac_tw_pre.append(p_tw_pre)
             siac_tw_post.append(p_tw_post)
@@ -559,6 +575,14 @@ def print_numerical_audit(sim: SimulationResults) -> bool:
             print(f"    SIAC rate bands ({len(MI.INTEREST_RATE_BANDS_SIAC)}):")
             for b in MI.INTEREST_RATE_BANDS_SIAC:
                 print(f"      {b['rate']:.1%} ({b.get('type', 'simple')}) — P={b['probability']:.0%}")
+        # HKIAC rate bands
+        if len(MI.INTEREST_RATE_BANDS_HKIAC) == 1:
+            b = MI.INTEREST_RATE_BANDS_HKIAC[0]
+            print(f"    HKIAC:    {b['rate']:.1%} p.a. ({b.get('type', 'simple')})")
+        else:
+            print(f"    HKIAC rate bands ({len(MI.INTEREST_RATE_BANDS_HKIAC)}):")
+            for b in MI.INTEREST_RATE_BANDS_HKIAC:
+                print(f"      {b['rate']:.1%} ({b.get('type', 'simple')}) — P={b['probability']:.0%}")
         for cid in sim.claim_ids:
             paths = sim.results[cid]
             interest_vals = [p.interest_earned_cr for p in paths if p.interest_earned_cr > 0]
@@ -582,6 +606,11 @@ def print_numerical_audit(sim: SimulationResults) -> bool:
         avg_siac_post = np.mean(siac_tw_post)
         print(f"  SIAC avg P(TW pre-reArb) = {avg_siac_pre:.1%} (expected ≈ 53%)")
         print(f"  SIAC avg P(TW post-reArb) = {avg_siac_post:.1%} (expected ≈ 62-67%)")
+    if hkiac_tw_pre:
+        avg_hk_pre = np.mean(hkiac_tw_pre)
+        avg_hk_post = np.mean(hkiac_tw_post)
+        print(f"  HKIAC avg P(TW pre-reArb) = {avg_hk_pre:.1%} (expected ≈ 56%)")
+        print(f"  HKIAC avg P(TW post-reArb) = {avg_hk_post:.1%}")
 
     # --- Part 4: Timeline ordering ---
     if tau_means:

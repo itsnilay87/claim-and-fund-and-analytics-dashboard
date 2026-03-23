@@ -6,7 +6,7 @@ const STATUS_LABELS = { queued:'Queued', running:'Running...', completed:'Comple
 export default function RunPanel({ config, defaults, onRun, activeRun, polling, runs, onViewResults, onOpenDownloads, serverAvailable }) {
   const runHistory = runs || [];
   const [selectedPortfolios, setSelectedPortfolios] = useState(['all']);
-  const PORTFOLIO_OPTIONS = [{ value:'all', label:'All Claims' }, { value:'siac', label:'SIAC Only' }, { value:'domestic', label:'Domestic Only' }];
+  const PORTFOLIO_OPTIONS = [{ value:'all', label:'All Claims' }, { value:'siac', label:'SIAC Only' }, { value:'domestic', label:'Domestic Only' }, { value:'hkiac', label:'HKIAC Only' }];
 
   const togglePortfolio = (val) => {
     setSelectedPortfolios(prev => {

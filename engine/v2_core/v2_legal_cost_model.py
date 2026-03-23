@@ -54,6 +54,14 @@ _STAGE_KEY_MAP: dict[str, str] = {
     # post_rearb_slp handled specially like slp
     "post_rearb_hc":   "siac_hc",
     "post_rearb_coa":  "siac_coa",
+    # HKIAC stages
+    "hk_cfi":          "hk_cfi",
+    "hk_ca":           "hk_ca",
+    "hk_cfa":          "hk_cfa",
+    # Post-re-arb HKIAC challenge stages (same rates as initial)
+    "post_rearb_hk_cfi": "hk_cfi",
+    "post_rearb_hk_ca":  "hk_ca",
+    "post_rearb_hk_cfa": "hk_cfa",
 }
 """Mapping from stage names used in pipeline/challenge to LEGAL_COSTS keys."""
 

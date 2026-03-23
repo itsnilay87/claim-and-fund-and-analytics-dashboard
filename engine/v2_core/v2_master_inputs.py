@@ -191,6 +191,20 @@ SIAC_HC_DURATION: float = 6.0
 SIAC_COA_DURATION: float = 6.0
 """Court of Appeal duration for SIAC awards — fixed 6 months."""
 
+# --- HKIAC court stages (CFI → CA → CFA) ---
+
+HK_CFI_DURATION: dict[str, float] = {"low": 6.0, "high": 12.0}
+"""Court of First Instance duration for HKIAC awards — Uniform(6, 12) months."""
+
+HK_CA_DURATION: dict[str, float] = {"low": 6.0, "high": 9.0}
+"""Court of Appeal duration for HKIAC awards — Uniform(6, 9) months."""
+
+HK_CFA_GRANTED_DURATION: dict[str, float] = {"low": 9.0, "high": 15.0}
+"""CFA duration when leave is granted — Uniform(9, 15) months."""
+
+HK_CFA_REFUSED_DURATION: float = 2.0
+"""CFA duration when leave is refused — fixed 2 months."""
+
 # --- Payment delays ---
 
 DOMESTIC_PAYMENT_DELAY: float = 6.0
@@ -198,6 +212,9 @@ DOMESTIC_PAYMENT_DELAY: float = 6.0
 
 SIAC_PAYMENT_DELAY: float = 4.0
 """Months from final SIAC court resolution to payment receipt."""
+
+HKIAC_PAYMENT_DELAY: float = 3.0
+"""Months from final HKIAC court resolution to payment receipt."""
 
 RE_ARB_PAYMENT_DELAY: float = 6.0
 """Months from re-arbitration win to payment (no further court challenge)."""
@@ -760,6 +777,296 @@ Totals:
 
 
 # ============================================================================
+# SECTION 7b: HKIAC PROBABILITY TREE (24 paths, 3 levels: CFI → CA → CFA)
+# ============================================================================
+#
+# After arbitration, the LOSER may challenge through Hong Kong courts:
+#   Level 1: CFI (Court of First Instance) — setting aside application
+#   Level 2: CA (Court of Appeal)
+#   Level 3: CFA (Court of Final Appeal) — with leave gate
+#
+# Scenario A: TATA WON arbitration → counterparty challenges
+# Scenario B: TATA LOST arbitration → TATA challenges
+#
+# Each path stores node-level probabilities for level-by-level traversal.
+# The CFA has a leave gate: if leave refused, the path terminates there.
+
+HKIAC_PATHS_A: list[dict] = [
+    # Scenario A: TATA WON arbitration, counterparty challenges
+    # 12 terminal paths. Outcomes: TRUE_WIN or LOSE. No RESTART.
+    #
+    # Format per path:
+    #   cfi_tata_wins: bool — CFI upholds award (good for TATA)
+    #   cfi_prob: float — P(cfi_tata_wins=True) at CFI level
+    #   ca_tata_wins: bool — CA upholds TATA's position
+    #   ca_prob: float — P(ca_tata_wins=True) at CA level given CFI outcome
+    #   cfa_leave_granted: bool — CFA grants leave to appeal
+    #   cfa_leave_prob: float — P(cfa_leave_granted=True)
+    #   cfa_tata_wins: bool|None — CFA merits outcome (None if leave refused)
+    #   cfa_merits_prob: float|None — P(cfa_tata_wins=True) if leave granted
+
+    # Branch: CFI upheld (0.85) → CA upheld (0.85) → CFA
+    {"path_id": "HA1",
+     "cfi_tata_wins": True,  "cfi_prob": 0.85,
+     "ca_tata_wins": True,   "ca_prob": 0.85,
+     "cfa_leave_granted": False, "cfa_leave_prob": 0.08,
+     "cfa_tata_wins": None,  "cfa_merits_prob": None,
+     "conditional_prob": 0.6647,
+     "outcome": "TRUE_WIN",
+     "description": "CFI upheld → CA upheld → CFA leave refused"},
+
+    {"path_id": "HA2",
+     "cfi_tata_wins": True,  "cfi_prob": 0.85,
+     "ca_tata_wins": True,   "ca_prob": 0.85,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.08,
+     "cfa_tata_wins": True,  "cfa_merits_prob": 0.80,
+     "conditional_prob": 0.0462,
+     "outcome": "TRUE_WIN",
+     "description": "CFI upheld → CA upheld → CFA granted → CFA upholds"},
+
+    {"path_id": "HA3",
+     "cfi_tata_wins": True,  "cfi_prob": 0.85,
+     "ca_tata_wins": True,   "ca_prob": 0.85,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.08,
+     "cfa_tata_wins": False, "cfa_merits_prob": 0.20,
+     "conditional_prob": 0.0116,
+     "outcome": "LOSE",
+     "description": "CFI upheld → CA upheld → CFA granted → CFA overturns"},
+
+    # Branch: CFI upheld (0.85) → CA set aside (0.15) → CFA
+    {"path_id": "HA4",
+     "cfi_tata_wins": True,  "cfi_prob": 0.85,
+     "ca_tata_wins": False,  "ca_prob": 0.15,
+     "cfa_leave_granted": False, "cfa_leave_prob": 0.20,
+     "cfa_tata_wins": None,  "cfa_merits_prob": None,
+     "conditional_prob": 0.1020,
+     "outcome": "LOSE",
+     "description": "CFI upheld → CA set aside → CFA leave refused"},
+
+    {"path_id": "HA5",
+     "cfi_tata_wins": True,  "cfi_prob": 0.85,
+     "ca_tata_wins": False,  "ca_prob": 0.15,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.20,
+     "cfa_tata_wins": True,  "cfa_merits_prob": 0.60,
+     "conditional_prob": 0.0153,
+     "outcome": "TRUE_WIN",
+     "description": "CFI upheld → CA set aside → CFA granted → CFA restores"},
+
+    {"path_id": "HA6",
+     "cfi_tata_wins": True,  "cfi_prob": 0.85,
+     "ca_tata_wins": False,  "ca_prob": 0.15,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.20,
+     "cfa_tata_wins": False, "cfa_merits_prob": 0.40,
+     "conditional_prob": 0.0102,
+     "outcome": "LOSE",
+     "description": "CFI upheld → CA set aside → CFA granted → CFA upholds set aside"},
+
+    # Branch: CFI set aside (0.15) → CA restores (0.55) → CFA
+    {"path_id": "HA7",
+     "cfi_tata_wins": False, "cfi_prob": 0.15,
+     "ca_tata_wins": True,   "ca_prob": 0.55,
+     "cfa_leave_granted": False, "cfa_leave_prob": 0.15,
+     "cfa_tata_wins": None,  "cfa_merits_prob": None,
+     "conditional_prob": 0.0701,
+     "outcome": "TRUE_WIN",
+     "description": "CFI set aside → CA restores → CFA leave refused"},
+
+    {"path_id": "HA8",
+     "cfi_tata_wins": False, "cfi_prob": 0.15,
+     "ca_tata_wins": True,   "ca_prob": 0.55,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.15,
+     "cfa_tata_wins": True,  "cfa_merits_prob": 0.55,
+     "conditional_prob": 0.0068,
+     "outcome": "TRUE_WIN",
+     "description": "CFI set aside → CA restores → CFA granted → CFA upholds restore"},
+
+    {"path_id": "HA9",
+     "cfi_tata_wins": False, "cfi_prob": 0.15,
+     "ca_tata_wins": True,   "ca_prob": 0.55,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.15,
+     "cfa_tata_wins": False, "cfa_merits_prob": 0.45,
+     "conditional_prob": 0.0056,
+     "outcome": "LOSE",
+     "description": "CFI set aside → CA restores → CFA granted → CFA overturns"},
+
+    # Branch: CFI set aside (0.15) → CA upholds set aside (0.45) → CFA
+    {"path_id": "HA10",
+     "cfi_tata_wins": False, "cfi_prob": 0.15,
+     "ca_tata_wins": False,  "ca_prob": 0.45,
+     "cfa_leave_granted": False, "cfa_leave_prob": 0.25,
+     "cfa_tata_wins": None,  "cfa_merits_prob": None,
+     "conditional_prob": 0.0506,
+     "outcome": "LOSE",
+     "description": "CFI set aside → CA upholds set aside → CFA leave refused"},
+
+    {"path_id": "HA11",
+     "cfi_tata_wins": False, "cfi_prob": 0.15,
+     "ca_tata_wins": False,  "ca_prob": 0.45,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.25,
+     "cfa_tata_wins": True,  "cfa_merits_prob": 0.45,
+     "conditional_prob": 0.0076,
+     "outcome": "TRUE_WIN",
+     "description": "CFI set aside → CA upholds set aside → CFA granted → CFA restores"},
+
+    {"path_id": "HA12",
+     "cfi_tata_wins": False, "cfi_prob": 0.15,
+     "ca_tata_wins": False,  "ca_prob": 0.45,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.25,
+     "cfa_tata_wins": False, "cfa_merits_prob": 0.55,
+     "conditional_prob": 0.0093,
+     "outcome": "LOSE",
+     "description": "CFI set aside → CA upholds set aside → CFA granted → CFA upholds"},
+]
+"""
+HKIAC Scenario A — TATA WON arbitration, counterparty challenges.
+12 terminal paths. 3 levels: CFI → CA → CFA (with leave gate).
+
+Outcomes: TRUE_WIN (award survives, enforce) or LOSE (award set aside).
+No RESTART paths in Scenario A.
+
+Totals:
+  TRUE_WIN = HA1+HA2+HA5+HA7+HA8+HA11 = 0.6647+0.0462+0.0153+0.0701+0.0068+0.0076 = 0.8107 (81.07%)
+  LOSE     = HA3+HA4+HA6+HA9+HA10+HA12 = 0.0116+0.1020+0.0102+0.0056+0.0506+0.0093 = 0.1893 (18.93%)
+  RESTART  = 0.0000 (0%)
+  Sum      = 1.0000 (100%) [0.0004 rounding]
+"""
+
+HKIAC_PATHS_B: list[dict] = [
+    # Scenario B: TATA LOST arbitration, TATA challenges
+    # 12 terminal paths. Outcomes: RESTART or LOSE. No TRUE_WIN.
+    #
+    # NOTE: paths[0] MUST have cfi_tata_wins=True so traversal reads correct cfi_prob.
+
+    # Branch: CFI overturns (0.20) → CA upholds overturn (0.50) → CFA
+    {"path_id": "HB1",
+     "cfi_tata_wins": True,  "cfi_prob": 0.20,
+     "ca_tata_wins": True,   "ca_prob": 0.50,
+     "cfa_leave_granted": False, "cfa_leave_prob": 0.15,
+     "cfa_tata_wins": None,  "cfa_merits_prob": None,
+     "conditional_prob": 0.0850,
+     "outcome": "RESTART",
+     "description": "CFI overturns → CA upholds → CFA leave refused"},
+
+    {"path_id": "HB2",
+     "cfi_tata_wins": True,  "cfi_prob": 0.20,
+     "ca_tata_wins": True,   "ca_prob": 0.50,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.15,
+     "cfa_tata_wins": True,  "cfa_merits_prob": 0.50,
+     "conditional_prob": 0.0075,
+     "outcome": "RESTART",
+     "description": "CFI overturns → CA upholds → CFA granted → CFA upholds"},
+
+    {"path_id": "HB3",
+     "cfi_tata_wins": True,  "cfi_prob": 0.20,
+     "ca_tata_wins": True,   "ca_prob": 0.50,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.15,
+     "cfa_tata_wins": False, "cfa_merits_prob": 0.50,
+     "conditional_prob": 0.0075,
+     "outcome": "LOSE",
+     "description": "CFI overturns → CA upholds → CFA granted → CFA overturns"},
+
+    # Branch: CFI overturns (0.20) → CA restores adverse (0.50) → CFA
+    {"path_id": "HB4",
+     "cfi_tata_wins": True,  "cfi_prob": 0.20,
+     "ca_tata_wins": False,  "ca_prob": 0.50,
+     "cfa_leave_granted": False, "cfa_leave_prob": 0.25,
+     "cfa_tata_wins": None,  "cfa_merits_prob": None,
+     "conditional_prob": 0.0750,
+     "outcome": "LOSE",
+     "description": "CFI overturns → CA restores adverse → CFA leave refused"},
+
+    {"path_id": "HB5",
+     "cfi_tata_wins": True,  "cfi_prob": 0.20,
+     "ca_tata_wins": False,  "ca_prob": 0.50,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.25,
+     "cfa_tata_wins": True,  "cfa_merits_prob": 0.45,
+     "conditional_prob": 0.0113,
+     "outcome": "RESTART",
+     "description": "CFI overturns → CA restores adverse → CFA granted → CFA overturns adverse"},
+
+    {"path_id": "HB6",
+     "cfi_tata_wins": True,  "cfi_prob": 0.20,
+     "ca_tata_wins": False,  "ca_prob": 0.50,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.25,
+     "cfa_tata_wins": False, "cfa_merits_prob": 0.55,
+     "conditional_prob": 0.0138,
+     "outcome": "LOSE",
+     "description": "CFI overturns → CA restores adverse → CFA granted → CFA upholds adverse"},
+
+    # Branch: CFI upholds adverse (0.80) → CA overturns adverse (0.25) → CFA
+    {"path_id": "HB7",
+     "cfi_tata_wins": False, "cfi_prob": 0.80,
+     "ca_tata_wins": True,   "ca_prob": 0.25,
+     "cfa_leave_granted": False, "cfa_leave_prob": 0.20,
+     "cfa_tata_wins": None,  "cfa_merits_prob": None,
+     "conditional_prob": 0.1600,
+     "outcome": "RESTART",
+     "description": "CFI upholds adverse → CA overturns → CFA leave refused"},
+
+    {"path_id": "HB8",
+     "cfi_tata_wins": False, "cfi_prob": 0.80,
+     "ca_tata_wins": True,   "ca_prob": 0.25,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.20,
+     "cfa_tata_wins": True,  "cfa_merits_prob": 0.45,
+     "conditional_prob": 0.0180,
+     "outcome": "RESTART",
+     "description": "CFI upholds adverse → CA overturns → CFA granted → CFA upholds overturn"},
+
+    {"path_id": "HB9",
+     "cfi_tata_wins": False, "cfi_prob": 0.80,
+     "ca_tata_wins": True,   "ca_prob": 0.25,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.20,
+     "cfa_tata_wins": False, "cfa_merits_prob": 0.55,
+     "conditional_prob": 0.0220,
+     "outcome": "LOSE",
+     "description": "CFI upholds adverse → CA overturns → CFA granted → CFA restores adverse"},
+
+    # Branch: CFI upholds adverse (0.80) → CA upholds adverse (0.75) → CFA
+    {"path_id": "HB10",
+     "cfi_tata_wins": False, "cfi_prob": 0.80,
+     "ca_tata_wins": False,  "ca_prob": 0.75,
+     "cfa_leave_granted": False, "cfa_leave_prob": 0.15,
+     "cfa_tata_wins": None,  "cfa_merits_prob": None,
+     "conditional_prob": 0.5100,
+     "outcome": "LOSE",
+     "description": "CFI upholds adverse → CA upholds adverse → CFA leave refused"},
+
+    {"path_id": "HB11",
+     "cfi_tata_wins": False, "cfi_prob": 0.80,
+     "ca_tata_wins": False,  "ca_prob": 0.75,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.15,
+     "cfa_tata_wins": True,  "cfa_merits_prob": 0.35,
+     "conditional_prob": 0.0315,
+     "outcome": "RESTART",
+     "description": "CFI upholds adverse → CA upholds adverse → CFA granted → CFA overturns"},
+
+    {"path_id": "HB12",
+     "cfi_tata_wins": False, "cfi_prob": 0.80,
+     "ca_tata_wins": False,  "ca_prob": 0.75,
+     "cfa_leave_granted": True, "cfa_leave_prob": 0.15,
+     "cfa_tata_wins": False, "cfa_merits_prob": 0.65,
+     "conditional_prob": 0.0585,
+     "outcome": "LOSE",
+     "description": "CFI upholds adverse → CA upholds adverse → CFA granted → CFA upholds"},
+]
+"""
+HKIAC Scenario B — TATA LOST arbitration, TATA challenges.
+12 terminal paths. 3 levels: CFI → CA → CFA (with leave gate).
+
+Outcomes: RESTART (adverse award vacated, fresh arb) or LOSE (adverse award stands).
+No TRUE_WIN paths in Scenario B.
+
+NOTE: Paths ordered with cfi_tata_wins=True first (HB1-HB6) so paths[0] has correct cfi_prob.
+
+Totals:
+  TRUE_WIN = 0.0000 (0%)
+  RESTART  = HB1+HB2+HB5+HB7+HB8+HB11 = 0.0850+0.0075+0.0113+0.1600+0.0180+0.0315 = 0.3133 (31.33%)
+  LOSE     = HB3+HB4+HB6+HB9+HB10+HB12 = 0.0075+0.0750+0.0138+0.0220+0.5100+0.0585 = 0.6868 (68.68%)
+  Sum      = 1.0001 (100%) [0.0001 rounding]
+"""
+
+
+# ============================================================================
 # SECTION 8: INVESTMENT STRUCTURE (TATA'S PERSPECTIVE)
 # ============================================================================
 # All percentages now show what TATA receives, not what fund keeps
@@ -806,6 +1113,9 @@ LEGAL_COSTS: dict = {
         "slp_admitted": {"low": 2.0, "high": 3.0},     # ₹2-3Cr if SLP admitted to hearing
         "siac_hc": {"low": 3.0, "high": 4.0},          # ₹3-4Cr total for Singapore HC stage
         "siac_coa": 2.0,                                # ₹2Cr total for Court of Appeal stage
+        "hk_cfi": {"low": 3.0, "high": 5.0},           # ₹3-5Cr total for Hong Kong CFI stage
+        "hk_ca": {"low": 2.5, "high": 4.0},            # ₹2.5-4Cr total for Hong Kong CA stage
+        "hk_cfa": {"low": 2.0, "high": 3.5},           # ₹2-3.5Cr total for Hong Kong CFA stage
     },
 }
 """
@@ -885,6 +1195,11 @@ INTEREST_RATE_BANDS_SIAC: list[dict] = [
     {"rate": 0.09, "type": "simple", "probability": 1.0},
 ]
 """Stochastic interest rate distribution for SIAC claims."""
+
+INTEREST_RATE_BANDS_HKIAC: list[dict] = [
+    {"rate": 0.07, "type": "simple", "probability": 1.0},
+]
+"""Stochastic interest rate distribution for HKIAC claims (7% p.a.)."""
 
 INTEREST_START_BASIS: str = "award_date"
 """When interest accrual begins. Options:

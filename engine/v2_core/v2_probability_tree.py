@@ -208,6 +208,107 @@ def simulate_siac_challenge(
 
 
 # ===================================================================
+# HKIAC CHALLENGE TREE (3 levels: CFI → CA → CFA with leave gate)
+# ===================================================================
+
+def simulate_hkiac_challenge(
+    arb_won: bool,
+    rng: np.random.Generator,
+) -> ChallengeResult:
+    """Traverse the 3-level HKIAC court challenge tree.
+
+    Parameters
+    ----------
+    arb_won : bool
+        True = TATA won arbitration (Scenario A), False = TATA lost (Scenario B).
+    rng : np.random.Generator
+        Random number generator for this path.
+
+    Returns
+    -------
+    ChallengeResult with outcome, timeline, path_id, and stage breakdown.
+
+    The tree is traversed level by level:
+      Level 1: CFI (Court of First Instance) — does TATA's position prevail?
+      Level 2: CA (Court of Appeal) — does TATA's position prevail?
+      Level 3: CFA (Court of Final Appeal) — leave gate then merits if granted.
+    """
+    paths = MI.HKIAC_PATHS_A if arb_won else MI.HKIAC_PATHS_B
+    scenario = "A" if arb_won else "B"
+
+    # Draw durations for CFI and CA from Uniform distributions
+    cfi_dur = rng.uniform(MI.HK_CFI_DURATION["low"], MI.HK_CFI_DURATION["high"])
+    ca_dur = rng.uniform(MI.HK_CA_DURATION["low"], MI.HK_CA_DURATION["high"])
+
+    # ── Level 1: CFI ──
+    cfi_tata_wins_prob = paths[0]["cfi_prob"]
+    u1 = rng.random()
+    cfi_tata_wins = u1 < cfi_tata_wins_prob
+
+    # ── Level 2: CA ──
+    matching = [p for p in paths if p["cfi_tata_wins"] == cfi_tata_wins]
+    ca_true_paths = [p for p in matching if p["ca_tata_wins"] is True]
+    if ca_true_paths:
+        ca_tata_wins_prob = ca_true_paths[0]["ca_prob"]
+    else:
+        ca_tata_wins_prob = 0.0
+    u2 = rng.random()
+    ca_tata_wins = u2 < ca_tata_wins_prob
+
+    # ── Level 3: CFA leave gate ──
+    matching = [p for p in matching if p["ca_tata_wins"] == ca_tata_wins]
+    granted_in_branch = [p for p in matching if p["cfa_leave_granted"] is True]
+    if granted_in_branch:
+        cfa_leave_prob = granted_in_branch[0]["cfa_leave_prob"]
+    else:
+        cfa_leave_prob = 0.0
+    u3 = rng.random()
+    cfa_leave_granted = u3 < cfa_leave_prob
+
+    # ── Level 3b: CFA merits (only if leave granted) ──
+    if cfa_leave_granted:
+        matching = [p for p in matching if p["cfa_leave_granted"] is True]
+        tata_wins_paths = [p for p in matching if p["cfa_tata_wins"] is True]
+        if tata_wins_paths:
+            cfa_merits_prob = tata_wins_paths[0]["cfa_merits_prob"]
+        else:
+            cfa_merits_prob = 0.0
+
+        u4 = rng.random()
+        cfa_tata_wins = u4 < cfa_merits_prob
+
+        result_path = [
+            p for p in matching
+            if p["cfa_tata_wins"] == cfa_tata_wins
+        ][0]
+
+        cfa_dur = rng.uniform(
+            MI.HK_CFA_GRANTED_DURATION["low"],
+            MI.HK_CFA_GRANTED_DURATION["high"],
+        )
+    else:
+        # CFA leave refused — find the refused path
+        result_path = [p for p in matching if p["cfa_leave_granted"] is False][0]
+        cfa_dur = MI.HK_CFA_REFUSED_DURATION
+
+    # Build timeline
+    total_dur = cfi_dur + ca_dur + cfa_dur
+    stages_detail = {
+        "hk_cfi": float(cfi_dur),
+        "hk_ca": float(ca_dur),
+        "hk_cfa": float(cfa_dur),
+    }
+
+    return ChallengeResult(
+        scenario=scenario,
+        path_id=result_path["path_id"],
+        outcome=result_path["outcome"],
+        timeline_months=float(total_dur),
+        stages_detail=stages_detail,
+    )
+
+
+# ===================================================================
 # VALIDATION — Analytical probability verification
 # ===================================================================
 
@@ -366,6 +467,74 @@ def validate_tree() -> None:
         )
         assert abs(siac_b_lo - 0.5800) < TOL, (
             f"SIAC B LOSE = {siac_b_lo:.4f}, expected 0.5800"
+        )
+
+    # ── HKIAC Scenario A ──
+    hk_a_probs = [p["conditional_prob"] for p in MI.HKIAC_PATHS_A]
+    hk_a_total = sum(hk_a_probs)
+    assert abs(hk_a_total - 1.0) < TOL, (
+        f"HKIAC Scenario A paths sum to {hk_a_total:.6f}, expected 1.0"
+    )
+    hk_a_tw = sum(p["conditional_prob"] for p in MI.HKIAC_PATHS_A
+                  if p["outcome"] == "TRUE_WIN")
+    hk_a_lo = sum(p["conditional_prob"] for p in MI.HKIAC_PATHS_A
+                  if p["outcome"] == "LOSE")
+    hk_a_re = sum(p["conditional_prob"] for p in MI.HKIAC_PATHS_A
+                  if p["outcome"] == "RESTART")
+
+    if use_dynamic:
+        exp = MI._EXPECTED_OUTCOME_TOTALS.get("hkiac_a")
+        if exp:
+            assert abs(hk_a_tw - exp["TRUE_WIN"]) < TOL, (
+                f"HKIAC A TRUE_WIN = {hk_a_tw:.4f}, expected {exp['TRUE_WIN']:.4f}"
+            )
+            assert abs(hk_a_lo - exp["LOSE"]) < TOL, (
+                f"HKIAC A LOSE = {hk_a_lo:.4f}, expected {exp['LOSE']:.4f}"
+            )
+    else:
+        assert abs(hk_a_tw - 0.8107) < TOL, (
+            f"HKIAC A TRUE_WIN = {hk_a_tw:.4f}, expected 0.8107"
+        )
+        assert abs(hk_a_lo - 0.1893) < TOL, (
+            f"HKIAC A LOSE = {hk_a_lo:.4f}, expected 0.1893"
+        )
+    # Structural invariant: no RESTART in HKIAC A
+    assert abs(hk_a_re - 0.0) < TOL, (
+        f"HKIAC A RESTART = {hk_a_re:.4f}, expected 0.0"
+    )
+
+    # ── HKIAC Scenario B ──
+    hk_b_probs = [p["conditional_prob"] for p in MI.HKIAC_PATHS_B]
+    hk_b_total = sum(hk_b_probs)
+    assert abs(hk_b_total - 1.0) < TOL, (
+        f"HKIAC Scenario B paths sum to {hk_b_total:.6f}, expected 1.0"
+    )
+    hk_b_tw = sum(p["conditional_prob"] for p in MI.HKIAC_PATHS_B
+                  if p["outcome"] == "TRUE_WIN")
+    hk_b_re = sum(p["conditional_prob"] for p in MI.HKIAC_PATHS_B
+                  if p["outcome"] == "RESTART")
+    hk_b_lo = sum(p["conditional_prob"] for p in MI.HKIAC_PATHS_B
+                  if p["outcome"] == "LOSE")
+
+    # Structural invariant: no TRUE_WIN in HKIAC B
+    assert hk_b_tw < TOL, (
+        f"HKIAC B TRUE_WIN = {hk_b_tw:.4f}, expected 0.0"
+    )
+    if use_dynamic:
+        exp = MI._EXPECTED_OUTCOME_TOTALS.get("hkiac_b")
+        if exp:
+            assert abs(hk_b_re - exp["RESTART"]) < TOL, (
+                f"HKIAC B RESTART = {hk_b_re:.4f}, expected {exp['RESTART']:.4f}"
+            )
+            assert abs(hk_b_lo - exp["LOSE"]) < TOL, (
+                f"HKIAC B LOSE = {hk_b_lo:.4f}, expected {exp['LOSE']:.4f}"
+            )
+    else:
+        assert abs(hk_b_re - 0.3133) < TOL, (
+            f"HKIAC B RESTART = {hk_b_re:.4f}, expected 0.3133"
+        )
+        assert abs(hk_b_lo - 0.6868) < TOL, (
+            f"HKIAC B LOSE = {hk_b_lo:.4f}, expected 0.6868"
         )
 
     # ── Quantum bands ──

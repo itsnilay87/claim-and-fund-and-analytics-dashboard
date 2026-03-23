@@ -1,10 +1,10 @@
 /**
  * ProbabilityTree.jsx — SVG-based interactive probability tree visualization.
  *
- * Renders hierarchical decision trees for domestic (S.34→S.37→SLP→Merits)
- * and SIAC (HC→COA) litigation paths with animated transitions.
+ * Renders hierarchical decision trees for domestic (S.34→S.37→SLP→Merits),
+ * SIAC (HC→COA), and HKIAC (CFI→CA→CFA) litigation paths with animated transitions.
  *
- * Data: data.probability_summary.tree_nodes.{domestic,siac}.{scenario_a,scenario_b}
+ * Data: data.probability_summary.tree_nodes.{domestic,siac,hkiac}.{scenario_a,scenario_b}
  */
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -260,6 +260,8 @@ export default function ProbabilityTree({ data }) {
 
   const layoutConfig = jurisdiction === 'domestic'
     ? { nodeW: 120, nodeH: 46, gapX: 50, gapY: 16, leafPadding: 24 }
+    : jurisdiction === 'hkiac'
+    ? { nodeW: 120, nodeH: 46, gapX: 50, gapY: 16, leafPadding: 24 }
     : { nodeW: 130, nodeH: 50, gapX: 60, gapY: 20, leafPadding: 24 };
   const { positions, edges, width: svgW, height: svgH } = useMemo(
     () => layoutTree(currentTree, layoutConfig),
@@ -312,6 +314,13 @@ export default function ProbabilityTree({ data }) {
     .filter(p => p.node.outcome === 'RESTART')
     .reduce((s, p) => s + (p.node.abs_prob || 0), 0);
 
+  const jurisdictionTitle = jurisdiction === 'domestic' ? 'Domestic' : jurisdiction === 'hkiac' ? 'HKIAC' : 'SIAC';
+  const jurisdictionSubtitle = jurisdiction === 'domestic'
+    ? 'Arbitration → S.34 Appeal → S.37 Appeal → SLP Gate → SLP Merits'
+    : jurisdiction === 'hkiac'
+    ? 'Arbitration → CFI → Court of Appeal → CFA Leave → CFA Merits'
+    : 'Arbitration → High Court → Court of Appeal';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: ui.space.xl }}>
       {/* KPIs */}
@@ -330,6 +339,7 @@ export default function ProbabilityTree({ data }) {
           {[
             { key: 'domestic', label: 'Domestic (S.34→SLP)' },
             { key: 'siac', label: 'SIAC (HC→COA)' },
+            { key: 'hkiac', label: 'HKIAC (CFI→CFA)' },
           ].map(j => (
             <button key={j.key} onClick={() => setJurisdiction(j.key)} style={{
               padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
@@ -379,11 +389,9 @@ export default function ProbabilityTree({ data }) {
       {/* SVG Tree */}
       <Card>
         <SectionTitle number="1"
-          title={`${jurisdiction === 'domestic' ? 'Domestic' : 'SIAC'} Decision Tree — Scenario ${scenario === 'scenario_a' ? 'A' : 'B'}`}
-          subtitle={jurisdiction === 'domestic'
-            ? 'Arbitration → S.34 Appeal → S.37 Appeal → SLP Gate → SLP Merits'
-            : 'Arbitration → High Court → Court of Appeal'
-          } />
+          title={`${jurisdictionTitle} Decision Tree — Scenario ${scenario === 'scenario_a' ? 'A' : 'B'}`}
+          subtitle={jurisdictionSubtitle}
+        />
         <div ref={containerRef} style={{
           overflowX: viewMode === 'detail' ? 'auto' : 'hidden',
           overflowY: viewMode === 'detail' ? 'auto' : 'hidden',

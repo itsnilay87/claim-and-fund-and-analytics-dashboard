@@ -52,7 +52,7 @@ export const useClaimStore = create((set, get) => ({
       jurisdiction,
       claim_type: 'prolongation',
       soc_value_cr: defaults.soc_value_cr ?? 1000,
-      currency: defaults.currency ?? (jurisdiction === 'siac_singapore' ? 'SGD' : 'INR'),
+      currency: defaults.currency ?? (jurisdiction === 'siac_singapore' ? 'SGD' : jurisdiction === 'hkiac_hongkong' ? 'HKD' : 'INR'),
       claimant_share_pct: defaults.claimant_share_pct ?? 1.0,
       current_stage: 'dab',
       perspective: 'claimant',

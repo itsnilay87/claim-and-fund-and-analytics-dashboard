@@ -1,0 +1,434 @@
+{
+  "id": "hkiac_hongkong",
+  "name": "HKIAC Hong Kong Arbitration",
+  "description": "Hong Kong International Arbitration Centre (HKIAC) arbitration under Hong Kong Arbitration Ordinance. Post-award challenge path: Court of First Instance (CFI) → Court of Appeal (CA) → Court of Final Appeal (CFA) with leave gate. 24 terminal paths across two scenarios.",
+  "country": "HK",
+  "institution": "HKIAC (Hong Kong International Arbitration Centre)",
+
+  "default_challenge_tree": {
+    "scenario_a": {
+      "description": "Claimant WON HKIAC arbitration — counterparty challenges in Hong Kong courts. 12 terminal paths. P(TRUE_WIN)=0.8107, P(LOSE)=0.1893.",
+      "root": {
+        "name": "Court of First Instance",
+        "probability": 1.0,
+        "children": [
+          {
+            "name": "CFI Award Upheld",
+            "probability": 0.85,
+            "duration_distribution": {"type": "uniform", "low": 6.0, "high": 12.0},
+            "legal_cost": {"low": 3.0, "high": 5.0},
+            "children": [
+              {
+                "name": "CA Award Upheld",
+                "probability": 0.85,
+                "duration_distribution": {"type": "uniform", "low": 6.0, "high": 9.0},
+                "legal_cost": {"low": 2.5, "high": 4.0},
+                "children": [
+                  {
+                    "name": "CFA Leave Refused (HA1)",
+                    "probability": 0.92,
+                    "outcome": "TRUE_WIN",
+                    "duration_distribution": {"type": "fixed", "value": 2.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5}
+                  },
+                  {
+                    "name": "CFA Leave Granted",
+                    "probability": 0.08,
+                    "duration_distribution": {"type": "uniform", "low": 9.0, "high": 15.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5},
+                    "children": [
+                      {
+                        "name": "CFA Upholds Award (HA2)",
+                        "probability": 0.80,
+                        "outcome": "TRUE_WIN"
+                      },
+                      {
+                        "name": "CFA Overturns Award (HA3)",
+                        "probability": 0.20,
+                        "outcome": "LOSE"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "CA Award Set Aside",
+                "probability": 0.15,
+                "duration_distribution": {"type": "uniform", "low": 6.0, "high": 9.0},
+                "legal_cost": {"low": 2.5, "high": 4.0},
+                "children": [
+                  {
+                    "name": "CFA Leave Refused (HA4)",
+                    "probability": 0.80,
+                    "outcome": "LOSE",
+                    "duration_distribution": {"type": "fixed", "value": 2.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5}
+                  },
+                  {
+                    "name": "CFA Leave Granted",
+                    "probability": 0.20,
+                    "duration_distribution": {"type": "uniform", "low": 9.0, "high": 15.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5},
+                    "children": [
+                      {
+                        "name": "CFA Restores Award (HA5)",
+                        "probability": 0.60,
+                        "outcome": "TRUE_WIN"
+                      },
+                      {
+                        "name": "CFA Upholds Set Aside (HA6)",
+                        "probability": 0.40,
+                        "outcome": "LOSE"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "CFI Award Set Aside",
+            "probability": 0.15,
+            "duration_distribution": {"type": "uniform", "low": 6.0, "high": 12.0},
+            "legal_cost": {"low": 3.0, "high": 5.0},
+            "children": [
+              {
+                "name": "CA Restores Award",
+                "probability": 0.55,
+                "duration_distribution": {"type": "uniform", "low": 6.0, "high": 9.0},
+                "legal_cost": {"low": 2.5, "high": 4.0},
+                "children": [
+                  {
+                    "name": "CFA Leave Refused (HA7)",
+                    "probability": 0.85,
+                    "outcome": "TRUE_WIN",
+                    "duration_distribution": {"type": "fixed", "value": 2.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5}
+                  },
+                  {
+                    "name": "CFA Leave Granted",
+                    "probability": 0.15,
+                    "duration_distribution": {"type": "uniform", "low": 9.0, "high": 15.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5},
+                    "children": [
+                      {
+                        "name": "CFA Upholds Restore (HA8)",
+                        "probability": 0.55,
+                        "outcome": "TRUE_WIN"
+                      },
+                      {
+                        "name": "CFA Overturns (HA9)",
+                        "probability": 0.45,
+                        "outcome": "LOSE"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "CA Upholds Set Aside",
+                "probability": 0.45,
+                "duration_distribution": {"type": "uniform", "low": 6.0, "high": 9.0},
+                "legal_cost": {"low": 2.5, "high": 4.0},
+                "children": [
+                  {
+                    "name": "CFA Leave Refused (HA10)",
+                    "probability": 0.75,
+                    "outcome": "LOSE",
+                    "duration_distribution": {"type": "fixed", "value": 2.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5}
+                  },
+                  {
+                    "name": "CFA Leave Granted",
+                    "probability": 0.25,
+                    "duration_distribution": {"type": "uniform", "low": 9.0, "high": 15.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5},
+                    "children": [
+                      {
+                        "name": "CFA Restores (HA11)",
+                        "probability": 0.45,
+                        "outcome": "TRUE_WIN"
+                      },
+                      {
+                        "name": "CFA Upholds (HA12)",
+                        "probability": 0.55,
+                        "outcome": "LOSE"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "scenario_b": {
+      "description": "Claimant LOST HKIAC arbitration — claimant challenges in Hong Kong courts. 12 terminal paths. P(RESTART)=0.3133, P(LOSE)=0.6868.",
+      "root": {
+        "name": "Court of First Instance",
+        "probability": 1.0,
+        "children": [
+          {
+            "name": "CFI Overturns Adverse Award",
+            "probability": 0.20,
+            "duration_distribution": {"type": "uniform", "low": 6.0, "high": 12.0},
+            "legal_cost": {"low": 3.0, "high": 5.0},
+            "children": [
+              {
+                "name": "CA Upholds Overturn",
+                "probability": 0.50,
+                "duration_distribution": {"type": "uniform", "low": 6.0, "high": 9.0},
+                "legal_cost": {"low": 2.5, "high": 4.0},
+                "children": [
+                  {
+                    "name": "CFA Leave Refused (HB1)",
+                    "probability": 0.85,
+                    "outcome": "RESTART",
+                    "duration_distribution": {"type": "fixed", "value": 2.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5}
+                  },
+                  {
+                    "name": "CFA Leave Granted",
+                    "probability": 0.15,
+                    "duration_distribution": {"type": "uniform", "low": 9.0, "high": 15.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5},
+                    "children": [
+                      {
+                        "name": "CFA Upholds (HB2)",
+                        "probability": 0.50,
+                        "outcome": "RESTART"
+                      },
+                      {
+                        "name": "CFA Overturns (HB3)",
+                        "probability": 0.50,
+                        "outcome": "LOSE"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "CA Restores Adverse Award",
+                "probability": 0.50,
+                "duration_distribution": {"type": "uniform", "low": 6.0, "high": 9.0},
+                "legal_cost": {"low": 2.5, "high": 4.0},
+                "children": [
+                  {
+                    "name": "CFA Leave Refused (HB4)",
+                    "probability": 0.75,
+                    "outcome": "LOSE",
+                    "duration_distribution": {"type": "fixed", "value": 2.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5}
+                  },
+                  {
+                    "name": "CFA Leave Granted",
+                    "probability": 0.25,
+                    "duration_distribution": {"type": "uniform", "low": 9.0, "high": 15.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5},
+                    "children": [
+                      {
+                        "name": "CFA Overturns Adverse (HB5)",
+                        "probability": 0.45,
+                        "outcome": "RESTART"
+                      },
+                      {
+                        "name": "CFA Upholds Adverse (HB6)",
+                        "probability": 0.55,
+                        "outcome": "LOSE"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "CFI Upholds Adverse Award",
+            "probability": 0.80,
+            "duration_distribution": {"type": "uniform", "low": 6.0, "high": 12.0},
+            "legal_cost": {"low": 3.0, "high": 5.0},
+            "children": [
+              {
+                "name": "CA Overturns Adverse Award",
+                "probability": 0.25,
+                "duration_distribution": {"type": "uniform", "low": 6.0, "high": 9.0},
+                "legal_cost": {"low": 2.5, "high": 4.0},
+                "children": [
+                  {
+                    "name": "CFA Leave Refused (HB7)",
+                    "probability": 0.80,
+                    "outcome": "RESTART",
+                    "duration_distribution": {"type": "fixed", "value": 2.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5}
+                  },
+                  {
+                    "name": "CFA Leave Granted",
+                    "probability": 0.20,
+                    "duration_distribution": {"type": "uniform", "low": 9.0, "high": 15.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5},
+                    "children": [
+                      {
+                        "name": "CFA Upholds Overturn (HB8)",
+                        "probability": 0.45,
+                        "outcome": "RESTART"
+                      },
+                      {
+                        "name": "CFA Restores Adverse (HB9)",
+                        "probability": 0.55,
+                        "outcome": "LOSE"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "name": "CA Upholds Adverse Award",
+                "probability": 0.75,
+                "duration_distribution": {"type": "uniform", "low": 6.0, "high": 9.0},
+                "legal_cost": {"low": 2.5, "high": 4.0},
+                "children": [
+                  {
+                    "name": "CFA Leave Refused (HB10)",
+                    "probability": 0.85,
+                    "outcome": "LOSE",
+                    "duration_distribution": {"type": "fixed", "value": 2.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5}
+                  },
+                  {
+                    "name": "CFA Leave Granted",
+                    "probability": 0.15,
+                    "duration_distribution": {"type": "uniform", "low": 9.0, "high": 15.0},
+                    "legal_cost": {"low": 2.0, "high": 3.5},
+                    "children": [
+                      {
+                        "name": "CFA Overturns (HB11)",
+                        "probability": 0.35,
+                        "outcome": "RESTART"
+                      },
+                      {
+                        "name": "CFA Upholds (HB12)",
+                        "probability": 0.65,
+                        "outcome": "LOSE"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+
+  "default_timeline": {
+    "pre_arb_stages": [
+      {
+        "name": "dab",
+        "duration_low": 4.8,
+        "duration_high": 13.1,
+        "legal_cost_low": 0.50,
+        "legal_cost_high": 1.0
+      },
+      {
+        "name": "arbitration",
+        "duration_low": 20.3,
+        "duration_high": 23.4,
+        "legal_cost_low": 8.0,
+        "legal_cost_high": 8.0
+      }
+    ],
+    "payment_delay_months": 3.0,
+    "max_horizon_months": 96
+  },
+
+  "available_stages": [
+    {
+      "name": "dab",
+      "label": "DAB (Dispute Adjudication Board)",
+      "duration_low": 4.8,
+      "duration_high": 13.1,
+      "legal_cost_low": 0.50,
+      "legal_cost_high": 1.0,
+      "pipeline_after": ["arbitration"]
+    },
+    {
+      "name": "arbitration",
+      "label": "Arbitration",
+      "duration_low": 20.3,
+      "duration_high": 23.4,
+      "legal_cost_low": 8.0,
+      "legal_cost_high": 8.0,
+      "pipeline_after": []
+    },
+    {
+      "name": "re_referral",
+      "label": "Re-Referral",
+      "duration_low": 3.0,
+      "duration_high": 7.0,
+      "legal_cost_low": 0.25,
+      "legal_cost_high": 0.50,
+      "pipeline_after": ["dab", "arbitration"]
+    },
+    {
+      "name": "re_arbitration",
+      "label": "Re-Arbitration",
+      "duration_low": 20.3,
+      "duration_high": 23.4,
+      "legal_cost_low": 8.0,
+      "legal_cost_high": 8.0,
+      "pipeline_after": []
+    }
+  ],
+
+  "default_legal_costs": {
+    "one_time_tribunal_cr": 6.0,
+    "one_time_expert_cr": 2.0,
+    "per_stage_costs": {
+      "dab": {
+        "name": "dab",
+        "duration_low": 4.8,
+        "duration_high": 13.1,
+        "legal_cost_low": 0.50,
+        "legal_cost_high": 1.0
+      },
+      "arb_counsel": {
+        "name": "arb_counsel",
+        "duration_low": 20.3,
+        "duration_high": 23.4,
+        "legal_cost_low": 8.0,
+        "legal_cost_high": 8.0
+      },
+      "hk_cfi": {
+        "name": "hk_cfi",
+        "duration_low": 6.0,
+        "duration_high": 12.0,
+        "legal_cost_low": 3.0,
+        "legal_cost_high": 5.0
+      },
+      "hk_ca": {
+        "name": "hk_ca",
+        "duration_low": 6.0,
+        "duration_high": 9.0,
+        "legal_cost_low": 2.5,
+        "legal_cost_high": 4.0
+      },
+      "hk_cfa": {
+        "name": "hk_cfa",
+        "duration_low": 2.0,
+        "duration_high": 15.0,
+        "legal_cost_low": 2.0,
+        "legal_cost_high": 3.5
+      }
+    },
+    "overrun_alpha": 2.0,
+    "overrun_beta": 5.0,
+    "overrun_low": -0.10,
+    "overrun_high": 0.60
+  },
+
+  "default_payment_delay_months": 3.0,
+  "supports_restart": true,
+  "enforcement_notes": "Awards enforced under Hong Kong Arbitration Ordinance and New York Convention. Post-award challenge path: CFI (setting aside) → CA → CFA (with leave). CFA leave is required and often refused. Payment typically within 3 months of final resolution."
+}

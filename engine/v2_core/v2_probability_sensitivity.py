@@ -396,6 +396,198 @@ def _compute_siac_b_outcomes(bp: dict, delta: float) -> dict[str, float]:
 
 
 # ===================================================================
+# Analytical tree recomputation — HKIAC
+# ===================================================================
+
+def _extract_hkiac_base_probs() -> dict:
+    """Extract HKIAC node-level base probabilities from MI path tables.
+
+    Tree structure (3-level court system):
+      CFI → CA → CFA (with leave gate)
+    Isomorphic to domestic S.34 → S.37 → SLP tree.
+    """
+    hk_a = MI.HKIAC_PATHS_A
+    hk_b = MI.HKIAC_PATHS_B
+
+    # --- Scenario A ---
+    a_cfi_tw = next(p["cfi_prob"] for p in hk_a if p["cfi_tata_wins"])
+
+    cfiT_a = [p for p in hk_a if p["cfi_tata_wins"]]
+    a_ca_tw_cfiT = next(p["ca_prob"] for p in cfiT_a if p["ca_tata_wins"])
+    cfiF_a = [p for p in hk_a if not p["cfi_tata_wins"]]
+    a_ca_tw_cfiF = next(p["ca_prob"] for p in cfiF_a if p["ca_tata_wins"])
+
+    def _cfa_leave_prob(paths, cfi_tw, ca_tw):
+        sub = [p for p in paths if p["cfi_tata_wins"] == cfi_tw
+               and p["ca_tata_wins"] == ca_tw and p["cfa_leave_granted"]]
+        return sub[0]["cfa_leave_prob"] if sub else 0.0
+
+    a_cfa_leave_TT = _cfa_leave_prob(hk_a, True, True)
+    a_cfa_leave_TF = _cfa_leave_prob(hk_a, True, False)
+    a_cfa_leave_FT = _cfa_leave_prob(hk_a, False, True)
+    a_cfa_leave_FF = _cfa_leave_prob(hk_a, False, False)
+
+    def _cfa_merits_tw_prob(paths, cfi_tw, ca_tw):
+        sub = [p for p in paths if p["cfi_tata_wins"] == cfi_tw
+               and p["ca_tata_wins"] == ca_tw
+               and p["cfa_leave_granted"]
+               and p.get("cfa_tata_wins")]
+        return sub[0]["cfa_merits_prob"] if sub else 0.0
+
+    a_cfam_TT = _cfa_merits_tw_prob(hk_a, True, True)
+    a_cfam_TF = _cfa_merits_tw_prob(hk_a, True, False)
+    a_cfam_FT = _cfa_merits_tw_prob(hk_a, False, True)
+    a_cfam_FF = _cfa_merits_tw_prob(hk_a, False, False)
+
+    # --- Scenario B ---
+    b_cfi_tw = next(p["cfi_prob"] for p in hk_b if p["cfi_tata_wins"])
+
+    cfiT_b = [p for p in hk_b if p["cfi_tata_wins"]]
+    b_ca_tw_cfiT = next(p["ca_prob"] for p in cfiT_b if p["ca_tata_wins"])
+    cfiF_b = [p for p in hk_b if not p["cfi_tata_wins"]]
+    b_ca_tw_cfiF = next(p["ca_prob"] for p in cfiF_b if p["ca_tata_wins"])
+
+    b_cfa_leave_TT = _cfa_leave_prob(hk_b, True, True)
+    b_cfa_leave_TF = _cfa_leave_prob(hk_b, True, False)
+    b_cfa_leave_FT = _cfa_leave_prob(hk_b, False, True)
+    b_cfa_leave_FF = _cfa_leave_prob(hk_b, False, False)
+
+    b_cfam_TT = _cfa_merits_tw_prob(hk_b, True, True)
+    b_cfam_TF = _cfa_merits_tw_prob(hk_b, True, False)
+    b_cfam_FT = _cfa_merits_tw_prob(hk_b, False, True)
+    b_cfam_FF = _cfa_merits_tw_prob(hk_b, False, False)
+
+    return {
+        "a": {
+            "cfi_tw": a_cfi_tw,
+            "ca_tw_cfiT": a_ca_tw_cfiT, "ca_tw_cfiF": a_ca_tw_cfiF,
+            "cfa_leave_TT": a_cfa_leave_TT, "cfa_leave_TF": a_cfa_leave_TF,
+            "cfa_leave_FT": a_cfa_leave_FT, "cfa_leave_FF": a_cfa_leave_FF,
+            "cfam_TT": a_cfam_TT, "cfam_TF": a_cfam_TF,
+            "cfam_FT": a_cfam_FT, "cfam_FF": a_cfam_FF,
+        },
+        "b": {
+            "cfi_tw": b_cfi_tw,
+            "ca_tw_cfiT": b_ca_tw_cfiT, "ca_tw_cfiF": b_ca_tw_cfiF,
+            "cfa_leave_TT": b_cfa_leave_TT, "cfa_leave_TF": b_cfa_leave_TF,
+            "cfa_leave_FT": b_cfa_leave_FT, "cfa_leave_FF": b_cfa_leave_FF,
+            "cfam_TT": b_cfam_TT, "cfam_TF": b_cfam_TF,
+            "cfam_FT": b_cfam_FT, "cfam_FF": b_cfam_FF,
+        },
+    }
+
+
+def _compute_hkiac_outcomes(bp: dict, delta: float) -> dict[str, float]:
+    """Compute HKIAC Scenario A outcome probabilities with court shift δ.
+
+    Tree: CFI → CA → CFA leave gate → CFA merits.
+    Filer logic same as domestic SLP gate (based on CA outcome):
+      ca=T → opponent files CFA → dismissed = favorable
+      ca=F → TATA files CFA → granted = favorable
+    """
+    cfi = _clamp(bp["cfi_tw"] + delta)
+    ca_cfiT = _clamp(bp["ca_tw_cfiT"] + delta)
+    ca_cfiF = _clamp(bp["ca_tw_cfiF"] + delta)
+
+    # CFA leave gate
+    cfa_leave_TT = 1.0 - _clamp((1.0 - bp["cfa_leave_TT"]) + delta)
+    cfa_leave_FT = 1.0 - _clamp((1.0 - bp["cfa_leave_FT"]) + delta)
+    cfa_leave_TF = _clamp(bp["cfa_leave_TF"] + delta)
+    cfa_leave_FF = _clamp(bp["cfa_leave_FF"] + delta)
+
+    cfam_TT = _clamp(bp["cfam_TT"] + delta)
+    cfam_TF = _clamp(bp["cfam_TF"] + delta)
+    cfam_FT = _clamp(bp["cfam_FT"] + delta)
+    cfam_FF = _clamp(bp["cfam_FF"] + delta)
+
+    p_cfiT = cfi
+    p_cfiF = 1.0 - cfi
+
+    # cfi=T, ca=T → opponent files CFA
+    p_TT = p_cfiT * ca_cfiT
+    h1 = p_TT * (1.0 - cfa_leave_TT)
+    h2 = p_TT * cfa_leave_TT * (1.0 - cfam_TT)
+    h3 = p_TT * cfa_leave_TT * cfam_TT
+
+    # cfi=T, ca=F → TATA files CFA
+    p_TF = p_cfiT * (1.0 - ca_cfiT)
+    h4 = p_TF * (1.0 - cfa_leave_TF)
+    h5 = p_TF * cfa_leave_TF * cfam_TF
+    h6 = p_TF * cfa_leave_TF * (1.0 - cfam_TF)
+
+    # cfi=F, ca=T → opponent files CFA
+    p_FT = p_cfiF * ca_cfiF
+    h7 = p_FT * (1.0 - cfa_leave_FT)
+    h8 = p_FT * cfa_leave_FT * (1.0 - cfam_FT)
+    h9 = p_FT * cfa_leave_FT * cfam_FT
+
+    # cfi=F, ca=F → TATA files CFA
+    p_FF = p_cfiF * (1.0 - ca_cfiF)
+    h10 = p_FF * (1.0 - cfa_leave_FF)
+    h11 = p_FF * cfa_leave_FF * cfam_FF
+    h12 = p_FF * cfa_leave_FF * (1.0 - cfam_FF)
+
+    p_tw = h1 + h3 + h5 + h7 + h9 + h11
+    p_lo = h2 + h4 + h6 + h8 + h10 + h12
+
+    total = p_tw + p_lo
+    assert abs(total - 1.0) < 1e-10, f"HKIAC A paths sum to {total:.10f}"
+    return {"TRUE_WIN": p_tw, "LOSE": p_lo, "RESTART": 0.0}
+
+
+def _compute_hkiac_b_outcomes(bp: dict, delta: float) -> dict[str, float]:
+    """HKIAC Scenario B (TATA lost arb): RESTART or LOSE."""
+    cfi = _clamp(bp["cfi_tw"] + delta)
+    ca_cfiT = _clamp(bp["ca_tw_cfiT"] + delta)
+    ca_cfiF = _clamp(bp["ca_tw_cfiF"] + delta)
+
+    cfa_leave_TT = 1.0 - _clamp((1.0 - bp["cfa_leave_TT"]) + delta)
+    cfa_leave_FT = 1.0 - _clamp((1.0 - bp["cfa_leave_FT"]) + delta)
+    cfa_leave_TF = _clamp(bp["cfa_leave_TF"] + delta)
+    cfa_leave_FF = _clamp(bp["cfa_leave_FF"] + delta)
+
+    cfam_TT = _clamp(bp["cfam_TT"] + delta)
+    cfam_TF = _clamp(bp["cfam_TF"] + delta)
+    cfam_FT = _clamp(bp["cfam_FT"] + delta)
+    cfam_FF = _clamp(bp["cfam_FF"] + delta)
+
+    p_cfiT = cfi
+    p_cfiF = 1.0 - cfi
+
+    p_TT = p_cfiT * ca_cfiT
+    hb10 = p_TT * (1.0 - cfa_leave_TT)
+    hb11 = p_TT * cfa_leave_TT * (1.0 - cfam_TT)
+    hb12 = p_TT * cfa_leave_TT * cfam_TT
+
+    p_TF = p_cfiT * (1.0 - ca_cfiT)
+    hb7 = p_TF * (1.0 - cfa_leave_TF)
+    hb8 = p_TF * cfa_leave_TF * cfam_TF
+    hb9 = p_TF * cfa_leave_TF * (1.0 - cfam_TF)
+
+    p_FT = p_cfiF * ca_cfiF
+    hb4 = p_FT * (1.0 - cfa_leave_FT)
+    hb5 = p_FT * cfa_leave_FT * (1.0 - cfam_FT)
+    hb6 = p_FT * cfa_leave_FT * cfam_FT
+
+    p_FF = p_cfiF * (1.0 - ca_cfiF)
+    hb1 = p_FF * (1.0 - cfa_leave_FF)
+    hb2 = p_FF * cfa_leave_FF * cfam_FF
+    hb3 = p_FF * cfa_leave_FF * (1.0 - cfam_FF)
+
+    p_restart = hb10 + hb12 + hb8 + hb4 + hb6 + hb2
+    p_lose = hb11 + hb7 + hb9 + hb5 + hb1 + hb3
+    p_tw = 0.0
+
+    if MI.NO_RESTART_MODE:
+        p_lose += p_restart
+        p_restart = 0.0
+
+    total = p_restart + p_lose + p_tw
+    assert abs(total - 1.0) < 1e-10, f"HKIAC B paths sum to {total:.10f}"
+    return {"TRUE_WIN": p_tw, "LOSE": p_lose, "RESTART": p_restart}
+
+
+# ===================================================================
 # Quantum band tilting
 # ===================================================================
 
@@ -574,17 +766,19 @@ def _compute_shifted_partition_probs(
     dom_base: dict,
     siac_base: dict,
     p_within_timeline: float,
+    hkiac_base: Optional[dict] = None,
 ) -> dict[int, float]:
     """Compute shifted partition probabilities for one claim.
 
     Parameters
     ----------
-    jurisdiction : "domestic" or "siac"
+    jurisdiction : "domestic", "siac", or "hkiac_hongkong"
     arb_delta : shift for arb win probability
     court_delta : shift for court node probabilities
     quantum_delta : shift for quantum bands (affects E[Q], not partition probs directly)
     dom_base, siac_base : base probability dicts from _extract_*_base_probs
     p_within_timeline : fraction of RESTART paths within timeline (from MC)
+    hkiac_base : base probability dict from _extract_hkiac_base_probs (optional)
     """
     arb_win = _clamp(MI.ARB_WIN_PROBABILITY + arb_delta)
     re_arb_win = _clamp(MI.RE_ARB_WIN_PROBABILITY + arb_delta)
@@ -592,6 +786,9 @@ def _compute_shifted_partition_probs(
     if jurisdiction == "domestic":
         sc_a = _compute_domestic_outcomes(dom_base["a"], court_delta)
         sc_b = _compute_domestic_b_outcomes(dom_base["b"], court_delta)
+    elif jurisdiction == "hkiac_hongkong" and hkiac_base is not None:
+        sc_a = _compute_hkiac_outcomes(hkiac_base["a"], court_delta)
+        sc_b = _compute_hkiac_b_outcomes(hkiac_base["b"], court_delta)
     else:
         sc_a = _compute_siac_outcomes(siac_base["a"], court_delta)
         sc_b = _compute_siac_b_outcomes(siac_base["b"], court_delta)
@@ -622,6 +819,7 @@ def _compute_claim_sensitivity(
     category: str,
     delta: float,
     base_eq_pct: float,
+    hkiac_base: Optional[dict] = None,
 ) -> dict:
     """Compute shifted metrics for one claim at one (category, delta).
 
@@ -646,6 +844,7 @@ def _compute_claim_sensitivity(
     # Shifted partition probabilities
     p_shifted = _compute_shifted_partition_probs(
         jur, arb_d, court_d, q_d, dom_base, siac_base, pwt,
+        hkiac_base=hkiac_base,
     )
 
     # Quantum scaling for TRUE_WIN partitions
@@ -747,6 +946,7 @@ def run_probability_sensitivity(
     # Step 2: base tree probabilities
     dom_base = _extract_domestic_base_probs()
     siac_base = _extract_siac_base_probs()
+    hkiac_base = _extract_hkiac_base_probs()
     base_eq_pct, base_qb_probs = _shifted_quantum_eq(0.0)
 
     # Verify base probabilities at δ=0
@@ -754,6 +954,8 @@ def run_probability_sensitivity(
     dom_b_base = _compute_domestic_b_outcomes(dom_base["b"], 0.0)
     siac_a_base = _compute_siac_outcomes(siac_base["a"], 0.0)
     siac_b_base = _compute_siac_b_outcomes(siac_base["b"], 0.0)
+    hkiac_a_base = _compute_hkiac_outcomes(hkiac_base["a"], 0.0)
+    hkiac_b_base = _compute_hkiac_b_outcomes(hkiac_base["b"], 0.0)
 
     # Step 3: compute all shift results
     results = []
@@ -765,6 +967,7 @@ def run_probability_sensitivity(
                 cid = claim.claim_id
                 per_claim[cid] = _compute_claim_sensitivity(
                     mc_cond[cid], dom_base, siac_base, category, delta, base_eq_pct,
+                    hkiac_base=hkiac_base,
                 )
 
             # Portfolio aggregation
@@ -806,6 +1009,7 @@ def run_probability_sensitivity(
                         claim.jurisdiction, arb_d, court_d, q_d,
                         dom_base, siac_base,
                         mc_cond[cid]["p_within_timeline"],
+                        hkiac_base=hkiac_base,
                     )
 
                     claim_ret = 0.0
@@ -869,6 +1073,12 @@ def run_probability_sensitivity(
                     "siac_b_restart": round(
                         _compute_siac_b_outcomes(siac_base["b"], court_d)["RESTART"], 4
                     ),
+                    "hkiac_a_tw": round(
+                        _compute_hkiac_outcomes(hkiac_base["a"], court_d)["TRUE_WIN"], 4
+                    ),
+                    "hkiac_b_restart": round(
+                        _compute_hkiac_b_outcomes(hkiac_base["b"], court_d)["RESTART"], 4
+                    ),
                 },
                 "per_claim": per_claim,
                 "portfolio": {
@@ -920,6 +1130,10 @@ def run_probability_sensitivity(
         "siac": {
             "scenario_a": {k: round(v, 4) for k, v in siac_a_base.items()},
             "scenario_b": {k: round(v, 4) for k, v in siac_b_base.items()},
+        },
+        "hkiac": {
+            "scenario_a": {k: round(v, 4) for k, v in hkiac_a_base.items()},
+            "scenario_b": {k: round(v, 4) for k, v in hkiac_b_base.items()},
         },
     }
 

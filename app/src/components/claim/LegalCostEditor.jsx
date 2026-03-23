@@ -16,6 +16,7 @@ const STAGE_LABELS = {
   dab: 'DAB', arb_counsel: 'Arb Counsel', s34: 'S.34', s37: 'S.37',
   slp_dismissed: 'SLP Dismissed', slp_admitted: 'SLP Admitted',
   siac_hc: 'High Court (SIAC)', siac_coa: 'CoA (SIAC)',
+  hk_cfi: 'CFI (Hong Kong)', hk_ca: 'CA (Hong Kong)', hk_cfa: 'CFA (Hong Kong)',
 };
 
 export default function LegalCostEditor({ draft, updateField }) {

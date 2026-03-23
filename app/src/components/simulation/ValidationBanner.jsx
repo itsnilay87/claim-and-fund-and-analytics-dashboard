@@ -6,6 +6,7 @@
   ['/quantum_bands', 'Quantum Bands (Quantum tab)'],
   ['/domestic_tree', 'Domestic Probability Tree (Prob. Trees tab)'],
   ['/siac_tree', 'SIAC Probability Tree (Prob. Trees tab)'],
+  ['/hkiac_tree', 'HKIAC Probability Tree (Prob. Trees tab)'],
   ['/timeline', 'Timeline (Timeline tab)'],
   ['/interest', 'Interest (Interest tab)'],
 ];

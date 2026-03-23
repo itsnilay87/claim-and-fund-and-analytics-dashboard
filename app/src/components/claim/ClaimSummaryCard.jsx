@@ -13,8 +13,8 @@
  */
 import { Play, AlertTriangle, CheckCircle, Clock, Loader2, ExternalLink } from 'lucide-react';
 
-const FLAG_EMOJI = { indian_domestic: '🇮🇳', siac_singapore: '🇸🇬' };
-const JURISDICTION_SHORT = { indian_domestic: 'Indian Domestic', siac_singapore: 'SIAC Singapore' };
+const FLAG_EMOJI = { indian_domestic: '🇮🇳', siac_singapore: '🇸🇬', hkiac_hongkong: '🇭🇰' };
+const JURISDICTION_SHORT = { indian_domestic: 'Indian Domestic', siac_singapore: 'SIAC Singapore', hkiac_hongkong: 'HKIAC Hong Kong' };
 const STATUS_STYLES = {
   draft: { bg: 'bg-slate-500/10', text: 'text-slate-400', border: 'border-slate-500/20', label: 'Draft' },
   running: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', border: 'border-cyan-500/20', label: 'Running' },

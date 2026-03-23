@@ -44,10 +44,10 @@ class ClaimConfig:
             raise ValueError(
                 f"{self.claim_id}: tpl_share must be in (0, 1], got {self.tpl_share}"
             )
-        if self.jurisdiction not in ("domestic", "siac"):
+        if self.jurisdiction not in ("domestic", "siac", "hkiac_hongkong"):
             raise ValueError(
-                f"{self.claim_id}: jurisdiction must be 'domestic' or 'siac', "
-                f"got '{self.jurisdiction}'"
+                f"{self.claim_id}: jurisdiction must be 'domestic', 'siac', "
+                f"or 'hkiac_hongkong', got '{self.jurisdiction}'"
             )
         if not self.pipeline:
             raise ValueError(f"{self.claim_id}: pipeline must not be empty")

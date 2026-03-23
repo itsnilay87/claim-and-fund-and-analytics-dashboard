@@ -451,7 +451,7 @@ function _runLegacyPortfolio(runId, runDir, configPath, config, portfolio, pytho
  * @returns {string|null}
  */
 function getLegacyResultFilePath(runId, portfolio, filePath) {
-  const allowed = ['all', 'siac', 'domestic', 'compare'];
+  const allowed = ['all', 'siac', 'domestic', 'hkiac', 'compare'];
   if (!allowed.includes(portfolio)) return null;
   const portDir = path.join(RUNS_DIR, runId, portfolio);
   const resolved = path.resolve(portDir, filePath);

@@ -530,6 +530,288 @@ def _build_siac_scenario_b() -> ScenarioTree:
 
 
 # ============================================================================
+# HKIAC Hong Kong challenge tree builders
+# ============================================================================
+
+def _build_hkiac_scenario_a() -> ScenarioTree:
+    """HKIAC Scenario A: Claimant WON arbitration — counterparty challenges.
+
+    3 levels: CFI → CA → CFA.  12 terminal paths.  Outcomes ∈ {TRUE_WIN, LOSE}.
+    P(TRUE_WIN) = 0.8107, P(LOSE) = 0.1893.
+    """
+    return ScenarioTree(
+        description="Claimant WON HKIAC arbitration — counterparty challenges in Hong Kong courts",
+        root=TreeNode(
+            name="Court of First Instance",
+            probability=1.0,
+            children=[
+                # CFI Award Upheld (0.85)
+                TreeNode(
+                    name="CFI Award Upheld",
+                    probability=0.85,
+                    duration_distribution={"type": "uniform", "low": 6.0, "high": 12.0},
+                    legal_cost={"low": 3.0, "high": 5.0},
+                    children=[
+                        # CA Award Upheld (0.85)
+                        TreeNode(
+                            name="CA Award Upheld",
+                            probability=0.85,
+                            duration_distribution={"type": "uniform", "low": 6.0, "high": 9.0},
+                            legal_cost={"low": 2.5, "high": 4.0},
+                            children=[
+                                TreeNode(
+                                    name="CFA Leave Refused (HA1)",
+                                    probability=0.92,
+                                    outcome="TRUE_WIN",
+                                    duration_distribution={"type": "fixed", "value": 2.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                ),
+                                TreeNode(
+                                    name="CFA Leave Granted",
+                                    probability=0.08,
+                                    duration_distribution={"type": "uniform", "low": 9.0, "high": 15.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                    children=[
+                                        TreeNode(name="CFA Upholds Award (HA2)", probability=0.80, outcome="TRUE_WIN"),
+                                        TreeNode(name="CFA Overturns Award (HA3)", probability=0.20, outcome="LOSE"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        # CA Award Set Aside (0.15)
+                        TreeNode(
+                            name="CA Award Set Aside",
+                            probability=0.15,
+                            duration_distribution={"type": "uniform", "low": 6.0, "high": 9.0},
+                            legal_cost={"low": 2.5, "high": 4.0},
+                            children=[
+                                TreeNode(
+                                    name="CFA Leave Refused (HA4)",
+                                    probability=0.80,
+                                    outcome="LOSE",
+                                    duration_distribution={"type": "fixed", "value": 2.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                ),
+                                TreeNode(
+                                    name="CFA Leave Granted",
+                                    probability=0.20,
+                                    duration_distribution={"type": "uniform", "low": 9.0, "high": 15.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                    children=[
+                                        TreeNode(name="CFA Restores Award (HA5)", probability=0.60, outcome="TRUE_WIN"),
+                                        TreeNode(name="CFA Upholds Set Aside (HA6)", probability=0.40, outcome="LOSE"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+                # CFI Award Set Aside (0.15)
+                TreeNode(
+                    name="CFI Award Set Aside",
+                    probability=0.15,
+                    duration_distribution={"type": "uniform", "low": 6.0, "high": 12.0},
+                    legal_cost={"low": 3.0, "high": 5.0},
+                    children=[
+                        # CA Restores Award (0.55)
+                        TreeNode(
+                            name="CA Restores Award",
+                            probability=0.55,
+                            duration_distribution={"type": "uniform", "low": 6.0, "high": 9.0},
+                            legal_cost={"low": 2.5, "high": 4.0},
+                            children=[
+                                TreeNode(
+                                    name="CFA Leave Refused (HA7)",
+                                    probability=0.85,
+                                    outcome="TRUE_WIN",
+                                    duration_distribution={"type": "fixed", "value": 2.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                ),
+                                TreeNode(
+                                    name="CFA Leave Granted",
+                                    probability=0.15,
+                                    duration_distribution={"type": "uniform", "low": 9.0, "high": 15.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                    children=[
+                                        TreeNode(name="CFA Upholds Restore (HA8)", probability=0.55, outcome="TRUE_WIN"),
+                                        TreeNode(name="CFA Overturns (HA9)", probability=0.45, outcome="LOSE"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        # CA Upholds Set Aside (0.45)
+                        TreeNode(
+                            name="CA Upholds Set Aside",
+                            probability=0.45,
+                            duration_distribution={"type": "uniform", "low": 6.0, "high": 9.0},
+                            legal_cost={"low": 2.5, "high": 4.0},
+                            children=[
+                                TreeNode(
+                                    name="CFA Leave Refused (HA10)",
+                                    probability=0.75,
+                                    outcome="LOSE",
+                                    duration_distribution={"type": "fixed", "value": 2.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                ),
+                                TreeNode(
+                                    name="CFA Leave Granted",
+                                    probability=0.25,
+                                    duration_distribution={"type": "uniform", "low": 9.0, "high": 15.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                    children=[
+                                        TreeNode(name="CFA Restores (HA11)", probability=0.45, outcome="TRUE_WIN"),
+                                        TreeNode(name="CFA Upholds (HA12)", probability=0.55, outcome="LOSE"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    )
+
+
+def _build_hkiac_scenario_b() -> ScenarioTree:
+    """HKIAC Scenario B: Claimant LOST arbitration — claimant challenges.
+
+    3 levels: CFI → CA → CFA.  12 terminal paths.  Outcomes ∈ {RESTART, LOSE}.
+    P(RESTART) = 0.3133, P(LOSE) = 0.6868.
+    """
+    return ScenarioTree(
+        description="Claimant LOST HKIAC arbitration — claimant challenges in Hong Kong courts",
+        root=TreeNode(
+            name="Court of First Instance",
+            probability=1.0,
+            children=[
+                # CFI Overturns Adverse (0.20)
+                TreeNode(
+                    name="CFI Overturns Adverse",
+                    probability=0.20,
+                    duration_distribution={"type": "uniform", "low": 6.0, "high": 12.0},
+                    legal_cost={"low": 3.0, "high": 5.0},
+                    children=[
+                        # CA Upholds Overturn (0.50)
+                        TreeNode(
+                            name="CA Upholds Overturn",
+                            probability=0.50,
+                            duration_distribution={"type": "uniform", "low": 6.0, "high": 9.0},
+                            legal_cost={"low": 2.5, "high": 4.0},
+                            children=[
+                                TreeNode(
+                                    name="CFA Leave Refused (HB1)",
+                                    probability=0.85,
+                                    outcome="RESTART",
+                                    duration_distribution={"type": "fixed", "value": 2.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                ),
+                                TreeNode(
+                                    name="CFA Leave Granted",
+                                    probability=0.15,
+                                    duration_distribution={"type": "uniform", "low": 9.0, "high": 15.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                    children=[
+                                        TreeNode(name="CFA Upholds (HB2)", probability=0.50, outcome="RESTART"),
+                                        TreeNode(name="CFA Overturns (HB3)", probability=0.50, outcome="LOSE"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        # CA Restores Adverse (0.50)
+                        TreeNode(
+                            name="CA Restores Adverse",
+                            probability=0.50,
+                            duration_distribution={"type": "uniform", "low": 6.0, "high": 9.0},
+                            legal_cost={"low": 2.5, "high": 4.0},
+                            children=[
+                                TreeNode(
+                                    name="CFA Leave Refused (HB4)",
+                                    probability=0.75,
+                                    outcome="LOSE",
+                                    duration_distribution={"type": "fixed", "value": 2.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                ),
+                                TreeNode(
+                                    name="CFA Leave Granted",
+                                    probability=0.25,
+                                    duration_distribution={"type": "uniform", "low": 9.0, "high": 15.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                    children=[
+                                        TreeNode(name="CFA Overturns Adverse (HB5)", probability=0.45, outcome="RESTART"),
+                                        TreeNode(name="CFA Upholds Adverse (HB6)", probability=0.55, outcome="LOSE"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+                # CFI Upholds Adverse (0.80)
+                TreeNode(
+                    name="CFI Upholds Adverse",
+                    probability=0.80,
+                    duration_distribution={"type": "uniform", "low": 6.0, "high": 12.0},
+                    legal_cost={"low": 3.0, "high": 5.0},
+                    children=[
+                        # CA Overturns Adverse (0.25)
+                        TreeNode(
+                            name="CA Overturns Adverse",
+                            probability=0.25,
+                            duration_distribution={"type": "uniform", "low": 6.0, "high": 9.0},
+                            legal_cost={"low": 2.5, "high": 4.0},
+                            children=[
+                                TreeNode(
+                                    name="CFA Leave Refused (HB7)",
+                                    probability=0.80,
+                                    outcome="RESTART",
+                                    duration_distribution={"type": "fixed", "value": 2.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                ),
+                                TreeNode(
+                                    name="CFA Leave Granted",
+                                    probability=0.20,
+                                    duration_distribution={"type": "uniform", "low": 9.0, "high": 15.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                    children=[
+                                        TreeNode(name="CFA Upholds Overturn (HB8)", probability=0.45, outcome="RESTART"),
+                                        TreeNode(name="CFA Restores Adverse (HB9)", probability=0.55, outcome="LOSE"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                        # CA Upholds Adverse (0.75)
+                        TreeNode(
+                            name="CA Upholds Adverse",
+                            probability=0.75,
+                            duration_distribution={"type": "uniform", "low": 6.0, "high": 9.0},
+                            legal_cost={"low": 2.5, "high": 4.0},
+                            children=[
+                                TreeNode(
+                                    name="CFA Leave Refused (HB10)",
+                                    probability=0.85,
+                                    outcome="LOSE",
+                                    duration_distribution={"type": "fixed", "value": 2.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                ),
+                                TreeNode(
+                                    name="CFA Leave Granted",
+                                    probability=0.15,
+                                    duration_distribution={"type": "uniform", "low": 9.0, "high": 15.0},
+                                    legal_cost={"low": 2.0, "high": 3.5},
+                                    children=[
+                                        TreeNode(name="CFA Overturns (HB11)", probability=0.35, outcome="RESTART"),
+                                        TreeNode(name="CFA Upholds (HB12)", probability=0.65, outcome="LOSE"),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    )
+
+
+# ============================================================================
 # Pre-built challenge tree instances
 # ============================================================================
 
@@ -541,6 +823,11 @@ DEFAULT_DOMESTIC_TREE = ChallengeTreeConfig(
 DEFAULT_SIAC_TREE = ChallengeTreeConfig(
     scenario_a=_build_siac_scenario_a(),
     scenario_b=_build_siac_scenario_b(),
+)
+
+DEFAULT_HKIAC_TREE = ChallengeTreeConfig(
+    scenario_a=_build_hkiac_scenario_a(),
+    scenario_b=_build_hkiac_scenario_b(),
 )
 
 
@@ -570,6 +857,17 @@ DEFAULT_SIAC_TIMELINE = TimelineConfig(
     max_horizon_months=96,
 )
 
+DEFAULT_HKIAC_TIMELINE = TimelineConfig(
+    pre_arb_stages=[
+        StageConfig(name="dab", duration_low=4.8, duration_high=13.1,
+                    legal_cost_low=0.50, legal_cost_high=1.0),
+        StageConfig(name="arbitration", duration_low=20.3, duration_high=23.4,
+                    legal_cost_low=8.0, legal_cost_high=8.0),
+    ],
+    payment_delay_months=3.0,
+    max_horizon_months=96,
+)
+
 
 # ============================================================================
 # Default legal costs
@@ -595,6 +893,12 @@ DEFAULT_LEGAL_COSTS = LegalCostConfig(
                                legal_cost_low=3.0, legal_cost_high=4.0),
         "siac_coa": StageConfig(name="siac_coa", duration_low=6.0, duration_high=6.0,
                                 legal_cost_low=2.0, legal_cost_high=2.0),
+        "hk_cfi": StageConfig(name="hk_cfi", duration_low=6.0, duration_high=12.0,
+                              legal_cost_low=3.0, legal_cost_high=5.0),
+        "hk_ca": StageConfig(name="hk_ca", duration_low=6.0, duration_high=9.0,
+                             legal_cost_low=2.5, legal_cost_high=4.0),
+        "hk_cfa": StageConfig(name="hk_cfa", duration_low=9.0, duration_high=15.0,
+                              legal_cost_low=2.0, legal_cost_high=3.5),
     },
     overrun_alpha=2.0,
     overrun_beta=5.0,
@@ -616,6 +920,12 @@ DEFAULT_INTEREST_DOMESTIC = InterestConfig(
 DEFAULT_INTEREST_SIAC = InterestConfig(
     enabled=False,
     rate=0.09,
+    compounding="simple",
+)
+
+DEFAULT_INTEREST_HKIAC = InterestConfig(
+    enabled=False,
+    rate=0.07,
     compounding="simple",
 )
 
@@ -698,8 +1008,23 @@ def get_default_claim_config(
             legal_costs=DEFAULT_LEGAL_COSTS,
             interest=DEFAULT_INTEREST_SIAC,
         )
+    elif jurisdiction == "hkiac_hongkong":
+        return ClaimConfig(
+            id=claim_id,
+            name=name,
+            jurisdiction="hkiac_hongkong",
+            claim_type="prolongation",
+            soc_value_cr=soc_value_cr,
+            currency="INR",
+            arbitration=DEFAULT_ARBITRATION_CONFIG,
+            quantum=DEFAULT_QUANTUM_CONFIG,
+            challenge_tree=DEFAULT_HKIAC_TREE,
+            timeline=DEFAULT_HKIAC_TIMELINE,
+            legal_costs=DEFAULT_LEGAL_COSTS,
+            interest=DEFAULT_INTEREST_HKIAC,
+        )
     else:
         raise ValueError(
             f"Unsupported jurisdiction '{jurisdiction}'. "
-            f"Use 'indian_domestic' or 'siac_singapore'."
+            f"Use 'indian_domestic', 'siac_singapore', or 'hkiac_hongkong'."
         )

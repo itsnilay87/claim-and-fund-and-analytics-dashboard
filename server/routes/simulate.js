@@ -298,7 +298,7 @@ router.post('/', (req, res) => {
   try {
     const { config: overrides = {}, portfolios = ['all'] } = req.body;
 
-    const validPortfolios = ['all', 'siac', 'domestic', 'compare'];
+    const validPortfolios = ['all', 'siac', 'domestic', 'hkiac', 'compare'];
     for (const p of portfolios) {
       if (!validPortfolios.includes(p)) {
         return res.status(400).json({ error: `Invalid portfolio: '${p}'. Must be one of: ${validPortfolios.join(', ')}` });
