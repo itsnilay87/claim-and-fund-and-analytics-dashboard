@@ -3,29 +3,28 @@
  *
  * Sections:
  *   1. Claim Identity Card
- *   2. KPI Row (6 cards)
- *   3. Value Chain Decomposition (horizontal flow)
- *   4. MOIC Distribution Histogram
- *   5. MC Percentile Summary Table
- *   6. J-Curve Preview
+ *   2. Portfolio Recovery Calculation (collapsible formula)
+ *   3. Portfolio Value Chain KPI Row (7 cards)
+ *   4. Supporting Metrics Row (4 cards)
+ *   5. Claim Overview Card (single claim with outcome bar)
+ *   6. Return Distribution (DistributionExplorer — 4 metric toggles)
+ *   7. Cashflow J-Curve (JCurveFanChart — D3 fan chart)
  */
 
-import React, { useMemo } from 'react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, ReferenceLine,
-  AreaChart, Area, LineChart, Line,
-} from 'recharts';
-import { COLORS, FONT, CHART_HEIGHT, useUISettings, fmtCr, fmtPct, fmtMOIC, fmtMo } from '../../theme';
-import { Card, SectionTitle, KPI, DataTable } from '../Shared';
+import React, { useState, useMemo } from 'react';
+import { COLORS, FONT, useUISettings, fmtCr, fmtPct, fmtMOIC, fmtMo } from '../../theme';
+import { Card, SectionTitle, KPI, Badge } from '../Shared';
+import DistributionExplorer from '../DistributionExplorer';
+import JCurveFanChart from '../JCurveFanChart';
 
 /* ═══════════════════════════════════════════════════════════
  *  § 1 — Claim Identity Card
  * ═══════════════════════════════════════════════════════════ */
 function ClaimIdentityCard({ claim }) {
   const { ui } = useUISettings();
+  const claimName = claim.name || claim.claim_id || 'N/A';
   const fields = [
-    { label: 'Claim Name',     value: claim.name || claim.claim_id || 'N/A' },
+    { label: 'Claim Name',     value: claimName },
     { label: 'Jurisdiction',   value: (claim.jurisdiction || 'N/A').toUpperCase() },
     { label: 'Claim Type',     value: (claim.archetype || 'N/A').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) },
     { label: 'Current Stage',  value: (claim.current_gate || 'N/A').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) },
@@ -34,7 +33,7 @@ function ClaimIdentityCard({ claim }) {
   ];
   return (
     <Card>
-      <SectionTitle number="1" title="Claim Identity" subtitle="Core claim attributes and parameters" />
+      <SectionTitle number="1" title={`Claim Identity — ${claimName}`} subtitle="Core claim attributes and parameters" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: ui.space.md }}>
         {fields.map(f => (
           <div key={f.label} style={{ padding: `${ui.space.sm}px ${ui.space.md}px` }}>
@@ -52,231 +51,114 @@ function ClaimIdentityCard({ claim }) {
 }
 
 /* ═══════════════════════════════════════════════════════════
- *  § 2 — KPI Row
+ *  § 2 — Portfolio Recovery Calculation
  * ═══════════════════════════════════════════════════════════ */
-function ClaimKPIRow({ data }) {
+function RecoveryCalculation({ claim, metrics }) {
   const { ui } = useUISettings();
-  const claim = data?.claims?.[0] || {};
-  const risk = data?.risk || {};
-  const moicDist = risk.moic_distribution || {};
-  const irrDist = risk.irr_distribution || {};
-
-  // Try to get reference metrics from investment_grid or waterfall_grid
-  const ig = data?.investment_grid || {};
-  const wg = data?.waterfall_grid || {};
-  const refKey = ig['10_20'] ? '10_20' : ig['10_10'] ? '10_10' : Object.keys(ig)[0];
-  const ref = ig[refKey] || {};
-  const wgRefKey = Object.keys(wg)[0];
-  const wgRef = wg[wgRefKey] || {};
-
-  const eMoic = ref.mean_moic || wgRef.mean_moic || moicDist.mean || moicDist.p50 || 0;
-  const eIrr = ref.mean_xirr || wgRef.mean_xirr || irrDist.mean || irrDist.p50 || 0;
-  const pLoss = ref.p_loss ?? wgRef.p_loss ?? 0;
-
-  const collected = claim.collected_stats?.mean || 0;
-  const legalCost = claim.legal_cost_stats?.mean || 0;
-  const netRecovery = collected - legalCost;
-
-  const favorColor = (v, good, bad) => v >= good ? '#34D399' : v >= bad ? COLORS.accent3 : COLORS.accent5;
-
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: ui.space.md }}>
-      <KPI label="SOC Value" value={fmtCr(claim.soc_value_cr)} sub="Statement of Claim" color={COLORS.accent1} />
-      <KPI label="Win Rate" value={fmtPct(claim.win_rate)} color={favorColor(claim.win_rate, 0.6, 0.4)} />
-      <KPI label="E[MOIC]" value={fmtMOIC(eMoic)} color={favorColor(eMoic, 2.0, 1.0)} />
-      <KPI label="E[IRR]" value={fmtPct(eIrr)} color={favorColor(eIrr, 0.25, 0.10)} />
-      <KPI label="P(Loss)" value={fmtPct(pLoss)} color={pLoss < 0.2 ? '#34D399' : COLORS.accent5} />
-      <KPI label="E[Net Recovery]" value={fmtCr(netRecovery)} sub={`Collected − Legal`} color={netRecovery >= 0 ? '#34D399' : COLORS.accent5} />
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════
- *  § 3 — Value Chain Decomposition
- * ═══════════════════════════════════════════════════════════ */
-function ValueChainDecomposition({ data }) {
-  const { ui } = useUISettings();
-  const decomp = data?.cashflow_analysis?.decomposition || data?.waterfall?.nominal;
-  if (!decomp) return null;
-
-  // If decomposition is an array (from cashflow_analysis)
-  const steps = Array.isArray(decomp) ? decomp : [];
-  if (steps.length === 0) return null;
+  const [showFormulas, setShowFormulas] = useState(false);
+  const { totalPrincipal, totalInterest, totalCollected, totalLegal, netRecovery, recoveryRate, interestEnabled } = metrics;
+  const claimName = claim.name || claim.claim_id || 'Claim';
 
   return (
     <Card>
-      <SectionTitle number="3" title="Value Chain Decomposition" subtitle="How SOC flows through probability gates to net recovery" />
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 0,
-        overflowX: 'auto', padding: `${ui.space.md}px 0`,
-      }}>
-        {steps.map((s, i) => (
-          <React.Fragment key={i}>
-            {i > 0 && (
-              <div style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center',
-                padding: '0 4px', flexShrink: 0,
-              }}>
-                <div style={{ color: COLORS.accent3, fontSize: ui.sizes.sm, fontWeight: 700, marginBottom: 2 }}>
-                  {s.step}
-                </div>
-                <div style={{ color: COLORS.textMuted, fontSize: 18 }}>→</div>
-              </div>
-            )}
-            <div style={{
-              background: i === 0 ? `${COLORS.accent1}15` : i === steps.length - 1 ? `${COLORS.accent4}15` : '#0F1219',
-              border: `1px solid ${i === 0 ? COLORS.accent1 + '40' : i === steps.length - 1 ? COLORS.accent4 + '40' : COLORS.cardBorder}`,
-              borderRadius: 10, padding: `${ui.space.md}px ${ui.space.lg}px`,
-              textAlign: 'center', minWidth: 120, flexShrink: 0,
-            }}>
-              <div style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs, fontWeight: 600, marginBottom: 4 }}>
-                {s.label?.substring(0, 30)}
-              </div>
-              <div style={{
-                color: COLORS.textBright, fontSize: ui.sizes.lg, fontWeight: 800,
-              }}>
-                {fmtCr(s.value_cr)}
-              </div>
-              {s.factor && s.factor !== '—' && (
-                <div style={{ color: COLORS.accent2, fontSize: ui.sizes.xs, marginTop: 2 }}>
-                  {s.factor}
-                </div>
-              )}
+      <SectionTitle title="Portfolio Recovery Calculation" subtitle="How E[Collected] derives from claim-level E[Q|Win] × Win Rate" />
+      <div style={{ padding: '12px 16px', borderRadius: 8, background: '#0c1622', border: `1px solid ${COLORS.accent2}40`, marginTop: 8 }}>
+        <div
+          onClick={() => setShowFormulas(!showFormulas)}
+          style={{ color: COLORS.accent2, fontSize: ui.sizes.sm, fontWeight: 700, marginBottom: showFormulas ? 8 : 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+        >
+          <span style={{ transition: 'transform 0.2s', transform: showFormulas ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+          📐 ANALYTICAL FORMULA (Manually Verifiable) — Click to {showFormulas ? 'hide' : 'show'}
+        </div>
+        {showFormulas && (
+          <div style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs, lineHeight: 1.8 }}>
+            <div style={{ marginBottom: 8 }}>
+              <strong style={{ color: COLORS.textBright }}>E[Principal]</strong> = Σ (E[Quantum|Win]ᵢ × Win_Rateᵢ) for each claim i
             </div>
-          </React.Fragment>
-        ))}
+            <div style={{ background: '#111827', padding: '6px 10px', borderRadius: 6, fontSize: ui.sizes.xs, marginBottom: 8 }}>
+              <span style={{ color: COLORS.textBright, fontWeight: 600 }}>{claimName}:</span>{' '}
+              <span style={{ color: COLORS.accent4 }}>{fmtCr(claim.expected_quantum_cr)}</span>{' × '}
+              <span style={{ color: COLORS.accent2 }}>{fmtPct(claim.win_rate)}</span>{' = '}
+              <span style={{ color: COLORS.accent3, fontWeight: 700 }}>{fmtCr((claim.expected_quantum_cr || 0) * (claim.win_rate || 0))}</span>
+            </div>
+            <div style={{ padding: '8px 12px', background: '#111827', borderRadius: 6 }}>
+              <strong style={{ color: COLORS.accent3 }}>Total E[Principal]</strong> = <strong style={{ color: COLORS.accent3 }}>{fmtCr(totalPrincipal)}</strong>
+              {interestEnabled && totalInterest > 0 && (
+                <><br /><strong style={{ color: COLORS.accent4 }}>+ E[Interest]</strong> = {fmtCr(totalInterest)}</>
+              )}
+              <br /><strong style={{ color: COLORS.accent6 }}>= E[Collected]</strong> = <strong style={{ color: COLORS.accent6 }}>{fmtCr(totalCollected)}</strong> ({fmtPct(recoveryRate)} of SOC)
+              <br /><strong style={{ color: COLORS.accent5 }}>- E[Legal]</strong> = {fmtCr(totalLegal)}
+              <br /><strong style={{ color: netRecovery >= 0 ? '#22C55E' : COLORS.accent5 }}>= E[Net Recovery]</strong> = <strong style={{ color: netRecovery >= 0 ? '#22C55E' : COLORS.accent5 }}>{fmtCr(netRecovery)}</strong>
+            </div>
+          </div>
+        )}
       </div>
     </Card>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════
- *  § 4 — MOIC Distribution Histogram
+ *  § 5 — Claim Overview Card
  * ═══════════════════════════════════════════════════════════ */
-function MOICHistogram({ data }) {
+function ClaimOverviewCard({ claim }) {
   const { ui } = useUISettings();
-  const moicData = data?.mc_distributions?.moic;
-  if (!moicData?.bins || !moicData?.counts) return null;
-
-  const chartData = moicData.bins.map((bin, i) => ({
-    bin: +bin.toFixed(2),
-    count: moicData.counts[i],
-    aboveBreakeven: bin >= 1.0,
-  }));
+  const od = claim.outcome_distribution || {};
+  const total = (od.TRUE_WIN || 0) + (od.RESTART || 0) + (od.LOSE || 0);
+  const isViable = claim.economically_viable !== false;
+  const claimName = claim.name || claim.claim_id || 'Claim';
 
   return (
     <Card>
-      <SectionTitle number="4" title="MOIC Distribution" subtitle="Monte Carlo outcome distribution. Green = profit (MOIC ≥ 1.0), Red = loss." />
-      <ResponsiveContainer width="100%" height={CHART_HEIGHT.md}>
-        <BarChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 30 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
-          <XAxis
-            dataKey="bin"
-            tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm, fontFamily: FONT }}
-            label={{ value: 'MOIC', position: 'insideBottom', offset: -15, fill: COLORS.text, fontSize: ui.sizes.md, fontWeight: 600 }}
+      <SectionTitle number="3" title="Claim Overview" subtitle="Summary statistics from Monte Carlo simulation" />
+      <div style={{
+        background: '#0F1219',
+        border: `1px solid ${isViable ? COLORS.cardBorder : '#EF4444'}`,
+        borderRadius: 10, padding: 16,
+        opacity: isViable ? 1 : 0.85,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ color: COLORS.textBright, fontSize: 14, fontWeight: 700 }}>
+            {claimName}
+            {!isViable && <span style={{ color: '#EF4444', fontSize: ui.sizes.xs, marginLeft: 6 }}>⚠️ UNVIABLE</span>}
+          </span>
+          <Badge
+            text={(claim.archetype || '').replace(/_/g, ' ').toUpperCase()}
+            color={claim.jurisdiction === 'siac' ? COLORS.accent2 : COLORS.accent1}
           />
-          <YAxis
-            tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm, fontFamily: FONT }}
-            label={{ value: 'Frequency', angle: -90, position: 'insideLeft', offset: 10, fill: COLORS.text, fontSize: ui.sizes.md, fontWeight: 600 }}
-          />
-          <Tooltip
-            contentStyle={{ background: '#1F2937', border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, fontFamily: FONT }}
-            labelStyle={{ color: COLORS.textBright, fontWeight: 700 }}
-            itemStyle={{ color: COLORS.text }}
-            formatter={(value, name) => [value, 'Count']}
-            labelFormatter={(v) => `MOIC: ${fmtMOIC(v)}`}
-          />
-          <ReferenceLine x={1.0} stroke={COLORS.accent3} strokeWidth={2} strokeDasharray="5 5" label={{ value: 'Breakeven', fill: COLORS.accent3, fontSize: ui.sizes.sm, fontWeight: 700 }} />
-          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-            {chartData.map((entry, i) => (
-              <Cell key={i} fill={entry.aboveBreakeven ? '#10B981' : '#EF4444'} fillOpacity={0.85} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </Card>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════
- *  § 5 — MC Percentile Summary Table
- * ═══════════════════════════════════════════════════════════ */
-function PercentileTable({ data }) {
-  const risk = data?.risk || {};
-  const moicDist = risk.moic_distribution || {};
-  const irrDist = risk.irr_distribution || {};
-
-  const headers = ['Metric', 'P5', 'P25', 'P50', 'P75', 'P95', 'Mean'];
-  const rows = [
-    ['MOIC', fmtMOIC(moicDist.p5), fmtMOIC(moicDist.p25), fmtMOIC(moicDist.p50), fmtMOIC(moicDist.p75), fmtMOIC(moicDist.p95), fmtMOIC(moicDist.mean)],
-    ['IRR', fmtPct(irrDist.p5), fmtPct(irrDist.p25), fmtPct(irrDist.p50), fmtPct(irrDist.p75), fmtPct(irrDist.p95), fmtPct(irrDist.mean)],
-  ];
-
-  return (
-    <Card>
-      <SectionTitle number="5" title="MC Percentile Summary" subtitle="Distribution quantiles across all Monte Carlo paths" />
-      <DataTable headers={headers} rows={rows} />
-    </Card>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════
- *  § 6 — J-Curve Preview
- * ═══════════════════════════════════════════════════════════ */
-function JCurvePreview({ data }) {
-  const { ui } = useUISettings();
-  const jc = data?.jcurve_data;
-  if (!jc?.scenarios) return null;
-
-  const scenarioKey = jc.default_key || Object.keys(jc.scenarios)[0];
-  const scen = jc.scenarios[scenarioKey];
-  if (!scen) return null;
-
-  // Handle both row-oriented (array of {month, median, ...}) and column-oriented ({month: [...], median: [...]}) data
-  const chartData = Array.isArray(scen)
-    ? scen.map(d => ({
-        month: d.month,
-        median: d.median ?? d.p50 ?? 0,
-        p25: d.p25 ?? 0,
-        p75: d.p75 ?? 0,
-      }))
-    : (scen.month || []).map((m, i) => ({
-        month: m,
-        median: scen.median?.[i] ?? 0,
-        p25: scen.p25?.[i] ?? 0,
-        p75: scen.p75?.[i] ?? 0,
-      }));
-
-  if (chartData.length === 0) return null;
-
-  return (
-    <Card>
-      <SectionTitle number="6" title="J-Curve Preview" subtitle={`Cumulative cashflow over time (scenario: ${scenarioKey})`} />
-      <ResponsiveContainer width="100%" height={280}>
-        <AreaChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 30 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
-          <XAxis
-            dataKey="month"
-            tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm, fontFamily: FONT }}
-            label={{ value: 'Month', position: 'insideBottom', offset: -15, fill: COLORS.text, fontSize: ui.sizes.md, fontWeight: 600 }}
-          />
-          <YAxis
-            tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm, fontFamily: FONT }}
-            tickFormatter={(v) => `${(v / 1).toFixed(0)}`}
-            label={{ value: '₹ Cr', angle: -90, position: 'insideLeft', offset: 10, fill: COLORS.text, fontSize: ui.sizes.md, fontWeight: 600 }}
-          />
-          <Tooltip
-            contentStyle={{ background: '#1F2937', border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, fontFamily: FONT }}
-            labelStyle={{ color: COLORS.textBright, fontWeight: 700 }}
-            labelFormatter={(v) => `Month ${v}`}
-            formatter={(v) => [fmtCr(v)]}
-          />
-          <ReferenceLine y={0} stroke={COLORS.accent3} strokeDasharray="3 3" />
-          <Area type="monotone" dataKey="p75" stackId="band" stroke="none" fill={COLORS.accent1} fillOpacity={0.15} />
-          <Area type="monotone" dataKey="p25" stackId="band_low" stroke="none" fill={COLORS.accent1} fillOpacity={0.08} />
-          <Line type="monotone" dataKey="median" stroke={COLORS.accent1} strokeWidth={2.5} dot={false} />
-        </AreaChart>
-      </ResponsiveContainer>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: ui.space.sm, fontSize: ui.sizes.sm }}>
+          <div>
+            <span style={{ color: COLORS.textMuted }}>SOC:</span>{' '}
+            <span style={{ color: COLORS.text, fontWeight: 600 }}>{fmtCr(claim.soc_value_cr)}</span>
+          </div>
+          <div>
+            <span style={{ color: COLORS.textMuted }}>Win Rate:</span>{' '}
+            <span style={{ color: COLORS.accent4, fontWeight: 600 }}>{fmtPct(claim.win_rate)}</span>
+          </div>
+          <div>
+            <span style={{ color: COLORS.textMuted }}>Avg Dur:</span>{' '}
+            <span style={{ color: COLORS.text, fontWeight: 600 }}>{(claim.mean_duration_months || 0).toFixed(1)}m</span>
+          </div>
+          <div>
+            <span style={{ color: COLORS.textMuted }}>Jurisdiction:</span>{' '}
+            <span style={{ color: COLORS.accent6, fontWeight: 600 }}>{(claim.jurisdiction || '').toUpperCase()}</span>
+          </div>
+        </div>
+        {total > 0 && (
+          <>
+            <div style={{ marginTop: 10, height: 6, borderRadius: 3, overflow: 'hidden', display: 'flex' }}>
+              <div style={{ width: `${(od.TRUE_WIN / total * 100)}%`, background: COLORS.accent4 }} />
+              <div style={{ width: `${(od.RESTART / total * 100)}%`, background: COLORS.accent3 }} />
+              <div style={{ width: `${(od.LOSE / total * 100)}%`, background: COLORS.accent5 }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: ui.sizes.xs, color: COLORS.textMuted }}>
+              <span>Win {fmtPct(od.TRUE_WIN / total)}</span>
+              <span>Restart {fmtPct(od.RESTART / total)}</span>
+              <span>Lose {fmtPct(od.LOSE / total)}</span>
+            </div>
+          </>
+        )}
+      </div>
     </Card>
   );
 }
@@ -298,14 +180,90 @@ export default function ClaimExecutiveSummary({ data, stochasticData }) {
     );
   }
 
+  // ── Derived portfolio metrics (single claim) ──
+  const meta = data?.simulation_meta || {};
+  const totalSOC = claim.soc_value_cr || 0;
+  const totalEQ = claim.expected_quantum_cr || 0;
+  const totalPrincipal = totalEQ * (claim.win_rate || 0);
+  const totalInterest = claim.interest_stats?.mean || 0;
+  const totalCollected = totalPrincipal + totalInterest;
+  const totalLegal = claim.legal_cost_stats?.mean || 0;
+  const netRecovery = totalCollected - totalLegal;
+  const recoveryRate = totalSOC > 0 ? totalCollected / totalSOC : 0;
+  const eqToSOC = totalSOC > 0 ? totalEQ / totalSOC : 0;
+  const principalToSOC = totalSOC > 0 ? totalPrincipal / totalSOC : 0;
+  const legalRatio = totalCollected > 0 ? totalLegal / totalCollected : 0;
+  const interestEnabled = meta.interest_enabled || totalInterest > 0;
+
+  // ── Normalize mc_distributions keys for DistributionExplorer ──
+  const normalizedData = useMemo(() => {
+    if (!data) return data;
+    const mc = data.mc_distributions;
+    if (mc) {
+      if (mc.xirr && !mc.irr) mc.irr = mc.xirr;
+      if (mc.net_return_cr && !mc.net_recovery) mc.net_recovery = mc.net_return_cr;
+    }
+    return data;
+  }, [data]);
+
+  const metrics = { totalSOC, totalEQ, totalPrincipal, totalInterest, totalCollected, totalLegal, netRecovery, recoveryRate, interestEnabled };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: ui.space.xl }}>
+
+      {/* §1 — Claim Identity Card */}
       <ClaimIdentityCard claim={claim} />
-      <ClaimKPIRow data={data} />
-      <ValueChainDecomposition data={data} />
-      <MOICHistogram data={data} />
-      <PercentileTable data={data} />
-      <JCurvePreview data={data} />
+
+      {/* §2 — Portfolio Recovery Calculation (collapsible) */}
+      <RecoveryCalculation claim={claim} metrics={metrics} />
+
+      {/* §3 — Portfolio Value Chain KPI Row */}
+      <div>
+        <div style={{
+          fontSize: ui.sizes.xs, color: COLORS.textMuted, textTransform: 'uppercase',
+          letterSpacing: '0.08em', fontWeight: 700, marginBottom: ui.space.sm, paddingLeft: 4,
+        }}>Portfolio Value Chain — SOC → E[Q|Win] → Principal → Collected → Net</div>
+        <div style={{ display: 'grid', gridTemplateColumns: interestEnabled ? 'repeat(7, 1fr)' : 'repeat(6, 1fr)', gap: ui.space.md }}>
+          <KPI label="Total SOC" value={fmtCr(totalSOC)} sub="1 claim" color={COLORS.accent1} />
+          <KPI label="E[Quantum|Win]" value={fmtCr(totalEQ)} sub={`${fmtPct(eqToSOC)} of SOC`} color={COLORS.accent4} />
+          <KPI label="Avg Win Rate" value={fmtPct(claim.win_rate)} sub="simple avg" color={COLORS.accent2} />
+          <KPI label="E[Principal]" value={fmtCr(totalPrincipal)} sub={`${fmtPct(principalToSOC)} of SOC`} color={COLORS.accent3} />
+          {interestEnabled && (
+            <KPI label="E[Interest]" value={fmtCr(totalInterest)} sub={`${fmtPct(totalSOC > 0 ? totalInterest / totalSOC : 0)} of SOC`} color={COLORS.accent4} />
+          )}
+          <KPI label="E[Collected]" value={fmtCr(totalCollected)} sub="Principal + Interest" color={COLORS.accent6} />
+          <KPI label="E[Net Recovery]" value={fmtCr(netRecovery)} sub={`After ₹${totalLegal.toFixed(0)} Cr legal`} color={netRecovery >= 0 ? '#22C55E' : COLORS.accent5} />
+        </div>
+      </div>
+
+      {/* §4 — Supporting Metrics Row */}
+      <div>
+        <div style={{
+          fontSize: ui.sizes.xs, color: COLORS.textMuted, textTransform: 'uppercase',
+          letterSpacing: '0.08em', fontWeight: 700, marginBottom: ui.space.sm, paddingLeft: 4,
+        }}>Supporting Metrics</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: ui.space.md }}>
+          <KPI label="Avg Quantum/Claim" value={fmtCr(totalEQ)} sub={`Total E[Q|Win] ${fmtCr(totalEQ)}`} color={COLORS.accent4} />
+          <KPI label="Avg Duration" value={`${(claim.mean_duration_months || 0).toFixed(1)}m`} sub="Time to resolution" color={COLORS.accent3} />
+          <KPI label="E[Legal Costs]" value={fmtCr(totalLegal)} sub={`${fmtPct(legalRatio)} of collected`} color={COLORS.accent5} />
+          <KPI label="Recovery Rate" value={fmtPct(recoveryRate)} sub="E[Collected] / SOC" color={COLORS.accent6} />
+        </div>
+      </div>
+
+      {/* §5 — Claim Overview Card */}
+      <ClaimOverviewCard claim={claim} />
+
+      {/* §6 — Return Distribution (DistributionExplorer with 4 toggles) */}
+      <Card>
+        <SectionTitle number="4" title="Return Distribution" subtitle="Monte Carlo simulated outcomes — toggle metric, hover bars for details" />
+        <DistributionExplorer data={normalizedData} defaultMetric="irr" height={280} compact />
+      </Card>
+
+      {/* §7 — Cashflow J-Curve (JCurveFanChart) */}
+      <Card>
+        <SectionTitle number="5" title="Cashflow J-Curve" subtitle="Cumulative portfolio cashflow — litigation funding structure" />
+        <JCurveFanChart data={data} height={340} showControls upfrontPct={0.10} tataTailPct={0.20} />
+      </Card>
     </div>
   );
 }

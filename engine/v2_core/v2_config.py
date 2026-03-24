@@ -32,6 +32,7 @@ class ClaimConfig:
     current_gate: str       # Current pipeline position
     tpl_share: float        # TPL's share (1.0 = 100%)
     pipeline: list[str]     # Remaining stages from current_gate
+    name: str = ""          # Human-readable claim name
     dab_commencement_date: str = ""  # ISO date (YYYY-MM-DD) of DAB commencement for interest calc
 
     def validate(self) -> None:

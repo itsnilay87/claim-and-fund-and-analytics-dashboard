@@ -180,6 +180,7 @@ def platform_claim_to_v2_claim(
         current_gate=claim.current_stage or "dab_commenced",
         tpl_share=claim.claimant_share_pct,
         pipeline=pipeline,
+        name=claim.name,
         dab_commencement_date=dab_commencement,
     )
     v2_claim.validate()

@@ -101,6 +101,7 @@ def _build_claims_section(
 
         out.append({
             "claim_id": cid,
+            "name": getattr(c, 'name', '') or cid,
             "archetype": c.archetype,
             "soc_value_cr": _cr(c.soc_value_cr),
             "jurisdiction": c.jurisdiction,
