@@ -26,22 +26,20 @@ const pct = (v, dec = 1) => `${(Number(v || 0) * 100).toFixed(dec)}%`;
 /* ═══════════════════════════════════════════════════════════
  *  § 1 — KPI Row
  * ═══════════════════════════════════════════════════════════ */
-function CashflowKPIs({ data, mode }) {
+function CashflowKPIs({ data }) {
   const claim = data?.claims?.[0] || {};
-  const waterfall = mode === 'nominal' ? data?.waterfall?.nominal : data?.waterfall?.present_value;
   const nomWaterfall = data?.waterfall?.nominal || {};
   const { ui } = useUISettings();
 
   const soc = claim.soc_value_cr || nomWaterfall.soc_cr || 0;
-  const collected = waterfall?.prob_adjusted_cr || claim.collected_stats?.mean || claim.mean_collected_cr || 0;
-  const legal = waterfall?.legal_costs_cr || claim.legal_cost_stats?.mean || claim.mean_legal_costs_cr || 0;
-  const net = waterfall?.net_after_legal_cr || (collected - legal);
-  const discountRate = data?.waterfall?.present_value?.discount_rate || 0.07;
+  const collected = nomWaterfall?.prob_adjusted_cr || claim.collected_stats?.mean || claim.mean_collected_cr || 0;
+  const legal = nomWaterfall?.legal_costs_cr || claim.legal_cost_stats?.mean || claim.mean_legal_costs_cr || 0;
+  const net = nomWaterfall?.net_after_legal_cr || (collected - legal);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: ui.space.md }}>
       <KPI label="SOC Value" value={fmtCr(soc)} sub="Statement of Claim" color={COLORS.accent1} />
-      <KPI label="E[Collected]" value={fmtCr(collected)} sub={mode === 'nominal' ? 'Expected Recovery' : `PV @ ${pct(discountRate, 0)}`} color={COLORS.accent4} />
+      <KPI label="E[Collected]" value={fmtCr(collected)} sub="Expected Recovery" color={COLORS.accent4} />
       <KPI label="E[Legal Costs]" value={fmtCr(legal)} sub="Total Legal" color={COLORS.accent5} />
       <KPI label="E[Net Recovery]" value={fmtCr(net)} sub="Collected − Legal" color={net >= 0 ? '#34D399' : COLORS.accent5} />
     </div>
@@ -480,8 +478,18 @@ export default function ClaimCashflow({ data }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: ui.space.xl }}>
-      {/* Nominal/PV Toggle */}
-      <div style={{ display: 'flex', gap: ui.space.sm }}>
+      {/* KPIs (always nominal values) */}
+      <CashflowKPIs data={data} />
+
+      {/* J-Curve Fan Chart (moved to top) */}
+      <JCurveFanChart data={data} />
+
+      {/* Annual Resolution & Recovery Timeline */}
+      <AnnualResolutionTimeline data={data} />
+
+      {/* Nominal/PV Toggle (only affects the Value Decomposition chart below) */}
+      <div style={{ display: 'flex', gap: ui.space.sm, alignItems: 'center' }}>
+        <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, marginRight: 8 }}>View Mode:</span>
         {[
           { key: 'nominal', label: 'Nominal (No Discounting)' },
           { key: 'pv', label: `Present Value @ ${pct(discountRate, 1)}` },
@@ -503,20 +511,11 @@ export default function ClaimCashflow({ data }) {
         ))}
       </div>
 
-      {/* KPIs (responsive to toggle) */}
-      <CashflowKPIs data={data} mode={valueMode} />
-
-      {/* Annual Resolution & Recovery Timeline */}
-      <AnnualResolutionTimeline data={data} />
-
-      {/* Nominal Value Decomposition (Waterfall Bar Chart) */}
+      {/* Nominal/PV Value Decomposition (Waterfall Bar Chart) */}
       <NominalValueDecompositionChart data={data} mode={valueMode} />
 
       {/* Value Decomposition: SOC → E[Collected] */}
       <ValueDecomposition data={data} />
-
-      {/* J-Curve Fan Chart */}
-      <JCurveFanChart data={data} />
 
       {/* Recovery Distribution Table */}
       <RecoveryDistributionTable data={data} />
