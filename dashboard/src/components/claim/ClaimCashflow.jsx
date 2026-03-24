@@ -55,9 +55,40 @@ function AnnualResolutionTimeline({ data }) {
   const { ui } = useUISettings();
   const timeline = data?.cashflow_analysis?.annual_timeline || [];
 
-  if (timeline.length === 0) {
-    return null;
+  // Show placeholder if no timeline data available
+  if (!timeline || timeline.length === 0) {
+    return (
+      <Card>
+        <SectionTitle number="1c" title="Annual Resolution & Recovery Timeline"
+          subtitle="When do claims resolve? Expected recovery in ₹ Crore per year." />
+        <div style={{ 
+          color: COLORS.textMuted, 
+          textAlign: 'center', 
+          padding: 40,
+          fontSize: ui.sizes.base,
+        }}>
+          Resolution timeline data not available for this simulation.
+          <br />
+          <span style={{ fontSize: ui.sizes.sm, opacity: 0.7 }}>
+            Run a new simulation to generate timeline data.
+          </span>
+        </div>
+      </Card>
+    );
   }
+
+  // Transform timeline data for charts
+  const resolutionData = timeline.map(t => ({
+    year: `Y${t.year}`,
+    resolving: +((t.pct_resolving || 0) * 100).toFixed(1),
+    cumulative: +((t.pct_cumulative || 0) * 100).toFixed(1),
+  }));
+
+  const recoveryData = timeline.map(t => ({
+    year: `Y${t.year}`,
+    recovery: +(t.e_recovery_cr || 0),
+    cumulRecovery: +(t.cumul_recovery_cr || 0),
+  }));
 
   return (
     <Card>
@@ -70,11 +101,7 @@ function AnnualResolutionTimeline({ data }) {
             Claims Resolution Timeline (%)
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart data={timeline.map(t => ({
-              year: `Y${t.year}`,
-              resolving: +(t.pct_resolving * 100).toFixed(1),
-              cumulative: +(t.pct_cumulative * 100).toFixed(1),
-            }))}>
+            <ComposedChart data={resolutionData}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
               <XAxis dataKey="year" tick={{ fill: COLORS.textMuted, fontSize: 11, fontFamily: FONT }} />
               <YAxis tick={{ fill: COLORS.textMuted, fontSize: 11, fontFamily: FONT }} unit="%" domain={[0, 100]} />
@@ -85,7 +112,7 @@ function AnnualResolutionTimeline({ data }) {
                 itemStyle={{ color: COLORS.text }}
                 formatter={(v) => [`${v}%`]}
               />
-              <Bar dataKey="resolving" name="This Year %" fill={COLORS.accent1} opacity={0.7} radius={[4, 4, 0, 0]} cursor={BAR_CURSOR || 'pointer'} />
+              <Bar dataKey="resolving" name="This Year %" fill={COLORS.accent1} opacity={0.7} radius={[4, 4, 0, 0]} />
               <Line dataKey="cumulative" name="Cumulative %" stroke={COLORS.accent3} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.accent3 }} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -96,11 +123,7 @@ function AnnualResolutionTimeline({ data }) {
             Expected Recovery by Year (₹ Crore)
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart data={timeline.map(t => ({
-              year: `Y${t.year}`,
-              recovery: +t.e_recovery_cr,
-              cumulRecovery: +t.cumul_recovery_cr,
-            }))}>
+            <ComposedChart data={recoveryData}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
               <XAxis dataKey="year" tick={{ fill: COLORS.textMuted, fontSize: 11, fontFamily: FONT }} />
               <YAxis tick={{ fill: COLORS.textMuted, fontSize: 11, fontFamily: FONT }} />
@@ -111,7 +134,7 @@ function AnnualResolutionTimeline({ data }) {
                 itemStyle={{ color: COLORS.text }}
                 formatter={(v) => [`₹${Number(v).toLocaleString('en-IN', { maximumFractionDigits: 1 })} Cr`]}
               />
-              <Bar dataKey="recovery" name="E[Recovery] this year" fill={COLORS.accent4} opacity={0.7} radius={[4, 4, 0, 0]} cursor={BAR_CURSOR || 'pointer'} />
+              <Bar dataKey="recovery" name="E[Recovery] this year" fill={COLORS.accent4} opacity={0.7} radius={[4, 4, 0, 0]} />
               <Line dataKey="cumulRecovery" name="Cumulative E[Recovery]" stroke={COLORS.accent3} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.accent3 }} />
             </ComposedChart>
           </ResponsiveContainer>
