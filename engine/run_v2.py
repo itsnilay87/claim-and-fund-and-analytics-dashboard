@@ -53,26 +53,7 @@ from engine.v2_core.v2_config import (
 )
 
 
-def _v2_paths_to_platform(
-    sim: SimulationResults,
-) -> dict:
-    """Convert V2 PathResult objects to platform PathResult for analysis modules."""
-    from engine.config.schema import PathResult as PlatformPathResult
-
-    converted: dict[str, list] = {}
-    for claim_id, v2_paths in sim.results.items():
-        platform_paths = []
-        for pr in v2_paths:
-            platform_paths.append(PlatformPathResult(
-                outcome=pr.final_outcome,
-                quantum_cr=pr.quantum.expected_quantum_cr if pr.quantum else 0.0,
-                timeline_months=pr.total_duration_months,
-                legal_costs_cr=pr.legal_cost_total_cr,
-                collected_cr=pr.collected_cr,
-                interest_cr=pr.interest_earned_cr,
-            ))
-        converted[claim_id] = platform_paths
-    return converted
+# _v2_paths_to_platform moved to engine.structures.litigation_funding
 
 
 # ===================================================================
@@ -328,173 +309,8 @@ def _build_portfolio_context(
     )
 
 
-def _build_arb_sensitivity(
-    sim: SimulationResults,
-    waterfall_grid_results: dict,
-) -> list[dict]:
-    """Compute arb-win-prob sensitivity via analytical path reweighting.
-
-    Uses the litigation-funding waterfall at a reference (cost_multiple,
-    award_ratio) mid-point.  Classifies each MC path as 'won' or 'lost'
-    and reweights at shifted arb_win_prob values.
-
-    Returns list of {arb_win_prob, e_moic, e_irr, p_loss}.
-    """
-    import numpy as np
-
-    # Pick reference point from waterfall grid midpoint
-    keys = sorted(waterfall_grid_results.keys())
-    if not keys:
-        return []
-    mid_key = keys[len(keys) // 2]
-    parts = mid_key.split("_")
-    ref_cm = int(parts[0]) / 10.0  # e.g. 30 → 3.0
-    ref_ar = int(parts[1]) / 100.0  # e.g. 25 → 0.25
-
-    n_paths = sim.n_paths
-    path_moics = np.zeros(n_paths)
-    path_irrs = np.zeros(n_paths)
-    path_won = np.zeros(n_paths, dtype=bool)
-
-    for path_i in range(n_paths):
-        total_inv = 0.0
-        total_ret = 0.0
-        any_won = False
-        mean_dur = 0.0
-        n_claims = 0
-
-        for cid in sim.claim_ids:
-            paths = sim.results.get(cid, [])
-            if path_i >= len(paths):
-                continue
-            p = paths[path_i]
-            legal = float(p.legal_cost_total_cr)
-            total_inv += legal
-
-            if p.final_outcome == "TRUE_WIN" and p.collected_cr > 0:
-                any_won = True
-                leg_a = ref_cm * legal
-                leg_b = ref_ar * float(p.collected_cr)
-                total_ret += min(leg_a, leg_b)
-
-            mean_dur += float(p.total_duration_months)
-            n_claims += 1
-
-        if total_inv > 0:
-            moic = total_ret / total_inv
-        else:
-            moic = 0.0
-
-        path_moics[path_i] = moic
-        path_won[path_i] = any_won
-
-        avg_dur = mean_dur / max(n_claims, 1)
-        if moic > 0 and avg_dur > 0:
-            path_irrs[path_i] = moic ** (12.0 / avg_dur) - 1.0
-        else:
-            path_irrs[path_i] = -1.0
-
-    # Original arb win probability
-    p_orig = MI.ARB_WIN_PROBABILITY
-    n_won = int(path_won.sum())
-    n_lost = n_paths - n_won
-
-    results = []
-    for p_s_raw in np.arange(0.30, 0.96, 0.05):
-        p_s = float(max(0.01, min(0.99, p_s_raw)))
-        if n_won > 0 and n_lost > 0 and p_orig > 0 and p_orig < 1:
-            w_won = p_s / p_orig
-            w_lost = (1.0 - p_s) / (1.0 - p_orig)
-            weights = np.where(path_won, w_won, w_lost)
-            weights /= weights.sum()
-            e_moic = float(np.dot(weights, path_moics))
-            e_irr = float(np.dot(weights, path_irrs))
-            p_loss = float(np.dot(weights, (path_moics < 1.0).astype(float)))
-        else:
-            e_moic = float(np.mean(path_moics))
-            e_irr = float(np.mean(path_irrs))
-            p_loss = float(np.mean(path_moics < 1.0))
-
-        results.append({
-            "arb_win_prob": round(p_s, 4),
-            "e_moic": round(e_moic, 4),
-            "e_irr": round(e_irr, 4),
-            "p_loss": round(p_loss, 4),
-        })
-
-    return results
-
-
-def _build_litigation_jcurve(sim: SimulationResults) -> dict:
-    """Build J-curve data for litigation funding from actual MC path cashflows.
-
-    For litigation funding there are no upfront/tail investment combos.
-    The cashflow is: monthly legal cost burn (outflows) → collection at settlement (inflow).
-    We compute cumulative cashflow percentile bands directly from the simulation paths.
-    """
-    import numpy as np
-
-    MAX_MONTHS = 96
-    n_paths = sim.n_paths
-
-    # Build cumulative cashflow matrix: shape (n_paths, MAX_MONTHS)
-    portfolio_cumul = np.zeros((n_paths, MAX_MONTHS))
-
-    for cid in sim.claim_ids:
-        paths = sim.results.get(cid, [])
-        for path_idx in range(min(len(paths), n_paths)):
-            p = paths[path_idx]
-            burn = p.monthly_legal_burn
-            if burn is None or len(burn) == 0:
-                continue
-
-            payment_month = max(int(math.ceil(p.total_duration_months)), 1)
-
-            # Build monthly cashflow vector: legal costs out, collection in
-            cf = np.zeros(MAX_MONTHS)
-            burn_len = min(len(burn), MAX_MONTHS)
-            for m in range(burn_len):
-                cf[m] = -float(burn[m])
-
-            # Collection inflow at settlement month
-            if payment_month < MAX_MONTHS and p.collected_cr > 0:
-                cf[payment_month] += p.collected_cr
-
-            # Cumulative sum and add to portfolio
-            portfolio_cumul[path_idx] += np.cumsum(cf)
-
-    # Compute percentile bands at sampled months
-    months_to_sample = list(range(0, min(24, MAX_MONTHS)))
-    months_to_sample += list(range(24, MAX_MONTHS, 3))
-    months_to_sample = sorted(set(m for m in months_to_sample if m < MAX_MONTHS))
-
-    timeline = []
-    for m in months_to_sample:
-        col = portfolio_cumul[:, m]
-        year = 2026 + (m + 4) // 12
-        month_num = ((m + 4) % 12) or 12
-        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        label = f"{month_names[month_num - 1]} {year}"
-        timeline.append({
-            "month": m,
-            "label": label,
-            "p5": round(float(np.percentile(col, 5)), 2),
-            "p25": round(float(np.percentile(col, 25)), 2),
-            "median": round(float(np.percentile(col, 50)), 2),
-            "p75": round(float(np.percentile(col, 75)), 2),
-            "p95": round(float(np.percentile(col, 95)), 2),
-            "mean": round(float(np.mean(col)), 2),
-        })
-
-    return {
-        "scenarios": {"litigation_funding": timeline},
-        "available_combos": [],
-        "upfront_pcts": [],
-        "tata_tail_pcts": [],
-        "default_key": "litigation_funding",
-        "max_months": MAX_MONTHS,
-    }
+# _build_arb_sensitivity and _build_litigation_jcurve moved to
+# engine.structures.litigation_funding
 
 
 def _postprocess_dashboard_json(
@@ -507,13 +323,11 @@ def _postprocess_dashboard_json(
 ) -> None:
     """Enrich exported dashboard_data.json with platform-compatible fields.
 
-    Adds: structure_type, risk section, mc_distributions, investment_grid (dict format).
-    The V2 exporter outputs investment_grid_soc as a list; the platform dashboard expects
-    a dict keyed by "up_tail" strings.
-
-    For litigation_funding mode, injects waterfall_grid, waterfall_axes, and
-    waterfall_breakeven from waterfall_grid_results.
+    Delegates structure-specific work to the appropriate StructureHandler,
+    then applies common risk / mc_distributions / extra-fields enrichment.
     """
+    from engine.structures import get_handler
+
     dash_path = os.path.join(output_dir, "dashboard_data.json")
     if not os.path.isfile(dash_path):
         return
@@ -521,87 +335,16 @@ def _postprocess_dashboard_json(
     with open(dash_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # ── Litigation Funding mode: inject waterfall grid ──
-    if structure_type == "litigation_funding" and waterfall_grid_results:
-        # Build waterfall_grid dict from GridCellMetrics
-        wf_grid = {}
-        for key, cell in waterfall_grid_results.items():
-            cell_dict = cell.model_dump() if hasattr(cell, "model_dump") else cell.dict()
-            cell_dict["e_moic"] = cell_dict.get("mean_moic", 0.0)
-            cell_dict["p_hurdle"] = cell_dict.get("p_hurdle", 0.0)
-            wf_grid[key] = cell_dict
+    # ── Structure-specific postprocessing (returns ig_dict) ──
+    handler = get_handler(structure_type)
+    ig_dict = handler.postprocess_dashboard(
+        data, sim, grid, waterfall_grid_results, pricing_basis, output_dir,
+    )
 
-        data["waterfall_grid"] = wf_grid
-        data["structure_type"] = "litigation_funding"
-        if data.get("simulation_meta"):
-            data["simulation_meta"]["structure_type"] = "litigation_funding"
-
-        # Build waterfall_axes from grid keys (e.g. "30_25" → cm=3.0, ar=0.25)
-        cm_set = set()
-        ar_set = set()
-        for key in waterfall_grid_results:
-            parts = key.split("_")
-            if len(parts) == 2:
-                cm_set.add(int(parts[0]))
-                ar_set.add(int(parts[1]))
-        data["waterfall_axes"] = {
-            "cost_multiples": sorted(v / 10.0 for v in cm_set),
-            "award_ratios": sorted(v / 100.0 for v in ar_set),
-        }
-
-        # Build waterfall_breakeven: for each award_ratio, find max cost_multiple
-        # where E[MOIC] >= 1.0
-        breakeven = []
-        for ar_val in sorted(ar_set):
-            ar_frac = ar_val / 100.0
-            max_cm = None
-            for cm_val in sorted(cm_set):
-                key = f"{cm_val}_{ar_val}"
-                cell = waterfall_grid_results.get(key)
-                if cell and cell.mean_moic >= 1.0:
-                    max_cm = cm_val / 10.0
-            if max_cm is not None:
-                breakeven.append({"award_ratio": ar_frac, "max_cost_multiple": max_cm})
-        data["waterfall_breakeven"] = breakeven
-
-        # Remove upfront/tail keys that don't apply to litigation funding
-        data.pop("investment_grid", None)
-        data.pop("investment_grid_soc", None)
-        data.pop("investment_grid_eq", None)
-
-        # Use waterfall_grid as source for risk/mc_distributions below
-        ig_dict = wf_grid
-
-    else:
-        # 1. Convert investment_grid_soc list → investment_grid dict + add p_hurdle alias
-        for basis_key in ("investment_grid_soc", "investment_grid_eq"):
-            if isinstance(data.get(basis_key), list) and len(data[basis_key]) > 0:
-                ig = {}
-                for row in data[basis_key]:
-                    # Add p_hurdle as alias for p_irr_gt_30 (dashboard expects p_hurdle)
-                    if "p_hurdle" not in row:
-                        row["p_hurdle"] = row.get("p_irr_gt_30", 0.0)
-                    # Add e_moic alias for mean_moic
-                    if "e_moic" not in row:
-                        row["e_moic"] = row.get("mean_moic", 0.0)
-                    up = round((row.get("upfront_pct", 0)) * 100)
-                    tail = round((row.get("tata_tail_pct", 0)) * 100)
-                    ig[f"{up}_{tail}"] = row
-                data["investment_grid"] = ig
-
-        # 2. Add structure_type if missing
-        if not data.get("structure_type"):
-            data["structure_type"] = "monetisation_upfront_tail"
-
-        ig_dict = data.get("investment_grid", {})
-
-    # 3. Build risk section from grid data at a reference point
-    #    (sim.results PathResult.moic/irr are not populated by grid analysis,
-    #     so we extract risk info from the grid cells themselves)
+    # ── Common: risk section ──
     ref_key = "10_20" if "10_20" in ig_dict else next(iter(ig_dict), None)
     ref = ig_dict.get(ref_key, {}) if ref_key else {}
 
-    # Collect grid-wide MOIC/IRR stats across all grid points for distribution
     grid_moics = sorted(
         row.get("mean_moic", 0.0)
         for row in ig_dict.values()
@@ -644,8 +387,7 @@ def _postprocess_dashboard_json(
         },
     }
 
-    # 4. Build mc_distributions from investment grid data
-    #    Use per-cell mean_moic/mean_xirr/mean_net_return_cr across all combos
+    # ── Common: mc_distributions ──
     all_net_returns = sorted(
         row.get("mean_net_return_cr", 0.0)
         for row in ig_dict.values()
@@ -674,16 +416,9 @@ def _postprocess_dashboard_json(
         "n_paths": sim.n_paths,
     }
 
-    # 5. Build sensitivity (arb win prob reweighting) for litigation_funding
-    if structure_type == "litigation_funding" and waterfall_grid_results:
-        sensitivity = _build_arb_sensitivity(sim, waterfall_grid_results)
-        if sensitivity:
-            data["sensitivity"] = sensitivity
-
-    # 6. Rebuild jcurve_data for litigation_funding using actual MC path cashflows
-    #    (no upfront/tail combos — pure legal cost burn + collection at settlement)
-    if structure_type == "litigation_funding":
-        data["jcurve_data"] = _build_litigation_jcurve(sim)
+    # ── Structure-specific extra fields (sensitivity, jcurve, etc.) ──
+    extra = handler.get_extra_dashboard_fields(sim, waterfall_grid_results)
+    data.update(extra)
 
     with open(dash_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -700,12 +435,13 @@ def _run_analysis_and_export(
 ) -> dict:
     """Run investment grid, stochastic pricing, sensitivity, and exports.
 
+    Delegates structure-specific grid analysis to the appropriate
+    StructureHandler, then runs universal exports (charts, Excel, PDF)
+    and conditionally runs stochastic / sensitivity analysis.
+
     Returns a dict with grid results, stochastic data, etc.
     """
-    from engine.v2_core.v2_investment_analysis import (
-        InvestmentGridResults,
-        analyze_investment_grid,
-    )
+    from engine.structures import get_handler
     from engine.v2_core.v2_stochastic_pricing import (
         export_stochastic_grid,
         run_stochastic_grid,
@@ -724,56 +460,19 @@ def _run_analysis_and_export(
 
     # Determine structure type
     structure_type = "monetisation_upfront_tail"
-    waterfall_grid_results = None
     if portfolio_config and portfolio_config.structure:
         structure_type = portfolio_config.structure.type
 
-    if structure_type == "litigation_funding":
-        # ── Waterfall grid analysis (litigation funding) ──
-        from engine.analysis.waterfall_analysis import evaluate_waterfall_grid
-        from engine.analysis.investment_grid import _arange
+    handler = get_handler(structure_type)
 
-        params = portfolio_config.structure.params
-        cm_list = _arange(params.cost_multiple_range)
-        ar_list = _arange(params.award_ratio_range)
-
-        print(f"\nComputing waterfall grid ({len(cm_list)} × {len(ar_list)})...")
-        t1 = time.time()
-
-        # Convert V2 path results to platform PathResult for waterfall analysis
-        platform_path_results = _v2_paths_to_platform(sim)
-
-        waterfall_grid_results = evaluate_waterfall_grid(
-            claims, platform_path_results,
-            cost_multiple_range=cm_list,
-            award_ratio_range=ar_list,
-            waterfall_type=params.waterfall_type,
-            start_date=sim_config_start_date(portfolio_config),
-        )
-        elapsed_grid = time.time() - t1
-        print(f"  Waterfall grid completed in {elapsed_grid:.1f}s ({len(waterfall_grid_results)} cells)")
-        result["waterfall_grid"] = waterfall_grid_results
-
-        # Create a minimal dummy InvestmentGridResults so the V2 exporter
-        # can still build non-grid sections (claims, jcurve, cashflow, etc.)
-        grid = InvestmentGridResults(
-            upfront_pcts=[],
-            award_share_pcts=[],
-            pricing_bases=[pricing_basis],
-            n_paths=sim.n_paths,
-            n_claims=len(claims),
-        )
-    else:
-        # ── Standard upfront/tail investment grid analysis ──
-        print("\nComputing investment grid...")
-        t1 = time.time()
-        grid = analyze_investment_grid(
-            sim, v2_claims, pricing_bases=[pricing_basis], ctx=ctx,
-        )
-        elapsed_grid = time.time() - t1
-        print(f"  Grid analysis completed in {elapsed_grid:.1f}s")
-
+    # ── Structure-specific grid analysis ──
+    grid, extra = handler.run_grid_analysis(
+        sim, claims, ctx, portfolio_config, output_dir,
+    )
+    result.update(extra)
     result["grid"] = grid
+
+    waterfall_grid_results = extra.get("waterfall_grid")
 
     # ── Charts ──
     try:
@@ -810,9 +509,9 @@ def _run_analysis_and_export(
     except Exception as exc:
         print(f"  Warning: PDF report failed: {exc}")
 
-    # ── Stochastic pricing grid (skip for litigation_funding — uses upfront/tail axes) ──
+    # ── Stochastic pricing grid ──
     stochastic_json = None
-    if structure_type != "litigation_funding":
+    if handler.should_run_stochastic():
         try:
             print("\nComputing stochastic pricing grid...")
             t_stoch = time.time()
@@ -839,11 +538,11 @@ def _run_analysis_and_export(
             print(f"  Warning: stochastic pricing failed: {exc}")
             stochastic_json = None
     else:
-        print("\n  Skipping stochastic pricing grid (not applicable for litigation_funding)")
+        print("\n  Skipping stochastic pricing grid (not applicable for " + structure_type + ")")
 
-    # ── Probability sensitivity (skip for litigation_funding — uses upfront/tail grid) ──
+    # ── Probability sensitivity ──
     prob_sensitivity = None
-    if structure_type != "litigation_funding":
+    if handler.should_run_prob_sensitivity():
         try:
             print("\nRunning probability sensitivity analysis...")
             prob_sensitivity = run_probability_sensitivity(
@@ -853,7 +552,7 @@ def _run_analysis_and_export(
         except Exception as exc:
             print(f"  Warning: probability sensitivity failed: {exc}")
     else:
-        print("  Skipping probability sensitivity (not applicable for litigation_funding)")
+        print("  Skipping probability sensitivity (not applicable for " + structure_type + ")")
 
     # ── Dashboard JSON ──
     try:
