@@ -4,14 +4,13 @@
  * Frames legal costs as the investment for a single claim.
  *
  * Sections:
- *   1. KPI Row (6 cards): Investment, E[Collected], E[MOIC], E[IRR], P(Loss), Breakeven Win Rate
- *   2. Recovery Funnel (styled divs with arrows)
+ *   1. KPI Row (7 cards): Investment, E[Collected], E[MOIC], E[IRR], P(Loss), Breakeven Win Rate, Collection Ratio
+ *   2. Recovery Funnel (styled divs with arrows, collapsible formula)
  *   3. Legal Cost Stage Breakdown (horizontal bar chart)
  *   4. Legal Costs as % of SOC (single large metric)
- *   5. Waterfall Terms Grid (heatmap table, if waterfall_grid data available)
  */
 
-import React, { useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
@@ -19,28 +18,182 @@ import {
 import { COLORS, FONT, CHART_COLORS, CHART_HEIGHT, useUISettings, fmtCr, fmtPct, fmtMOIC, moicColor } from '../../theme';
 import { Card, SectionTitle, KPI } from '../Shared';
 
-/* ── Waterfall heatmap cell color ── */
-function cellColor(moic) {
-  if (moic >= 2.0) return '#065F46';
-  if (moic >= 1.5) return '#047857';
-  if (moic >= 1.0) return '#D97706';
-  if (moic >= 0.5) return '#C2410C';
-  return '#991B1B';
+/* ── Recovery Funnel Card with collapsible formula ── */
+function RecoveryFunnelCard({ ui, soc, eqGivenWin, eqPctOfSoc, winRate, ePrincipal, eInterest, eCollected, eNet, legalCost, collectionRatio, netOverSoc }) {
+  const [showFormula, setShowFormula] = React.useState(false);
+
+  const mcPaths = ''; // placeholder if needed
+
+  return (
+    <Card>
+      <SectionTitle number="1" title="Portfolio Recovery Funnel — SOC to Net"
+        subtitle={`E[Principal] = Σ(E[Q]Win) × Win Rate) = ${fmtCr(ePrincipal)}. Total SOC: ${fmtCr(soc)}.`} />
+
+      {/* Collapsible Calculation Formula */}
+      <div style={{
+        marginBottom: ui.space.md, borderRadius: 8,
+        border: `1px solid ${COLORS.accent4}40`,
+        background: '#0c1622',
+        overflow: 'hidden',
+      }}>
+        <button
+          onClick={() => setShowFormula(v => !v)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 14px', cursor: 'pointer',
+            background: 'transparent', border: 'none', textAlign: 'left',
+          }}
+        >
+          <span style={{ color: COLORS.accent4, fontSize: 14 }}>{showFormula ? '▼' : '▶'}</span>
+          <span style={{ fontSize: 14 }}>📄</span>
+          <span style={{ color: COLORS.accent4, fontSize: ui.sizes.sm, fontWeight: 700, textTransform: 'uppercase' }}>
+            Calculation Formula (Verifiable)
+          </span>
+          <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs, marginLeft: 'auto' }}>
+            — Click to {showFormula ? 'hide' : 'show'}
+          </span>
+        </button>
+        {showFormula && (
+          <div style={{
+            padding: '0 14px 14px 38px',
+            color: COLORS.text, fontSize: ui.sizes.sm, lineHeight: 1.7,
+            fontFamily: FONT,
+          }}>
+            <div>
+              <span style={{ fontWeight: 700, color: COLORS.textBright }}>E[Principal]</span> = Σ (E[Quantum|Win]<sub>i</sub> × Win_Rate<sub>i</sub>) for each claim
+            </div>
+            <div style={{ marginLeft: 16, color: COLORS.textMuted }}>
+              = ({fmtCr(eqGivenWin)} × {fmtPct(winRate)})
+            </div>
+            <div style={{ marginLeft: 16 }}>
+              = <span style={{ color: COLORS.accent1, fontWeight: 700 }}>{fmtCr(ePrincipal)}</span>{' '}
+              <span style={{ color: COLORS.textMuted }}>({fmtPct(soc > 0 ? ePrincipal / soc : 0)} of SOC)</span>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <span style={{ fontWeight: 700, color: COLORS.textBright }}>E[Collected]</span> = E[Principal] + E[Interest] = {fmtCr(ePrincipal)} + {fmtCr(eInterest)} = <span style={{ color: COLORS.accent2, fontWeight: 700 }}>{fmtCr(eCollected)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* KPI metric cards row */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: ui.space.md,
+        marginBottom: ui.space.md,
+      }}>
+        {[
+          { label: 'TOTAL SOC', value: fmtCr(soc), sub: `${soc > 0 ? 1 : 0} claims`, color: COLORS.accent1 },
+          { label: 'E[QUANTUM|WIN]', value: fmtCr(eqGivenWin), sub: `${fmtPct(eqPctOfSoc)} of SOC`, color: COLORS.accent4 },
+          { label: 'AVG WIN RATE', value: fmtPct(winRate), sub: 'SOC-weighted', color: COLORS.accent3 },
+          { label: 'E[PRINCIPAL]', value: fmtCr(ePrincipal), sub: `${fmtPct(soc > 0 ? ePrincipal / soc : 0)} of SOC`, color: COLORS.accent2 },
+          { label: 'E[INTEREST]', value: fmtCr(eInterest), sub: `${fmtPct(soc > 0 ? eInterest / soc : 0)} of SOC`, color: COLORS.accent3 },
+          { label: 'E[NET RECOVERY]', value: fmtCr(eNet), sub: `after ${fmtCr(legalCost)} legal`, color: eNet >= 0 ? '#22C55E' : COLORS.accent5 },
+        ].map((card, i) => (
+          <div key={i} style={{
+            background: '#0F1219', border: `1px solid ${COLORS.cardBorder}`,
+            borderRadius: 10, padding: `${ui.space.sm}px ${ui.space.md}px`, textAlign: 'center',
+          }}>
+            <div style={{ color: COLORS.textMuted, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>{card.label}</div>
+            <div style={{ color: card.color, fontSize: ui.sizes.lg, fontWeight: 800 }}>{card.value}</div>
+            <div style={{ color: COLORS.textMuted, fontSize: 10, marginTop: 2 }}>{card.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Second row: Legal Costs, Total Collected, Collection Ratio, Net/SOC */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: ui.space.md,
+        marginBottom: ui.space.md,
+      }}>
+        {[
+          { label: 'E[LEGAL COSTS]', value: fmtCr(legalCost), sub: `${fmtPct(soc > 0 ? legalCost / soc : 0)} of SOC`, color: COLORS.accent5 },
+          { label: 'TOTAL COLLECTED', value: fmtCr(eCollected), sub: 'Principal + Interest', color: COLORS.accent4 },
+          { label: 'COLLECTION RATIO', value: fmtPct(collectionRatio), sub: 'Total Collected / SOC', color: collectionRatio >= 0.9 ? '#34D399' : collectionRatio >= 0.5 ? COLORS.accent3 : COLORS.accent5 },
+          { label: 'NET / SOC', value: fmtPct(netOverSoc), sub: netOverSoc >= 0 ? 'net positive' : 'net negative', color: netOverSoc >= 0 ? '#34D399' : COLORS.accent5 },
+        ].map((card, i) => (
+          <div key={i} style={{
+            background: '#0F1219', border: `1px solid ${COLORS.cardBorder}`,
+            borderRadius: 10, padding: `${ui.space.sm}px ${ui.space.md}px`, textAlign: 'center',
+          }}>
+            <div style={{ color: COLORS.textMuted, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>{card.label}</div>
+            <div style={{ color: card.color, fontSize: ui.sizes.lg, fontWeight: 800 }}>{card.value}</div>
+            <div style={{ color: COLORS.textMuted, fontSize: 10, marginTop: 2 }}>{card.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Recovery flow bar */}
+      <div style={{ marginTop: ui.space.sm }}>
+        <div style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs, fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>
+          Recovery Flow (as % of SOC) — Principal + Interest - Legal = Net
+        </div>
+        <div style={{ display: 'flex', height: 32, borderRadius: 8, overflow: 'hidden', background: '#1F2937' }}>
+          {soc > 0 && (
+            <>
+              <div style={{
+                width: `${Math.max(2, Math.min(100, (ePrincipal / soc) * 100))}%`,
+                background: `linear-gradient(90deg, ${COLORS.accent1}, ${COLORS.accent3})`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{ color: '#fff', fontSize: ui.sizes.xs, fontWeight: 700 }}>Principal {fmtPct(ePrincipal / soc)}</span>
+              </div>
+              {eInterest > 0 && (
+                <div style={{
+                  width: `${Math.max(2, Math.min(30, (eInterest / soc) * 100))}%`,
+                  background: COLORS.accent4,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>Interest {fmtPct(eInterest / soc)}</span>
+                </div>
+              )}
+              <div style={{
+                width: `${Math.max(2, Math.min(30, (legalCost / soc) * 100))}%`,
+                background: COLORS.accent5 + 'AA',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>Legal {fmtPct(legalCost / soc)}</span>
+              </div>
+            </>
+          )}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+          <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs }}>0%</span>
+          <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs }}>← Total Collected ({fmtPct(collectionRatio)}) →</span>
+          <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs }}>100% of SOC</span>
+        </div>
+      </div>
+
+      {/* Calculation summary line */}
+      <div style={{
+        marginTop: ui.space.md, padding: '10px 14px', borderRadius: 8,
+        background: '#0c162280', border: `1px solid ${COLORS.cardBorder}`,
+      }}>
+        <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600 }}>Calculation: </span>
+        <span style={{ color: COLORS.accent2, fontSize: ui.sizes.sm, fontWeight: 700 }}>E[Principal]</span>
+        <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm }}> ({fmtCr(ePrincipal)}) + </span>
+        <span style={{ color: COLORS.accent3, fontSize: ui.sizes.sm, fontWeight: 700 }}>E[Interest]</span>
+        <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm }}> ({fmtCr(eInterest)}) = </span>
+        <span style={{ color: COLORS.accent4, fontSize: ui.sizes.sm, fontWeight: 700 }}>E[Total Collected]</span>
+        <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm }}> ({fmtCr(eCollected)}) → minus </span>
+        <span style={{ color: COLORS.accent5, fontSize: ui.sizes.sm, fontWeight: 700 }}>E[Legal]</span>
+        <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm }}> ({fmtCr(legalCost)}) = </span>
+        <span style={{ color: eNet >= 0 ? '#22C55E' : COLORS.accent5, fontSize: ui.sizes.sm, fontWeight: 700 }}>E[Net]</span>
+        <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm }}> ({fmtCr(eNet)})</span>
+      </div>
+    </Card>
+  );
 }
 
 export default function ClaimInvestmentAnalysis({ data }) {
   const { ui } = useUISettings();
   const claim = data?.claims?.[0];
-  const meta = data?.simulation_meta || {};
   const ca = data?.cashflow_analysis || {};
   const ps = ca.portfolio_summary || {};
   const perClaim = ca.per_claim || [];
   const lc = data?.legal_cost_summary;
   const wGrid = data?.waterfall_grid || {};
-  const wAxes = data?.waterfall_axes || null;
   const risk = data?.risk || {};
   const ig = data?.investment_grid_soc || [];
-  const decomp = ca.decomposition || [];
 
   if (!claim) {
     return <Card><SectionTitle title="No claim data available" /></Card>;
@@ -93,22 +246,8 @@ export default function ClaimInvestmentAnalysis({ data }) {
   }
 
   const legalPctOfSoc = soc > 0 ? legalCost / soc : 0;
-
-  // Waterfall grid parsing
-  const gridKeys = Object.keys(wGrid);
-  const hasGrid = gridKeys.length > 0;
-  const gridData = useMemo(() => {
-    if (!hasGrid) return { multiples: [], awardCaps: [] };
-    let multiples, awardCaps;
-    if (wAxes) {
-      multiples = (wAxes.cost_multiples || []).sort((a, b) => a - b);
-      awardCaps = (wAxes.award_ratios || []).sort((a, b) => a - b);
-    } else {
-      multiples = [...new Set(gridKeys.map(k => parseFloat(k.split('_')[0])))].sort((a, b) => a - b);
-      awardCaps = [...new Set(gridKeys.map(k => parseFloat(k.split('_')[1])))].sort((a, b) => a - b);
-    }
-    return { multiples, awardCaps };
-  }, [hasGrid, gridKeys, wAxes]);
+  const collectionRatio = soc > 0 ? eCollected / soc : 0;
+  const netOverSoc = soc > 0 ? eNet / soc : 0;
 
   const favorColor = (v, good, bad) => v >= good ? '#34D399' : v >= bad ? COLORS.accent3 : COLORS.accent5;
 
@@ -116,7 +255,7 @@ export default function ClaimInvestmentAnalysis({ data }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: ui.space.xl }}>
 
       {/* ═══ § 1 — KPI Row ═══ */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: ui.space.md }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: ui.space.md }}>
         <KPI
           label="Investment (Legal Costs)"
           value={fmtCr(legalCost)}
@@ -128,6 +267,12 @@ export default function ClaimInvestmentAnalysis({ data }) {
           value={fmtCr(collected)}
           sub="Expected recovery"
           color={COLORS.accent4}
+        />
+        <KPI
+          label="Collection Ratio"
+          value={fmtPct(collectionRatio)}
+          sub="E[Collected] / SOC"
+          color={collectionRatio >= 0.9 ? '#34D399' : collectionRatio >= 0.5 ? COLORS.accent3 : COLORS.accent5}
         />
         <KPI
           label="E[MOIC]"
@@ -154,94 +299,12 @@ export default function ClaimInvestmentAnalysis({ data }) {
       </div>
 
       {/* ═══ § 2 — Recovery Funnel ═══ */}
-      <Card>
-        <SectionTitle number="1" title="Recovery Funnel — SOC to Net"
-          subtitle={`How the Statement of Claim flows through probability gates to net recovery. E[Principal] = E[Q|Win] × Win Rate = ${fmtCr(ePrincipal)}`} />
-
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 0,
-          overflowX: 'auto', padding: `${ui.space.md}px 0`,
-        }}>
-          {[
-            { label: 'SOC', value: soc, sub: 'Statement of Claim', color: COLORS.accent1 },
-            { label: `× E[Q|Win] (${fmtPct(eqPctOfSoc)})`, value: eqGivenWin, sub: 'Expected Quantum', color: COLORS.accent4, isOp: false },
-            { label: `× Win Rate (${fmtPct(winRate)})`, value: ePrincipal, sub: 'E[Principal]', color: COLORS.accent3, isOp: false },
-            ...(eInterest > 0 ? [{ label: `+ Interest`, value: eCollected, sub: `+${fmtCr(eInterest)}`, color: COLORS.accent6, isOp: false }] : []),
-            { label: 'E[Collected]', value: eCollected, sub: 'Total expected', color: COLORS.accent2 },
-            { label: `− Legal Costs`, value: eNet, sub: `−${fmtCr(legalCost)}`, color: eNet >= 0 ? '#22C55E' : COLORS.accent5, isOp: false },
-            { label: 'E[Net Recovery]', value: eNet, sub: eNet >= 0 ? 'Positive return' : 'Negative return', color: eNet >= 0 ? '#22C55E' : COLORS.accent5 },
-          ].map((step, i, arr) => (
-            <React.Fragment key={i}>
-              {i > 0 && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', padding: '0 2px', flexShrink: 0,
-                }}>
-                  <div style={{ color: COLORS.textMuted, fontSize: 20, fontWeight: 700 }}>→</div>
-                </div>
-              )}
-              <div style={{
-                background: i === 0 ? `${COLORS.accent1}15` : i === arr.length - 1 ? (eNet >= 0 ? '#22C55E15' : `${COLORS.accent5}15`) : '#0F1219',
-                border: `1px solid ${i === 0 ? COLORS.accent1 + '40' : i === arr.length - 1 ? (eNet >= 0 ? '#22C55E40' : COLORS.accent5 + '40') : COLORS.cardBorder}`,
-                borderRadius: 10, padding: `${ui.space.sm}px ${ui.space.md}px`,
-                textAlign: 'center', minWidth: 110, flexShrink: 0,
-              }}>
-                <div style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs, fontWeight: 600, marginBottom: 3, whiteSpace: 'nowrap' }}>
-                  {step.label}
-                </div>
-                <div style={{ color: step.color, fontSize: ui.sizes.lg, fontWeight: 800 }}>
-                  {fmtCr(step.value)}
-                </div>
-                {step.sub && (
-                  <div style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs, marginTop: 2 }}>
-                    {step.sub}
-                  </div>
-                )}
-              </div>
-            </React.Fragment>
-          ))}
-        </div>
-
-        {/* Recovery flow bar */}
-        <div style={{ marginTop: ui.space.md }}>
-          <div style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs, fontWeight: 600, textTransform: 'uppercase', marginBottom: 6 }}>
-            Recovery as % of SOC
-          </div>
-          <div style={{ display: 'flex', height: 28, borderRadius: 8, overflow: 'hidden', background: '#1F2937' }}>
-            {soc > 0 && (
-              <>
-                <div style={{
-                  width: `${Math.max(2, Math.min(100, (ePrincipal / soc) * 100))}%`,
-                  background: `linear-gradient(90deg, ${COLORS.accent1}, ${COLORS.accent3})`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <span style={{ color: '#fff', fontSize: ui.sizes.xs, fontWeight: 700 }}>Principal {fmtPct(ePrincipal / soc)}</span>
-                </div>
-                {eInterest > 0 && (
-                  <div style={{
-                    width: `${Math.max(2, Math.min(30, (eInterest / soc) * 100))}%`,
-                    background: COLORS.accent4,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>Interest</span>
-                  </div>
-                )}
-                <div style={{
-                  width: `${Math.max(2, Math.min(30, (legalCost / soc) * 100))}%`,
-                  background: COLORS.accent5 + 'AA',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>Legal {fmtPct(legalCost / soc)}</span>
-                </div>
-              </>
-            )}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-            <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs }}>0%</span>
-            <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs }}>← Collected ({fmtPct(eCollected / soc)}) →</span>
-            <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs }}>100% SOC</span>
-          </div>
-        </div>
-      </Card>
+      <RecoveryFunnelCard
+        ui={ui} soc={soc} eqGivenWin={eqGivenWin} eqPctOfSoc={eqPctOfSoc}
+        winRate={winRate} ePrincipal={ePrincipal} eInterest={eInterest}
+        eCollected={eCollected} eNet={eNet} legalCost={legalCost}
+        collectionRatio={collectionRatio} netOverSoc={netOverSoc}
+      />
 
       {/* ═══ § 3 — Legal Cost Stage Breakdown ═══ */}
       {stageCostData.length > 0 && (
@@ -315,81 +378,6 @@ export default function ClaimInvestmentAnalysis({ data }) {
           </div>
         </div>
       </Card>
-
-      {/* ═══ § 5 — Waterfall Terms Grid ═══ */}
-      {hasGrid ? (
-        <Card>
-          <SectionTitle number="4" title="Waterfall Terms Heatmap"
-            subtitle="E[MOIC] across (cost_multiple_cap × award_ratio_cap) combinations. Green = MOIC > 2.0, Yellow = 1.0–2.0, Red < 1.0." />
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ borderCollapse: 'separate', borderSpacing: 2, width: '100%', fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th style={{
-                    padding: '8px 6px', color: COLORS.textMuted, fontWeight: 700, fontSize: 11,
-                    position: 'sticky', left: 0, background: COLORS.card, zIndex: 2,
-                  }}>
-                    Multiple \ Award%
-                  </th>
-                  {gridData.awardCaps.map(a => (
-                    <th key={a} style={{
-                      padding: '6px 4px', color: COLORS.textMuted, fontWeight: 600, fontSize: 11,
-                      textAlign: 'center', minWidth: 56,
-                    }}>
-                      {(a * 100).toFixed(0)}%
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {gridData.multiples.map(m => (
-                  <tr key={m}>
-                    <td style={{
-                      padding: '6px 8px', color: COLORS.accent1, fontWeight: 700, fontSize: 12,
-                      position: 'sticky', left: 0, background: COLORS.card, zIndex: 1,
-                    }}>
-                      {m.toFixed(1)}×
-                    </td>
-                    {gridData.awardCaps.map(a => {
-                      const key = wAxes
-                        ? `${Math.round(m * 10)}_${Math.round(a * 100)}`
-                        : `${m}_${a}`;
-                      const cell = wGrid[key];
-                      if (!cell) return <td key={a} style={{ background: '#1F2937', textAlign: 'center', fontSize: 10 }}>—</td>;
-                      const val = cell.mean_moic || cell.e_moic || 0;
-                      return (
-                        <td key={a} style={{
-                          padding: '5px 3px', textAlign: 'center',
-                          background: cellColor(val),
-                          borderRadius: 3, fontWeight: 600,
-                          color: '#ffffffDD', fontSize: 11,
-                        }}
-                          title={`${m.toFixed(1)}× cap / ${(a * 100).toFixed(0)}% award → ${fmtMOIC(val)}`}>
-                          {fmtMOIC(val)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      ) : (
-        <Card>
-          <SectionTitle number="4" title="Waterfall Terms Grid" />
-          <div style={{
-            textAlign: 'center', padding: `${ui.space.xxl}px`,
-            color: COLORS.textMuted, fontSize: ui.sizes.md,
-          }}>
-            <div style={{ fontSize: 48, marginBottom: ui.space.md }}>🏗️</div>
-            <div style={{ fontWeight: 600 }}>Run simulation to see waterfall analysis</div>
-            <div style={{ fontSize: ui.sizes.sm, marginTop: ui.space.sm }}>
-              Waterfall grid requires litigation funding structure type with cost_multiple and award_ratio parameters.
-            </div>
-          </div>
-        </Card>
-      )}
     </div>
   );
 }

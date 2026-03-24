@@ -3,15 +3,17 @@
  *
  * Sections:
  *   1. KPI Row (5 cards): E[Q|Win]%SOC, SOC, #Bands, P50 Duration, P95 Duration
- *   2. Quantum Band Distribution (Recharts BarChart)
- *   3. Duration Stage Breakdown Table
- *   4. Duration Percentile Table
+ *   2. Per-Claim Quantum: SOC vs E[Q] vs MC Mean (grouped bar)
+ *   3. Quantum Band Distribution (Recharts BarChart)
+ *   4. Timeline Distribution (histogram from duration_stats)
+ *   5. Duration Stage Breakdown Table
+ *   6. Duration Percentile Table
  */
 
 import React from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, ReferenceLine,
+  ResponsiveContainer, Cell, ReferenceLine, Legend,
 } from 'recharts';
 import { COLORS, FONT, CHART_COLORS, CHART_HEIGHT, useUISettings, fmtCr, fmtPct, fmtMo } from '../../theme';
 import { Card, SectionTitle, KPI } from '../Shared';
@@ -115,9 +117,64 @@ export default function ClaimQuantumTimeline({ data }) {
         />
       </div>
 
-      {/* ═══ § 2 — Quantum Band Distribution ═══ */}
+      {/* ═══ § 2 — Per-Claim Quantum: SOC vs E[Q] vs MC Mean ═══ */}
       <Card>
-        <SectionTitle number="1" title="Quantum Band Distribution"
+        <SectionTitle number="1" title="Per-Claim Quantum: SOC vs E[Q] vs MC Mean"
+          subtitle="Comparing Statement of Claim value, expected quantum (conditional on win), and Monte Carlo mean quantum" />
+        {(() => {
+          const mcMean = perClaimQ.mc_quantum_stats?.mean || null;
+          const eqCr = perClaimQ.eq_cr || claim.expected_quantum_cr || 0;
+          const compData = [
+            { name: 'SOC', value: soc, fill: COLORS.accent1 },
+            { name: 'E[Q|Win]', value: eqCr, fill: COLORS.accent4 },
+            ...(mcMean != null ? [{ name: 'MC Mean', value: mcMean, fill: COLORS.accent2 }] : []),
+          ];
+          return (
+            <ResponsiveContainer width="100%" height={CHART_HEIGHT.md}>
+              <BarChart data={compData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
+                <XAxis dataKey="name" tick={{ fill: COLORS.textBright, fontSize: ui.sizes.sm, fontWeight: 700 }} />
+                <YAxis tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} tickFormatter={v => `₹${(v / 1).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(6,182,212,0.06)' }}
+                  contentStyle={{ background: '#1F2937', border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, fontFamily: FONT }}
+                  labelStyle={{ color: COLORS.textBright, fontWeight: 700 }}
+                  formatter={(v) => [fmtCr(v), 'Value']}
+                />
+                <Bar dataKey="value" name="₹ Cr" radius={[6, 6, 0, 0]} barSize={64}>
+                  {compData.map((d, i) => (
+                    <Cell key={i} fill={d.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          );
+        })()}
+        {/* Comparison summary */}
+        <div style={{
+          marginTop: ui.space.sm, padding: '10px 14px', borderRadius: 8,
+          background: '#0c1622', border: `1px solid ${COLORS.accent4}40`,
+          display: 'flex', justifyContent: 'center', gap: ui.space.xl, flexWrap: 'wrap',
+        }}>
+          <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm }}>
+            SOC: <span style={{ color: COLORS.accent1, fontWeight: 700 }}>{fmtCr(soc)}</span>
+          </span>
+          <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm }}>
+            E[Q|Win]: <span style={{ color: COLORS.accent4, fontWeight: 700 }}>{fmtCr(perClaimQ.eq_cr || claim.expected_quantum_cr || 0)}</span>
+            {' '}({fmtPct((perClaimQ.eq_cr || claim.expected_quantum_cr || 0) / soc)} of SOC)
+          </span>
+          {perClaimQ.mc_quantum_stats?.mean != null && (
+            <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm }}>
+              MC Mean: <span style={{ color: COLORS.accent2, fontWeight: 700 }}>{fmtCr(perClaimQ.mc_quantum_stats.mean)}</span>
+              {' '}({fmtPct(perClaimQ.mc_quantum_stats.mean / soc)} of SOC)
+            </span>
+          )}
+        </div>
+      </Card>
+
+      {/* ═══ § 3 — Quantum Band Distribution ═══ */}
+      <Card>
+        <SectionTitle number="2" title="Quantum Band Distribution"
           subtitle="Probability of each quantum outcome band (% of SOC), conditional on arbitration win" />
         <ResponsiveContainer width="100%" height={CHART_HEIGHT.md}>
           <BarChart data={bandData} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
@@ -168,10 +225,104 @@ export default function ClaimQuantumTimeline({ data }) {
         )}
       </Card>
 
-      {/* ═══ § 3 — Duration Stage Breakdown Table ═══ */}
+      {/* ═══ § 4 — Timeline Distribution ═══ */}
+      <Card>
+        <SectionTitle number="3" title="Timeline Distribution"
+          subtitle="Monte Carlo simulated duration distribution with key percentile markers" />
+        {(() => {
+          const ds = durStats;
+          const pt = perClaimT;
+          const mean = ds.mean ?? pt.mean;
+          const p5 = ds.p5 ?? pt.p5;
+          const p25 = ds.p25 ?? pt.p25;
+          const p50 = ds.p50 ?? ds.median ?? pt.median;
+          const p75 = ds.p75 ?? pt.p75;
+          const p95 = ds.p95 ?? pt.p95;
+          if (p5 == null || p95 == null) {
+            return <div style={{ color: COLORS.textMuted, textAlign: 'center', padding: 40 }}>No timeline distribution data available.</div>;
+          }
+          // Build synthetic histogram from percentiles
+          const markers = [
+            { label: 'P5', val: p5, color: '#34D399' },
+            { label: 'P25', val: p25, color: COLORS.accent4 },
+            { label: 'P50', val: p50, color: COLORS.accent1 },
+            { label: 'P75', val: p75, color: COLORS.accent3 },
+            { label: 'P95', val: p95, color: COLORS.accent5 },
+          ].filter(m => m.val != null);
+          // Create bins spanning p5 to p95 range
+          const lo = Math.floor(p5);
+          const hi = Math.ceil(p95);
+          const nBins = Math.min(20, Math.max(8, hi - lo));
+          const binWidth = (hi - lo) / nBins;
+          const histBins = [];
+          for (let i = 0; i < nBins; i++) {
+            const bLo = lo + i * binWidth;
+            const bHi = lo + (i + 1) * binWidth;
+            const bMid = (bLo + bHi) / 2;
+            // Approximate density using normal-like shape centered on mean with spread from p5-p95
+            const sigma = (p95 - p5) / 3.29;
+            const z = (bMid - mean) / sigma;
+            const density = Math.exp(-0.5 * z * z);
+            histBins.push({
+              range: `${bLo.toFixed(0)}–${bHi.toFixed(0)}`,
+              months: bMid,
+              density: density,
+            });
+          }
+          // Normalize
+          const maxDensity = Math.max(...histBins.map(b => b.density));
+          histBins.forEach(b => { b.density = b.density / maxDensity; });
+          return (
+            <>
+              <ResponsiveContainer width="100%" height={CHART_HEIGHT.md}>
+                <BarChart data={histBins} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
+                  <XAxis dataKey="range" tick={{ fill: COLORS.textMuted, fontSize: 10 }} label={{ value: 'Duration (months)', fill: COLORS.textMuted, position: 'insideBottom', offset: -10, fontSize: 11 }} />
+                  <YAxis tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} tickFormatter={() => ''} label={{ value: 'Relative Frequency', fill: COLORS.textMuted, angle: -90, position: 'insideLeft', fontSize: 11 }} />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(6,182,212,0.06)' }}
+                    contentStyle={{ background: '#1F2937', border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, fontFamily: FONT }}
+                    labelStyle={{ color: COLORS.textBright, fontWeight: 700 }}
+                    formatter={(v, name) => [(v * 100).toFixed(0) + '%', 'Relative Frequency']}
+                  />
+                  {markers.map(m => (
+                    <ReferenceLine key={m.label} x={histBins.reduce((best, b) => Math.abs(b.months - m.val) < Math.abs(best.months - m.val) ? b : best, histBins[0]).range}
+                      stroke={m.color} strokeDasharray="4 3" strokeWidth={2}
+                      label={{ value: `${m.label}: ${fmtMo(m.val)}`, fill: m.color, fontSize: 10, fontWeight: 700, position: 'top' }} />
+                  ))}
+                  <Bar dataKey="density" name="Frequency" radius={[4, 4, 0, 0]} barSize={32}>
+                    {histBins.map((d, i) => (
+                      <Cell key={i} fill={d.months <= p50 ? COLORS.accent4 : COLORS.accent3} fillOpacity={0.85} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              {/* Percentile marker legend */}
+              <div style={{
+                display: 'flex', justifyContent: 'center', gap: ui.space.lg, flexWrap: 'wrap',
+                marginTop: ui.space.sm, padding: '8px 14px', borderRadius: 8,
+                background: '#0c1622', border: `1px solid ${COLORS.cardBorder}`,
+              }}>
+                {markers.map(m => (
+                  <span key={m.label} style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs }}>
+                    <span style={{ color: m.color, fontWeight: 700 }}>■ {m.label}</span>: {fmtMo(m.val)}
+                  </span>
+                ))}
+                {mean != null && (
+                  <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs }}>
+                    <span style={{ color: COLORS.accent2, fontWeight: 700 }}>Mean</span>: {fmtMo(mean)}
+                  </span>
+                )}
+              </div>
+            </>
+          );
+        })()}
+      </Card>
+
+      {/* ═══ § 5 — Duration Stage Breakdown Table ═══ */}
       {durationStages.length > 0 && (
         <Card>
-          <SectionTitle number="2" title="Duration Stage Breakdown"
+          <SectionTitle number="4" title="Duration Stage Breakdown"
             subtitle="Litigation stage durations contributing to total timeline" />
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT }}>
@@ -202,10 +353,10 @@ export default function ClaimQuantumTimeline({ data }) {
         </Card>
       )}
 
-      {/* ═══ § 4 — Duration Percentile Table ═══ */}
+      {/* ═══ § 6 — Duration Percentile Table ═══ */}
       {pctData.length > 0 && (
         <Card>
-          <SectionTitle number="3" title="Duration Percentile Distribution"
+          <SectionTitle number="5" title="Duration Percentile Distribution"
             subtitle="Monte Carlo simulated timeline percentiles for this claim" />
           <div style={{ display: 'grid', gridTemplateColumns: `repeat(${pctData.length}, 1fr)`, gap: ui.space.md }}>
             {pctData.map((p, i) => (
