@@ -115,12 +115,41 @@ export default function DistributionExplorer({
     const nBins = compact ? 25 : 40;
 
     // Try to get pre-binned data first
-    if (data.mc_distributions && data.mc_distributions[metric]) {
-      const dist = data.mc_distributions[metric];
-      return {
-        bins: dist.bins || [],
-        stats: dist.stats || {},
-      };
+    // Key aliases: Python exporter uses xirr / net_return_cr
+    const MC_KEY_ALIASES = { irr: 'xirr', net_recovery: 'net_return_cr' };
+    const mcKey = (data.mc_distributions?.[metric]) ? metric : MC_KEY_ALIASES[metric];
+    if (data.mc_distributions && mcKey && data.mc_distributions[mcKey]) {
+      const dist = data.mc_distributions[mcKey];
+
+      // Handle {bins: [midpoints], counts: [counts], edges?: [edges]} format from run_v2.py
+      if (dist.counts && Array.isArray(dist.counts) && dist.counts.length > 0) {
+        let bins;
+        if (dist.edges && dist.edges.length > 1) {
+          // Use edges for precise x0/x1 boundaries
+          bins = dist.counts.map((count, i) => ({
+            x0: dist.edges[i],
+            x1: dist.edges[i + 1] ?? dist.edges[i] + (dist.edges[1] - dist.edges[0]),
+            count,
+          }));
+        } else if (dist.bins && dist.bins.length > 0 && typeof dist.bins[0] === 'number') {
+          // Reconstruct from midpoints
+          const step = dist.bins.length > 1 ? dist.bins[1] - dist.bins[0] : 1;
+          bins = dist.bins.map((mid, i) => ({
+            x0: mid - step / 2,
+            x1: mid + step / 2,
+            count: dist.counts[i] || 0,
+          }));
+        }
+        if (bins && bins.length > 0) {
+          const totalN = data.mc_distributions.n_paths || bins.reduce((s, b) => s + b.count, 0);
+          return { bins, stats: _statsFromHist(bins, totalN) };
+        }
+      }
+
+      // Handle pre-formatted {bins: [{x0, x1, count}], stats: {}} format
+      if (dist.bins && dist.bins.length > 0 && typeof dist.bins[0] === 'object') {
+        return { bins: dist.bins, stats: dist.stats || {} };
+      }
     }
 
     // Use stochastic pricing grid histograms (full N=10,000 paths).

@@ -597,8 +597,8 @@ def _postprocess_dashboard_json(
 
     data["mc_distributions"] = {
         "moic": _histogram(grid_moics),
-        "xirr": _histogram(grid_xirrs),
-        "net_return_cr": _histogram(all_net_returns),
+        "irr": _histogram(grid_xirrs),
+        "net_recovery": _histogram(all_net_returns),
         "n_paths": sim.n_paths,
     }
 
