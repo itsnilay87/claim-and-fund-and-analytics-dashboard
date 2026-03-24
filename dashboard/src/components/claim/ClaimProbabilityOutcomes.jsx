@@ -145,10 +145,14 @@ function OutcomeDistributionBar({ data }) {
 export default function ClaimProbabilityOutcomes({ data, stochasticData }) {
   const { ui } = useUISettings();
 
+  // Extract the claim's jurisdiction to lock probability displays
+  const claim = data?.claims?.[0] || {};
+  const jur = claim.jurisdiction || 'domestic';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: ui.space.xl }}>
       <ProbabilityKPIRow data={data} />
-      <V2ProbabilityOutcomes data={data} stochasticData={stochasticData} />
+      <V2ProbabilityOutcomes data={data} stochasticData={stochasticData} claimJurisdiction={jur} />
       <OutcomeDistributionBar data={data} />
     </div>
   );

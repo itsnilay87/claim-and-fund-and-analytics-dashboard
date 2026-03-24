@@ -425,6 +425,78 @@ def _build_arb_sensitivity(
     return results
 
 
+def _build_litigation_jcurve(sim: SimulationResults) -> dict:
+    """Build J-curve data for litigation funding from actual MC path cashflows.
+
+    For litigation funding there are no upfront/tail investment combos.
+    The cashflow is: monthly legal cost burn (outflows) → collection at settlement (inflow).
+    We compute cumulative cashflow percentile bands directly from the simulation paths.
+    """
+    import numpy as np
+
+    MAX_MONTHS = 96
+    n_paths = sim.n_paths
+
+    # Build cumulative cashflow matrix: shape (n_paths, MAX_MONTHS)
+    portfolio_cumul = np.zeros((n_paths, MAX_MONTHS))
+
+    for cid in sim.claim_ids:
+        paths = sim.results.get(cid, [])
+        for path_idx in range(min(len(paths), n_paths)):
+            p = paths[path_idx]
+            burn = p.monthly_legal_burn
+            if burn is None or len(burn) == 0:
+                continue
+
+            payment_month = max(int(math.ceil(p.total_duration_months)), 1)
+
+            # Build monthly cashflow vector: legal costs out, collection in
+            cf = np.zeros(MAX_MONTHS)
+            burn_len = min(len(burn), MAX_MONTHS)
+            for m in range(burn_len):
+                cf[m] = -float(burn[m])
+
+            # Collection inflow at settlement month
+            if payment_month < MAX_MONTHS and p.collected_cr > 0:
+                cf[payment_month] += p.collected_cr
+
+            # Cumulative sum and add to portfolio
+            portfolio_cumul[path_idx] += np.cumsum(cf)
+
+    # Compute percentile bands at sampled months
+    months_to_sample = list(range(0, min(24, MAX_MONTHS)))
+    months_to_sample += list(range(24, MAX_MONTHS, 3))
+    months_to_sample = sorted(set(m for m in months_to_sample if m < MAX_MONTHS))
+
+    timeline = []
+    for m in months_to_sample:
+        col = portfolio_cumul[:, m]
+        year = 2026 + (m + 4) // 12
+        month_num = ((m + 4) % 12) or 12
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        label = f"{month_names[month_num - 1]} {year}"
+        timeline.append({
+            "month": m,
+            "label": label,
+            "p5": round(float(np.percentile(col, 5)), 2),
+            "p25": round(float(np.percentile(col, 25)), 2),
+            "median": round(float(np.percentile(col, 50)), 2),
+            "p75": round(float(np.percentile(col, 75)), 2),
+            "p95": round(float(np.percentile(col, 95)), 2),
+            "mean": round(float(np.mean(col)), 2),
+        })
+
+    return {
+        "scenarios": {"litigation_funding": timeline},
+        "available_combos": [],
+        "upfront_pcts": [],
+        "tata_tail_pcts": [],
+        "default_key": "litigation_funding",
+        "max_months": MAX_MONTHS,
+    }
+
+
 def _postprocess_dashboard_json(
     sim: SimulationResults,
     grid,
@@ -607,6 +679,11 @@ def _postprocess_dashboard_json(
         sensitivity = _build_arb_sensitivity(sim, waterfall_grid_results)
         if sensitivity:
             data["sensitivity"] = sensitivity
+
+    # 6. Rebuild jcurve_data for litigation_funding using actual MC path cashflows
+    #    (no upfront/tail combos — pure legal cost burn + collection at settlement)
+    if structure_type == "litigation_funding":
+        data["jcurve_data"] = _build_litigation_jcurve(sim)
 
     with open(dash_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)

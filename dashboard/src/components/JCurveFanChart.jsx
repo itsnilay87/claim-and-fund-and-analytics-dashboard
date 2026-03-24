@@ -65,7 +65,11 @@ export default function JCurveFanChart({
     const upInt = Math.round(selectedUpfront * 100);
     const tailInt = Math.round(selectedTail * 100);
     const key = `up${upInt}_tail${tailInt}`;
-    const timeline = jc.scenarios[key] || null;
+    // Fall back to default_key (e.g. "litigation_funding") or first available scenario
+    const timeline = jc.scenarios[key]
+      || (jc.default_key && jc.scenarios[jc.default_key])
+      || jc.scenarios[Object.keys(jc.scenarios)[0]]
+      || null;
 
     return {
       timelineData: timeline,

@@ -261,8 +261,8 @@ export default function ClaimExecutiveSummary({ data, stochasticData }) {
 
       {/* §7 — Cashflow J-Curve (JCurveFanChart) */}
       <Card>
-        <SectionTitle number="5" title="Cashflow J-Curve" subtitle="Cumulative portfolio cashflow — litigation funding structure" />
-        <JCurveFanChart data={data} height={340} showControls upfrontPct={0.10} tataTailPct={0.20} />
+        <SectionTitle number="5" title="Cashflow J-Curve" subtitle="Cumulative cashflow — legal cost burn then settlement inflow" />
+        <JCurveFanChart data={data} height={340} showControls={false} />
       </Card>
     </div>
   );

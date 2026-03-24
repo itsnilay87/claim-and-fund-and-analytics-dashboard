@@ -103,7 +103,7 @@ const flowBox = {
  * Main Component
  * ═══════════════════════════════════════════════════════════ */
 
-export default function ProbabilityOutcomes({ data, stochasticData }) {
+export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdiction = null }) {
   const { ui } = useUISettings();
   const prob = data?.probability_summary;
   const sensitivity = data?.probability_sensitivity;
@@ -111,9 +111,11 @@ export default function ProbabilityOutcomes({ data, stochasticData }) {
   const simMeta = data?.simulation_meta || {};
   const treeNodes = prob?.tree_nodes;
 
+  // When claimJurisdiction is provided (single claim view), lock to that jurisdiction
   const [jurisdiction, setJurisdiction] = useState(
-    prob?.domestic?.aggregate ? 'domestic' : 'siac'
+    claimJurisdiction || (prob?.domestic?.aggregate ? 'domestic' : 'siac')
   );
+  const isLockedJurisdiction = !!claimJurisdiction;
   const [scenario, setScenario]         = useState('scenario_a');
 
   /* ── Safe aggregates with null guards for single-portfolio modes ── */
@@ -284,26 +286,28 @@ export default function ProbabilityOutcomes({ data, stochasticData }) {
 
       {/* Jurisdiction + Scenario toggles */}
       <div style={{ display: 'flex', gap: ui.space.lg, flexWrap: 'wrap' }}>
-        {/* jurisdiction */}
-        <div style={{ display: 'flex', gap: ui.space.sm }}>
-          <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600, lineHeight: '36px' }}>
-            Jurisdiction:
-          </span>
-          {[
-            { key: 'domestic', label: 'Domestic (S.34→SLP)', show: hasDomestic },
-            { key: 'siac',     label: 'SIAC (HC→COA)',       show: hasSiac },
-          ].filter(j => j.show).map(j => (
-            <button key={j.key} onClick={() => setJurisdiction(j.key)} style={{
-              padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
-              fontFamily: FONT, fontSize: ui.sizes.sm,
-              fontWeight: jurisdiction === j.key ? 700 : 500,
-              color: jurisdiction === j.key ? '#fff' : COLORS.textMuted,
-              background: jurisdiction === j.key ? COLORS.gradient1 : COLORS.card,
-            }}>
-              {j.label}
-            </button>
-          ))}
-        </div>
+        {/* jurisdiction - hidden when locked to single claim's jurisdiction */}
+        {!isLockedJurisdiction && (
+          <div style={{ display: 'flex', gap: ui.space.sm }}>
+            <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600, lineHeight: '36px' }}>
+              Jurisdiction:
+            </span>
+            {[
+              { key: 'domestic', label: 'Domestic (S.34→SLP)', show: hasDomestic },
+              { key: 'siac',     label: 'SIAC (HC→COA)',       show: hasSiac },
+            ].filter(j => j.show).map(j => (
+              <button key={j.key} onClick={() => setJurisdiction(j.key)} style={{
+                padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                fontFamily: FONT, fontSize: ui.sizes.sm,
+                fontWeight: jurisdiction === j.key ? 700 : 500,
+                color: jurisdiction === j.key ? '#fff' : COLORS.textMuted,
+                background: jurisdiction === j.key ? COLORS.gradient1 : COLORS.card,
+              }}>
+                {j.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* scenario */}
         <div style={{ display: 'flex', gap: ui.space.sm }}>
@@ -439,8 +443,10 @@ export default function ProbabilityOutcomes({ data, stochasticData }) {
                 ].map(o => (
                   <div key={o.key} style={{ ...flowBox, borderColor: OUTCOME_COLORS[o.key], minWidth: 110 }}>
                     <div style={{ fontSize: 11, color: COLORS.textMuted }}>{o.label}</div>
-                    {hasDomestic && <div style={{ fontSize: 14, fontWeight: 700, color: OUTCOME_COLORS[o.key] }}>Dom: {safePct(o.valueDom)}</div>}
-                    {hasSiac && <div style={{ fontSize: 14, fontWeight: 700, color: OUTCOME_COLORS[o.key] }}>SIAC: {safePct(o.valueSiac)}</div>}
+                    {(!isLockedJurisdiction ? hasDomestic : jurisdiction === 'domestic') && 
+                      <div style={{ fontSize: 14, fontWeight: 700, color: OUTCOME_COLORS[o.key] }}>Dom: {safePct(o.valueDom)}</div>}
+                    {(!isLockedJurisdiction ? hasSiac : jurisdiction === 'siac') && 
+                      <div style={{ fontSize: 14, fontWeight: 700, color: OUTCOME_COLORS[o.key] }}>SIAC: {safePct(o.valueSiac)}</div>}
                   </div>
                 ))}
               </div>
@@ -453,7 +459,7 @@ export default function ProbabilityOutcomes({ data, stochasticData }) {
               fontSize: ui.sizes.sm, color: COLORS.text, lineHeight: 1.6,
             }}>
               <span style={{ fontWeight: 700, color: OUTCOME_COLORS.TRUE_WIN }}>Key Insight:</span>{' '}
-              {hasDomestic && hasSiac ? (
+              {hasDomestic && hasSiac && !isLockedJurisdiction ? (
                 <>SIAC claims have a <strong style={{ color: OUTCOME_COLORS.TRUE_WIN }}>
                   {((siacAgg.true_win - domAgg.true_win) * 100).toFixed(1)}pp
                 </strong> higher win probability than Domestic claims — a shorter appeal pipeline (2 stages vs 4) means fewer chances for the opponent to overturn the award.</>
@@ -826,9 +832,9 @@ export default function ProbabilityOutcomes({ data, stochasticData }) {
       )}
 
       {/* ═══════════════════════════════════════════════════════
-       *  § 7  DOMESTIC vs SIAC COMPARISON
+       *  § 7  DOMESTIC vs SIAC COMPARISON (hidden in single-claim mode)
        * ═══════════════════════════════════════════════════════ */}
-      {hasDomestic && hasSiac && (
+      {hasDomestic && hasSiac && !isLockedJurisdiction && (
         <Card>
           <SectionTitle number="§7" title="Domestic vs SIAC — Outcome Comparison"
             subtitle="Absolute outcome probabilities by jurisdiction — weighted across both arbitration scenarios" />
