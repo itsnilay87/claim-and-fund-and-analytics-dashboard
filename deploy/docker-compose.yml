@@ -38,6 +38,7 @@ services:
       - PORT=3001
       - DATABASE_URL=postgresql://${POSTGRES_USER:-cap_user}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-claim_analytics}
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
     networks:
       - internal
       - default

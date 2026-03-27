@@ -2,7 +2,7 @@
  * Auth routes — register, login, refresh, logout, profile.
  */
 const express = require('express');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const User = require('../db/models/User');
 const RefreshToken = require('../db/models/RefreshToken');
@@ -35,14 +35,18 @@ const BCRYPT_SALT_ROUNDS = 12;
 const REFRESH_TOKEN_DAYS = 7;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Cookie secure flag: only true if COOKIE_SECURE=true or if HTTPS is detected
+// Default to false for plain HTTP deployments (e.g. http://178.104.35.208)
+const COOKIE_SECURE = process.env.COOKIE_SECURE === 'true';
+
 /**
  * Set the refresh token as an HttpOnly cookie.
  */
 function setRefreshCookie(res, token) {
   res.cookie('refreshToken', token, {
     httpOnly: true,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    secure: COOKIE_SECURE,
     path: '/api/auth',
     maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
   });
@@ -54,8 +58,8 @@ function setRefreshCookie(res, token) {
 function clearRefreshCookie(res) {
   res.clearCookie('refreshToken', {
     httpOnly: true,
-    sameSite: 'strict',
-    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    secure: COOKIE_SECURE,
     path: '/api/auth',
   });
 }

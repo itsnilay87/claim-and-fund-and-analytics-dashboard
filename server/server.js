@@ -50,6 +50,7 @@ const { authenticateToken } = require('./middleware/auth');
 const { getDefaults } = require('./services/configService');
 const { listRuns } = require('./services/simulationRunner');
 const { pool } = require('./db/pool');
+const { runMigrations } = require('./db/migrate');
 const RefreshToken = require('./db/models/RefreshToken');
 
 const app = express();
@@ -181,9 +182,17 @@ app.listen(PORT, () => {
   console.log(`[Claim Analytics Server] Engine dir: ${path.resolve(__dirname, '..', 'engine')}`);
   console.log(`[Claim Analytics Server] Runs dir:   ${path.resolve(__dirname, 'runs')}`);
 
-  // Non-blocking DB connectivity check — server works without DB
+  // Non-blocking DB connectivity check + auto-migration
   pool.query('SELECT 1')
-    .then(() => console.log('[Claim Analytics Server] Database connected ✓'))
+    .then(async () => {
+      console.log('[Claim Analytics Server] Database connected ✓');
+      try {
+        await runMigrations();
+        console.log('[Claim Analytics Server] Migrations applied ✓');
+      } catch (err) {
+        console.error('[Claim Analytics Server] Migration failed:', err.message);
+      }
+    })
     .catch((err) => console.warn('[Claim Analytics Server] Database unavailable — running without DB:', err.message));
 
   // Periodic refresh token cleanup — purge expired tokens every hour
