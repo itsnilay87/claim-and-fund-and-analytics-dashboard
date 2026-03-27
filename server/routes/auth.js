@@ -62,6 +62,7 @@ function clearRefreshCookie(res) {
 
 /**
  * Generate tokens for a user, store refresh hash in DB, set cookie.
+ * Enforces max 5 refresh tokens per user (prevents token accumulation).
  * @returns {{ accessToken: string }}
  */
 async function issueTokens(res, user) {
@@ -71,6 +72,10 @@ async function issueTokens(res, user) {
   const expiresAt = new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000);
 
   await RefreshToken.create(user.id, refreshHash, expiresAt);
+
+  // Enforce max 5 refresh tokens per user — delete oldest beyond limit
+  await RefreshToken.enforceMaxPerUser(user.id, 5);
+
   setRefreshCookie(res, rawRefresh);
 
   return accessToken;
@@ -173,6 +178,8 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
     if (new Date(stored.expires_at) < new Date()) {
       await RefreshToken.deleteByHash(tokenHash);
       clearRefreshCookie(res);
+      // Opportunistic cleanup: purge other expired tokens
+      RefreshToken.deleteExpired().catch(() => {});
       return res.status(401).json({ error: 'Refresh token expired' });
     }
 

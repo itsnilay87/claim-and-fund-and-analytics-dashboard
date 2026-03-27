@@ -10,6 +10,9 @@
  */
 import { create } from 'zustand';
 import { api, setAccessToken, clearAccessToken } from '../services/api';
+import { useWorkspaceStore } from './workspaceStore';
+import { useClaimStore } from './claimStore';
+import { usePortfolioStore } from './portfolioStore';
 
 export const useAuthStore = create((set, get) => ({
   user: null,
@@ -44,6 +47,10 @@ export const useAuthStore = create((set, get) => ({
   logout: async () => {
     try { await api.post('/api/auth/logout'); } catch { /* ignore */ }
     clearAccessToken();
+    // Clear all store state to prevent stale data leaks
+    useWorkspaceStore.getState().reset();
+    useClaimStore.getState().reset();
+    usePortfolioStore.getState().reset();
     set({ user: null, isAuthenticated: false, error: null });
   },
 

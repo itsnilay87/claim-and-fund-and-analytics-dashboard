@@ -62,6 +62,27 @@ const RefreshToken = {
     );
     return rowCount;
   },
+
+  /**
+   * Enforce a maximum number of refresh tokens per user.
+   * Deletes the oldest tokens beyond the limit.
+   * @param {string} userId - UUID
+   * @param {number} maxCount - maximum tokens to keep (default 5)
+   * @returns {Promise<number>} count of deleted tokens
+   */
+  async enforceMaxPerUser(userId, maxCount = 5) {
+    const { rowCount } = await query(
+      `DELETE FROM refresh_tokens
+       WHERE id IN (
+         SELECT id FROM refresh_tokens
+         WHERE user_id = $1
+         ORDER BY created_at DESC
+         OFFSET $2
+       )`,
+      [userId, maxCount]
+    );
+    return rowCount;
+  },
 };
 
 module.exports = RefreshToken;

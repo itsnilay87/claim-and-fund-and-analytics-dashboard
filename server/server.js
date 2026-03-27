@@ -34,6 +34,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const simulateRouter = require('./routes/simulate');
@@ -49,34 +50,73 @@ const { authenticateToken } = require('./middleware/auth');
 const { getDefaults } = require('./services/configService');
 const { listRuns } = require('./services/simulationRunner');
 const { pool } = require('./db/pool');
+const RefreshToken = require('./db/models/RefreshToken');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
-// ── Middleware ──
-app.use(helmet());
+// ── Security: Helmet with configured CSP ──
+app.use(helmet({
+  contentSecurityPolicy: IS_PRODUCTION ? {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],  // Tailwind/inline styles
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  } : false, // Disable CSP in dev (Vite HMR needs eval/inline)
+  crossOriginEmbedderPolicy: false, // Needed for cross-origin font loading
+  xFrameOptions: { action: 'deny' },
+}));
+
+// ── CORS ──
 app.use(cors({
   origin: (origin, callback) => {
-    // In production behind Nginx, origin is same-host (no origin header) or the server's own domain.
-    // In development, allow any localhost port.
-    if (!origin || /^https?:\/\/localhost(:\d+)?$/.test(origin)) {
-      callback(null, true);
-    } else if (process.env.ALLOWED_ORIGIN && origin === process.env.ALLOWED_ORIGIN) {
-      callback(null, true);
-    } else if (process.env.NODE_ENV === 'production') {
-      // Behind Nginx reverse proxy — allow all origins (Nginx handles external access)
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+    // No origin = same-origin or server-to-server (allow)
+    if (!origin) return callback(null, true);
+    // Dev: allow any localhost port
+    if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+    // Production: allow configured origin
+    if (process.env.ALLOWED_ORIGIN && origin === process.env.ALLOWED_ORIGIN) return callback(null, true);
+    // Behind Nginx reverse proxy — origin matches server domain (Nginx handles external access)
+    if (IS_PRODUCTION) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
+
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 
+// ── Global API rate limiter — 100 requests/min per IP ──
+const globalApiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' },
+  skip: (req) => req.path === '/api/health', // Don't rate-limit health checks
+});
+app.use('/api', globalApiLimiter);
+
 // ── Routes (order matters — specific before wildcard) ──
+// Legacy runs list BEFORE the authenticated /api/runs router
+app.get('/api/runs/legacy', (_req, res) => {
+  try {
+    const runs = listRuns();
+    res.json({ runs });
+  } catch (err) {
+    console.error('[GET /api/runs/legacy]', err.message);
+    res.status(500).json({ error: 'Failed to list runs' });
+  }
+});
+
 app.use('/api/auth', authRouter);
 app.use('/api/simulate', simulateRouter);
 app.use('/api/jurisdictions', jurisdictionsRouter);
@@ -99,7 +139,8 @@ app.get('/api/defaults', (_req, res) => {
   try {
     res.json(getDefaults());
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[GET /api/defaults]', err.message);
+    res.status(500).json({ error: 'Failed to load defaults' });
   }
 });
 
@@ -119,25 +160,19 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
-// ── Legacy runs list (backward-compat with claim-analytics old app — no auth) ──
-app.get('/api/runs/legacy', (_req, res) => {
-  try {
-    const runs = listRuns();
-    res.json({ runs });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ── 404 handler — always return JSON, never HTML ──
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// ── Error handling middleware ──
+// ── Error handling middleware — never expose stack traces in production ──
 app.use((err, _req, res, _next) => {
-  console.error('[ERROR]', err.message);
-  res.status(500).json({ error: err.message });
+  console.error('[ERROR]', err.stack || err.message);
+  if (IS_PRODUCTION) {
+    res.status(500).json({ error: 'Internal server error' });
+  } else {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Start server ──
@@ -150,6 +185,26 @@ app.listen(PORT, () => {
   pool.query('SELECT 1')
     .then(() => console.log('[Claim Analytics Server] Database connected ✓'))
     .catch((err) => console.warn('[Claim Analytics Server] Database unavailable — running without DB:', err.message));
+
+  // Periodic refresh token cleanup — purge expired tokens every hour
+  setInterval(async () => {
+    try {
+      const count = await RefreshToken.deleteExpired();
+      if (count > 0) console.log(`[Cleanup] Purged ${count} expired refresh tokens`);
+    } catch (err) {
+      console.warn('[Cleanup] Failed to purge expired tokens:', err.message);
+    }
+  }, 60 * 60 * 1000);
+});
+
+// ── Unhandled rejection / exception safety net ──
+process.on('unhandledRejection', (reason) => {
+  console.error('[UNHANDLED REJECTION]', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]', err);
+  // Give time for logs to flush, then exit
+  setTimeout(() => process.exit(1), 1000);
 });
 
 module.exports = app;

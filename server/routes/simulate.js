@@ -8,6 +8,7 @@
 
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const { startRun, startLegacyRun } = require('../services/simulationRunner');
 const { mergeConfig, getDefaults, loadDefaults, validateConfig } = require('../services/configService');
 const { authenticateToken } = require('../middleware/auth');
@@ -16,6 +17,15 @@ const fs = require('fs');
 const path = require('path');
 
 const JURISDICTIONS_DIR = path.resolve(__dirname, '..', '..', 'engine', 'jurisdictions');
+
+// Rate limiter for simulation endpoints — 10 per minute per IP
+const simulateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many simulation requests. Please try again later.' },
+});
 
 /**
  * Load jurisdiction template and merge defaults into claim_config.
@@ -146,7 +156,7 @@ function _buildDbCallbacks(userId) {
  * Body: { claim_config: ClaimConfig, simulation: SimulationConfig, workspace_id?, claim_id? }
  * Runs single-claim mode (no investment grid). Requires auth.
  */
-router.post('/claim', authenticateToken, async (req, res) => {
+router.post('/claim', authenticateToken, simulateLimiter, async (req, res) => {
   try {
     const { claim_config, simulation } = req.body;
 
@@ -217,7 +227,7 @@ router.post('/claim', authenticateToken, async (req, res) => {
  * Body: { portfolio_config: PortfolioConfig, claims: ClaimConfig[], workspace_id?, portfolio_id? }
  * Requires auth.
  */
-router.post('/portfolio', authenticateToken, async (req, res) => {
+router.post('/portfolio', authenticateToken, simulateLimiter, async (req, res) => {
   try {
     const { portfolio_config, claims } = req.body;
 

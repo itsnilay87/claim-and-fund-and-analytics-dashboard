@@ -34,9 +34,14 @@ router.get('/', (_req, res) => {
  */
 router.get('/:id', (req, res) => {
   try {
-    const template = _loadTemplate(req.params.id);
+    const jurisdictionId = req.params.id;
+    // Prevent path traversal
+    if (!/^[a-zA-Z0-9_-]+$/.test(jurisdictionId)) {
+      return res.status(400).json({ error: 'Invalid jurisdiction ID' });
+    }
+    const template = _loadTemplate(jurisdictionId);
     if (!template) {
-      return res.status(404).json({ error: `Jurisdiction '${req.params.id}' not found` });
+      return res.status(404).json({ error: `Jurisdiction '${jurisdictionId}' not found` });
     }
     res.json(template);
   } catch (err) {
@@ -51,7 +56,12 @@ router.get('/:id', (req, res) => {
  */
 router.get('/:id/defaults', (req, res) => {
   try {
-    const defaults = loadDefaults(req.params.id);
+    const jurisdictionId = req.params.id;
+    // Prevent path traversal
+    if (!/^[a-zA-Z0-9_-]+$/.test(jurisdictionId)) {
+      return res.status(400).json({ error: 'Invalid jurisdiction ID' });
+    }
+    const defaults = loadDefaults(jurisdictionId);
     if (!defaults) {
       return res.status(404).json({ error: `Jurisdiction '${req.params.id}' not found` });
     }
@@ -89,7 +99,11 @@ function _listJurisdictions() {
 }
 
 function _loadTemplate(jurisdictionId) {
+  // Prevent path traversal — only allow alphanumeric, hyphens, underscores
+  if (!/^[a-zA-Z0-9_-]+$/.test(jurisdictionId)) return null;
   const filePath = path.join(JURISDICTIONS_DIR, `${jurisdictionId}.json`);
+  // Double-check resolved path stays within the jurisdictions directory
+  if (!path.resolve(filePath).startsWith(path.resolve(JURISDICTIONS_DIR))) return null;
   if (!fs.existsSync(filePath)) return null;
   return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 }
