@@ -9,6 +9,7 @@
  * Route guards: ProtectedRoute redirects to /login, GuestRoute redirects to /workspaces.
  * Layout: DashboardLayout wraps all authenticated routes with TopBar + WorkspaceSidebar.
  */
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import DashboardLayout from './layouts/DashboardLayout';
@@ -30,17 +31,24 @@ import PortfolioResults from './pages/PortfolioResults';
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-950"><div className="w-8 h-8 border-2 border-teal-500/30 border-t-teal-500 rounded-full animate-spin" /></div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return children;
 }
 
 function GuestRoute({ children }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-950"><div className="w-8 h-8 border-2 border-teal-500/30 border-t-teal-500 rounded-full animate-spin" /></div>;
   if (isAuthenticated) return <Navigate to="/workspaces" replace />;
   return children;
 }
 
 export default function App() {
+  const initAuth = useAuthStore((s) => s.initAuth);
+
+  useEffect(() => { initAuth(); }, [initAuth]);
   return (
     <Routes>
       {/* Public routes wrapped in PublicLayout */}

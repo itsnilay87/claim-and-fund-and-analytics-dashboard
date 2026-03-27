@@ -14,21 +14,19 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
-    setLoading(true)
-
-    // Prototype: accept demo credentials or any non-empty input
-    await new Promise((r) => setTimeout(r, 800))
-
-    if (form.email === 'demo@claimanalytics.com' && form.password === 'demo123') {
-      login(form.email, form.password)
-      navigate('/workspaces')
-    } else if (form.email && form.password) {
-      login(form.email, form.password)
-      navigate('/workspaces')
-    } else {
+    if (!form.email || !form.password) {
       setError('Please enter email and password')
+      return
     }
-    setLoading(false)
+    setLoading(true)
+    try {
+      await login(form.email, form.password)
+      navigate('/workspaces')
+    } catch (err) {
+      setError(err.message || 'Login failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fillDemo = () => {

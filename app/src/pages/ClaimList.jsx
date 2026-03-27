@@ -8,6 +8,7 @@
  *
  * Route: /workspace/:wsId/claims
  */
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useClaimStore } from '../store/claimStore';
 import { FileText, Plus, Trash2, ArrowRight } from 'lucide-react';
@@ -15,8 +16,11 @@ import { FileText, Plus, Trash2, ArrowRight } from 'lucide-react';
 export default function ClaimList() {
   const { wsId } = useParams();
   const navigate = useNavigate();
-  const claims = useClaimStore((s) => s.getClaims(wsId));
+  const claims = useClaimStore((s) => s.claims);
+  const loadClaims = useClaimStore((s) => s.loadClaims);
   const removeClaim = useClaimStore((s) => s.removeClaim);
+
+  useEffect(() => { loadClaims(wsId); }, [wsId, loadClaims]);
 
   return (
     <div className="space-y-6">

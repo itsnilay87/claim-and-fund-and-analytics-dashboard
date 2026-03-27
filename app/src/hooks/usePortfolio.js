@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { usePortfolioStore } from '../store/portfolioStore';
 import { useClaimStore } from '../store/claimStore';
+import { api } from '../services/api';
 
 const STEPS = ['claims', 'structure', 'configure', 'review'];
 const STEP_LABELS = ['Select Claims', 'Choose Structure', 'Configure', 'Review & Run'];
@@ -341,18 +342,11 @@ export function usePortfolioRun() {
     setProgress(0);
 
     try {
-      const res = await fetch('/api/simulate/portfolio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+      const data = await api.post('/api/simulate/portfolio', {
+        ...config,
+        workspace_id: config.portfolio_config?.workspace_id,
+        portfolio_id: config.portfolio_config?.id,
       });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(err.error || err.details || `Server error ${res.status}`);
-      }
-
-      const data = await res.json();
       setRunId(data.runId);
       setStatus('queued');
       return data.runId;
@@ -373,9 +367,7 @@ export function usePortfolioRun() {
 
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/status/${encodeURIComponent(runId)}`);
-        if (!res.ok) return;
-        const data = await res.json();
+        const data = await api.get(`/api/status/${encodeURIComponent(runId)}`);
         setStatus(data.status);
         setProgress(data.progress || 0);
         if (data.stage) setStage(data.stage);

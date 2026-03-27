@@ -41,8 +41,10 @@ export default function PortfolioBuilder() {
   // For new portfolios, create immediately and redirect
   useEffect(() => {
     if (!isEdit) {
-      const p = createPortfolio(wsId, 'New Portfolio');
-      navigate(`/workspace/${wsId}/portfolio/${p.id}`, { replace: true });
+      (async () => {
+        const p = await createPortfolio(wsId, 'New Portfolio');
+        navigate(`/workspace/${wsId}/portfolio/${p.id}`, { replace: true });
+      })();
     }
   }, [isEdit]);
 
@@ -63,7 +65,7 @@ export default function PortfolioBuilder() {
   const handleRun = async () => {
     // Save to store first
     if (id) {
-      updatePortfolio(id, {
+      await updatePortfolio(id, {
         name: portfolioName,
         claim_ids: selectedClaims,
         structure,
@@ -75,15 +77,16 @@ export default function PortfolioBuilder() {
     const config = buildConfig();
     const runId = await run.submit(config);
     if (runId && id) {
-      updatePortfolio(id, { run_id: runId, status: 'running' });
+      await updatePortfolio(id, { run_id: runId, status: 'running' });
     }
   };
 
   // Navigate to results on completion
   useEffect(() => {
     if (run.isComplete && run.runId && id) {
-      updatePortfolio(id, { status: 'completed', run_id: run.runId });
-      navigate(`/workspace/${wsId}/portfolio/${id}/results?runId=${run.runId}`);
+      updatePortfolio(id, { status: 'completed', run_id: run.runId }).then(() => {
+        navigate(`/workspace/${wsId}/portfolio/${id}/results?runId=${run.runId}`);
+      });
     }
   }, [run.isComplete]);
 

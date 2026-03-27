@@ -8,12 +8,10 @@
  *
  * Route: /workspaces
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
-import { useClaimStore } from '../store/claimStore';
-import { usePortfolioStore } from '../store/portfolioStore';
 import WorkspaceCard from '../components/workspace/WorkspaceCard';
 import { Plus, LogOut, BarChart3, X, Download } from 'lucide-react';
 import { DEMO_WORKSPACES, importDemoWorkspace } from '../utils/demoLoader';
@@ -22,12 +20,13 @@ export default function WorkspaceHome() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace);
   const setActive = useWorkspaceStore((s) => s.setActive);
-  const getClaims = useClaimStore((s) => s.getClaims);
-  const getPortfolios = usePortfolioStore((s) => s.getPortfoliosByWorkspace);
   const navigate = useNavigate();
+
+  useEffect(() => { fetchWorkspaces(); }, [fetchWorkspaces]);
 
   const [showModal, setShowModal] = useState(false);
   const [showDemoModal, setShowDemoModal] = useState(false);
@@ -36,14 +35,14 @@ export default function WorkspaceHome() {
 
   const handleLoadDemo = async (demo) => {
     const ws = await importDemoWorkspace(demo);
-    // Force store refresh from localStorage
-    window.location.href = `/workspace/${ws.id}`;
+    setActive(ws.id);
+    navigate(`/workspace/${ws.id}`);
   };
 
-  const handleCreate = (e) => {
+  const handleCreate = async (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    const ws = createWorkspace(newName.trim(), newDesc.trim());
+    const ws = await createWorkspace(newName.trim(), newDesc.trim());
     setNewName('');
     setNewDesc('');
     setShowModal(false);
@@ -51,8 +50,8 @@ export default function WorkspaceHome() {
     navigate(`/workspace/${ws.id}`);
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/');
   };
 
@@ -128,8 +127,8 @@ export default function WorkspaceHome() {
               <WorkspaceCard
                 key={ws.id}
                 workspace={ws}
-                claimCount={getClaims(ws.id).length}
-                portfolioCount={getPortfolios(ws.id).length}
+                claimCount={ws.claim_count ?? 0}
+                portfolioCount={ws.portfolio_count ?? 0}
                 onOpen={() => {
                   setActive(ws.id);
                   navigate(`/workspace/${ws.id}`);

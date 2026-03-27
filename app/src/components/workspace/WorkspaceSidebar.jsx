@@ -6,7 +6,7 @@
  * with inline counts, and quick-add buttons.  Collapsible to icon-only mode.
  */
 import { NavLink, useParams } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useClaimStore } from '../../store/claimStore';
 import { usePortfolioStore } from '../../store/portfolioStore';
 import {
@@ -27,8 +27,12 @@ export default function WorkspaceSidebar() {
   const [claimsOpen, setClaimsOpen] = useState(true);
   const [portfoliosOpen, setPortfoliosOpen] = useState(true);
 
-  const claims = useClaimStore((s) => s.getClaims(wsId));
-  const portfolios = usePortfolioStore((s) => s.getPortfoliosByWorkspace(wsId));
+  const claims = useClaimStore((s) => s.claims);
+  const loadClaims = useClaimStore((s) => s.loadClaims);
+  const portfolios = usePortfolioStore((s) => s.portfolios);
+  const loadPortfolios = usePortfolioStore((s) => s.loadPortfolios);
+
+  useEffect(() => { loadClaims(wsId); loadPortfolios(wsId); }, [wsId, loadClaims, loadPortfolios]);
 
   const linkClass = (isActive) =>
     `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${

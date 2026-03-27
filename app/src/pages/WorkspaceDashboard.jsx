@@ -7,6 +7,7 @@
  *
  * Route: /workspace/:wsId
  */
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useClaimStore } from '../store/claimStore';
@@ -18,8 +19,12 @@ export default function WorkspaceDashboard() {
   const navigate = useNavigate();
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const workspace = workspaces.find((w) => w.id === wsId);
-  const claims = useClaimStore((s) => s.getClaims(wsId));
-  const portfolios = usePortfolioStore((s) => s.getPortfoliosByWorkspace(wsId));
+  const claims = useClaimStore((s) => s.claims);
+  const loadClaims = useClaimStore((s) => s.loadClaims);
+  const portfolios = usePortfolioStore((s) => s.portfolios);
+  const loadPortfolios = usePortfolioStore((s) => s.loadPortfolios);
+
+  useEffect(() => { loadClaims(wsId); loadPortfolios(wsId); }, [wsId, loadClaims, loadPortfolios]);
 
   return (
     <div className="space-y-6">

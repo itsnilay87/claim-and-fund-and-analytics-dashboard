@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useClaimStore } from '../store/claimStore';
+import { api } from '../services/api';
 
 /**
  * useClaimEditor — manages form state for the claim editor.
@@ -17,14 +18,16 @@ export function useClaimEditor(wsId, claimId) {
   // Load existing claim if editing
   useEffect(() => {
     if (claimId && wsId) {
-      store.loadClaims(wsId);
-      const claims = store.getClaimsByWorkspace(wsId);
-      const existing = claims.find((c) => c.id === claimId);
-      if (existing) {
-        setDraft({ ...existing });
-        originalRef.current = JSON.stringify(existing);
-        setDirty(false);
-      }
+      (async () => {
+        await store.loadClaims(wsId);
+        const claims = store.getClaimsByWorkspace(wsId);
+        const existing = claims.find((c) => c.id === claimId);
+        if (existing) {
+          setDraft({ ...existing });
+          originalRef.current = JSON.stringify(existing);
+          setDirty(false);
+        }
+      })();
     }
   }, [claimId, wsId]);
 
@@ -32,9 +35,7 @@ export function useClaimEditor(wsId, claimId) {
   const fetchDefaults = useCallback(async (jurisdictionId) => {
     setLoadingDefaults(true);
     try {
-      const res = await fetch(`/api/jurisdictions/${encodeURIComponent(jurisdictionId)}/defaults`);
-      if (!res.ok) throw new Error('Failed to fetch defaults');
-      const data = await res.json();
+      const data = await api.get(`/api/jurisdictions/${encodeURIComponent(jurisdictionId)}/defaults`);
       setJurisdictionDefaults(data);
       return data;
     } catch {
@@ -47,9 +48,7 @@ export function useClaimEditor(wsId, claimId) {
   /** Fetch jurisdiction template (full tree structure) */
   const fetchTemplate = useCallback(async (jurisdictionId) => {
     try {
-      const res = await fetch(`/api/jurisdictions/${encodeURIComponent(jurisdictionId)}`);
-      if (!res.ok) return null;
-      return await res.json();
+      return await api.get(`/api/jurisdictions/${encodeURIComponent(jurisdictionId)}`);
     } catch {
       return null;
     }
@@ -65,7 +64,7 @@ export function useClaimEditor(wsId, claimId) {
     if (template?.default_challenge_tree) {
       merged.challenge_tree = template.default_challenge_tree;
     }
-    const claim = store.createClaim(wsId, jurisdictionId, merged);
+    const claim = await store.createClaim(wsId, jurisdictionId, merged);
     setDraft({ ...claim });
     originalRef.current = JSON.stringify(claim);
     setDirty(false);
@@ -164,12 +163,12 @@ export function useClaimEditor(wsId, claimId) {
   }, [draft, validate]);
 
   /** Save draft to store */
-  const save = useCallback(() => {
+  const save = useCallback(async () => {
     if (!draft) return;
     if (claimId) {
-      store.updateClaim(draft.id, draft);
+      await store.updateClaim(draft.id, draft);
     } else if (draft.id) {
-      store.updateClaim(draft.id, draft);
+      await store.updateClaim(draft.id, draft);
     }
     originalRef.current = JSON.stringify(draft);
     setDirty(false);
@@ -264,9 +263,7 @@ export function useJurisdictions() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/jurisdictions');
-        if (!res.ok) throw new Error('Failed');
-        const data = await res.json();
+        const data = await api.get('/api/jurisdictions');
         if (!cancelled) setJurisdictions(data.jurisdictions || []);
       } catch {
         if (!cancelled) setJurisdictions([]);

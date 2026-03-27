@@ -5,7 +5,7 @@ import { ArrowRight, Eye, EyeOff } from 'lucide-react'
 
 export default function Signup() {
   const navigate = useNavigate()
-  const login = useAuthStore((s) => s.login)
+  const register = useAuthStore((s) => s.register)
   const [form, setForm] = useState({ name: '', email: '', company: '', password: '', confirm: '' })
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
@@ -29,10 +29,14 @@ export default function Signup() {
       return
     }
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 800))
-    login(form.email, form.password)
-    navigate('/workspaces')
-    setLoading(false)
+    try {
+      await register(form.email, form.password, form.name)
+      navigate('/workspaces')
+    } catch (err) {
+      setError(err.message || 'Registration failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

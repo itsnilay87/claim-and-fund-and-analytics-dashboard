@@ -1,65 +1,77 @@
 /**
  * @module authStore
- * @description Zustand store for authentication state (localStorage-persisted).
+ * @description Zustand store for authentication state (server-backed).
  *
- * Provides mock JWT auth for the prototype — login generates a client-side
- * token, logout clears localStorage.  Exports `useAuthStore` hook.
+ * Provides real JWT auth via the server API. Access token is stored in
+ * memory (via api.js module variable), refresh token is an HttpOnly cookie.
  *
- * State: { user, token, isAuthenticated }
- * Actions: login(email, password), logout()
- * Persistence: localStorage key `cap_auth`
+ * State: { user, isAuthenticated, isLoading, error }
+ * Actions: login, register, logout, initAuth, updateUser
  */
 import { create } from 'zustand';
-import { generateUUID } from '../utils/uuid';
+import { api, setAccessToken, clearAccessToken } from '../services/api';
 
-const STORAGE_KEY = 'cap_auth';
+export const useAuthStore = create((set, get) => ({
+  user: null,
+  isAuthenticated: false,
+  isLoading: true, // true until initAuth completes
+  error: null,
 
-function loadPersisted() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const data = JSON.parse(raw);
-      if (data && data.token && data.user) return data;
+  login: async (email, password) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { user, accessToken } = await api.post('/api/auth/login', { email, password });
+      setAccessToken(accessToken);
+      set({ user, isAuthenticated: true, isLoading: false });
+    } catch (err) {
+      set({ error: err.message, isLoading: false });
+      throw err;
     }
-  } catch { /* ignore */ }
-  return null;
-}
-
-function generateMockJwt(user) {
-  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const payload = btoa(JSON.stringify({ sub: user.id, email: user.email, iat: Date.now() }));
-  const sig = btoa(String(Date.now()));
-  return `${header}.${payload}.${sig}`;
-}
-
-const persisted = loadPersisted();
-
-export const useAuthStore = create((set) => ({
-  user: persisted?.user ?? null,
-  token: persisted?.token ?? null,
-  isAuthenticated: !!(persisted?.token),
-
-  login: (email, password) => {
-    const user = {
-      id: generateUUID(),
-      name: email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-      email,
-    };
-    const token = generateMockJwt(user);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ user, token }));
-    set({ user, token, isAuthenticated: true });
   },
 
-  logout: () => {
-    localStorage.removeItem(STORAGE_KEY);
-    set({ user: null, token: null, isAuthenticated: false });
+  register: async (email, password, full_name) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { user, accessToken } = await api.post('/api/auth/register', { email, password, full_name });
+      setAccessToken(accessToken);
+      set({ user, isAuthenticated: true, isLoading: false });
+    } catch (err) {
+      set({ error: err.message, isLoading: false });
+      throw err;
+    }
   },
 
-  updateUser: (updates) => {
-    set((state) => {
-      const user = { ...state.user, ...updates };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ user, token: state.token }));
-      return { user };
-    });
+  logout: async () => {
+    try { await api.post('/api/auth/logout'); } catch { /* ignore */ }
+    clearAccessToken();
+    set({ user: null, isAuthenticated: false, error: null });
   },
+
+  /**
+   * On app startup: try to restore session via refresh token cookie.
+   * If the cookie is valid, the server returns a new access token.
+   */
+  initAuth: async () => {
+    set({ isLoading: true });
+    try {
+      const { accessToken } = await api.post('/api/auth/refresh');
+      setAccessToken(accessToken);
+      const { user } = await api.get('/api/auth/me');
+      set({ user, isAuthenticated: true, isLoading: false });
+    } catch {
+      set({ isLoading: false }); // Not logged in, that's ok
+    }
+  },
+
+  updateUser: async (updates) => {
+    try {
+      const { user } = await api.put('/api/auth/me', updates);
+      set({ user });
+    } catch (err) {
+      set({ error: err.message });
+      throw err;
+    }
+  },
+
+  clearError: () => set({ error: null }),
 }));

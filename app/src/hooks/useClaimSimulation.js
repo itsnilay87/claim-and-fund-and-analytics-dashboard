@@ -1,7 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { api } from '../services/api';
 
 /**
  * useClaimRun — manages single-claim simulation submission and polling.
+ * Uses the centralized api client for auth-protected simulation endpoints.
  */
 export function useClaimRun() {
   const [runId, setRunId] = useState(null);
@@ -20,18 +22,12 @@ export function useClaimRun() {
     setStage('');
 
     try {
-      const res = await fetch('/api/simulate/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claim_config: claimConfig, simulation }),
+      const data = await api.post('/api/simulate/claim', {
+        claim_config: claimConfig,
+        simulation,
+        workspace_id: claimConfig.workspace_id,
+        claim_id: claimConfig.id,
       });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(err.error || err.details || `Server error ${res.status}`);
-      }
-
-      const data = await res.json();
       setRunId(data.runId);
       setStatus('queued');
       return data.runId;
@@ -52,9 +48,7 @@ export function useClaimRun() {
 
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/status/${encodeURIComponent(runId)}`);
-        if (!res.ok) return;
-        const data = await res.json();
+        const data = await api.get(`/api/status/${encodeURIComponent(runId)}`);
         setStatus(data.status);
         setProgress(data.progress || 0);
         if (data.stage) setStage(data.stage);
@@ -112,15 +106,12 @@ export function useClaimResults(runId) {
       try {
         const base = `/api/results/${encodeURIComponent(runId)}`;
         // Fetch main dashboard data (required)
-        const mainRes = await fetch(`${base}/dashboard_data.json`);
-        if (!mainRes.ok) throw new Error(`HTTP ${mainRes.status}`);
-        const dashboard = await mainRes.json();
+        const dashboard = await api.get(`${base}/dashboard_data.json`);
 
         // Fetch stochastic pricing (optional, may not exist)
         let stochastic = null;
         try {
-          const stochRes = await fetch(`${base}/stochastic_pricing.json`);
-          if (stochRes.ok) stochastic = await stochRes.json();
+          stochastic = await api.get(`${base}/stochastic_pricing.json`);
         } catch { /* optional */ }
 
         if (!cancelled) {

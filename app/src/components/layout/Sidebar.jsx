@@ -21,7 +21,7 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const navItems = useNavItems()
 
-  const handleLogout = () => { logout(); navigate('/') }
+  const handleLogout = async () => { await logout(); navigate('/') }
 
   return (
     <aside className={`flex flex-col bg-white dark:bg-slate-900/50 border-r border-slate-200 dark:border-white/5 transition-all duration-300 ${collapsed ? 'w-16' : 'w-60'}`}>

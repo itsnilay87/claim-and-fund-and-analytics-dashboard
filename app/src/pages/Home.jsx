@@ -1,16 +1,11 @@
-﻿import { Link, useParams } from 'react-router-dom'
+﻿import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useClaimStore } from '../store/claimStore'
 import { usePortfolioStore } from '../store/portfolioStore'
+import { api } from '../services/api'
 import { BarChart3, TrendingUp, Clock, DollarSign, PlusCircle, ArrowRight, CheckCircle2, Loader2, AlertCircle, Scale, FileText, Briefcase } from 'lucide-react'
 import StatsCards from '../components/dashboard/StatsCards'
-
-const demoRuns = [
-  { id: 'demo-run-001', name: 'Full Portfolio Analysis', portfolio: 'All (6 Claims)', status: 'completed', date: '2026-03-10', moic: '2.4x', irr: '28.1%' },
-  { id: 'demo-run-002', name: 'SIAC Claims Only', portfolio: 'SIAC (3 Claims)', status: 'completed', date: '2026-03-08', moic: '2.7x', irr: '32.4%' },
-  { id: 'demo-run-003', name: 'Domestic Claims', portfolio: 'Domestic (3 Claims)', status: 'completed', date: '2026-03-05', moic: '2.1x', irr: '24.7%' },
-  { id: 'demo-run-004', name: 'Sensitivity Run A', portfolio: 'All (6 Claims)', status: 'running', date: '2026-03-15', moic: '-', irr: '-' },
-]
 
 const statusConfig = {
   completed: { icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
@@ -22,7 +17,16 @@ export default function Home() {
   const user = useAuthStore((s) => s.user)
   const { wsId } = useParams()
   const claims = useClaimStore((s) => s.claims)
+  const loadClaims = useClaimStore((s) => s.loadClaims)
   const portfolios = usePortfolioStore((s) => s.portfolios)
+  const loadPortfolios = usePortfolioStore((s) => s.loadPortfolios)
+
+  useEffect(() => { loadClaims(wsId); loadPortfolios(wsId); }, [wsId, loadClaims, loadPortfolios])
+
+  const [recentRuns, setRecentRuns] = useState([])
+  useEffect(() => {
+    api.get('/api/runs?limit=4').then((data) => setRecentRuns(data.runs || [])).catch(() => {})
+  }, [])
 
   const totalClaims = claims.length
   const totalPortfolios = portfolios.length
@@ -131,7 +135,7 @@ export default function Home() {
             <thead>
               <tr className="text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-white/5">
                 <th className="text-left py-3 px-5 font-medium">Name</th>
-                <th className="text-left py-3 px-5 font-medium">Portfolio</th>
+                <th className="text-left py-3 px-5 font-medium">Type</th>
                 <th className="text-left py-3 px-5 font-medium">Status</th>
                 <th className="text-left py-3 px-5 font-medium">Date</th>
                 <th className="text-left py-3 px-5 font-medium">MOIC</th>
@@ -140,21 +144,22 @@ export default function Home() {
               </tr>
             </thead>
             <tbody>
-              {demoRuns.map((run) => {
+              {recentRuns.map((run) => {
                 const sc = statusConfig[run.status] || statusConfig.completed
+                const summary = run.summary || {}
                 return (
                   <tr key={run.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3.5 px-5 text-sm text-slate-900 dark:text-white font-medium">{run.name}</td>
-                    <td className="py-3.5 px-5 text-sm text-slate-500 dark:text-slate-400">{run.portfolio}</td>
+                    <td className="py-3.5 px-5 text-sm text-slate-900 dark:text-white font-medium">{run.name || `Run ${run.id.slice(0, 8)}`}</td>
+                    <td className="py-3.5 px-5 text-sm text-slate-500 dark:text-slate-400 capitalize">{run.structure_type || '-'}</td>
                     <td className="py-3.5 px-5">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${sc.bg} ${sc.color}`}>
                         <sc.icon size={12} className={sc.animate ? 'animate-spin' : ''} />
                         {run.status}
                       </span>
                     </td>
-                    <td className="py-3.5 px-5 text-sm text-slate-500 dark:text-slate-400">{run.date}</td>
-                    <td className="py-3.5 px-5 text-sm text-slate-900 dark:text-white font-mono">{run.moic}</td>
-                    <td className="py-3.5 px-5 text-sm text-slate-900 dark:text-white font-mono">{run.irr}</td>
+                    <td className="py-3.5 px-5 text-sm text-slate-500 dark:text-slate-400">{run.created_at ? new Date(run.created_at).toLocaleDateString() : '-'}</td>
+                    <td className="py-3.5 px-5 text-sm text-slate-900 dark:text-white font-mono">{summary.moic ?? '-'}</td>
+                    <td className="py-3.5 px-5 text-sm text-slate-900 dark:text-white font-mono">{summary.irr ?? '-'}</td>
                     <td className="py-3.5 px-5 text-right">
                       {run.status === 'completed' && (
                         <Link to={`/workspace/${wsId}/portfolio/${run.id}/results`} className="text-xs text-teal-600 dark:text-teal-400 hover:text-teal-500 dark:hover:text-teal-300">

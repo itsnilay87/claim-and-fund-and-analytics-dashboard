@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Briefcase, Loader2, AlertCircle, ExternalLink, Download } from 'lucide-react';
 import { usePortfolioStore } from '../store/portfolioStore';
+import { api } from '../services/api';
 import DownloadsPanel from '../components/simulation/DownloadsPanel';
 
 const STRUCTURE_LABELS = {
@@ -54,9 +55,7 @@ export default function PortfolioResults() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/results/${encodeURIComponent(effectiveRunId)}/dashboard_data.json`);
-        if (!res.ok) throw new Error(`Failed to load results: HTTP ${res.status}`);
-        const json = await res.json();
+        const json = await api.get(`/api/results/${encodeURIComponent(effectiveRunId)}/dashboard_data.json`);
         if (!cancelled) setData(json);
       } catch (err) {
         if (!cancelled) setError(err.message);

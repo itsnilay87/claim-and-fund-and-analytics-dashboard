@@ -108,7 +108,7 @@ export default function ClaimEditor() {
     const runId = await simRun.submit(claimConfig, simulation);
     if (runId) {
       // Store runId on the claim for results retrieval
-      updateClaim(draft.id, { run_id: runId, status: 'running' });
+      await updateClaim(draft.id, { run_id: runId, status: 'running' });
     }
   };
 

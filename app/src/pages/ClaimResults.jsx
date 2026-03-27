@@ -14,6 +14,7 @@ import {
   Maximize2, Minimize2,
 } from 'lucide-react';
 import { useClaimStore } from '../store/claimStore';
+import { api } from '../services/api';
 
 // ── Poll run status hook ──
 function useRunStatus(runId) {
@@ -30,19 +31,7 @@ function useRunStatus(runId) {
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/status/${encodeURIComponent(runId)}`);
-        if (!res.ok) {
-          if (res.status === 404) {
-            // runId not found — might be stale
-            setError('Run not found. The simulation may have been cleaned up.');
-            setStatus('not_found');
-            setLoading(false);
-            clearInterval(pollRef.current);
-            return;
-          }
-          return;
-        }
-        const data = await res.json();
+        const data = await api.get(`/api/status/${encodeURIComponent(runId)}`);
         setStatus(data.status);
         setProgress(data.progress || 0);
         if (data.stage) setStage(data.stage);
@@ -51,7 +40,15 @@ function useRunStatus(runId) {
           setLoading(false);
           clearInterval(pollRef.current);
         }
-      } catch { /* ignore transient errors */ }
+      } catch (err) {
+        if (err.status === 404) {
+          setError('Run not found. The simulation may have been cleaned up.');
+          setStatus('not_found');
+          setLoading(false);
+          clearInterval(pollRef.current);
+        }
+        /* ignore other transient errors */
+      }
     };
 
     // Initial check

@@ -1,78 +1,81 @@
 /**
  * @module workspaceStore
- * @description Zustand store for workspace management (localStorage-persisted).
+ * @description Zustand store for workspace management (server API-backed).
  *
  * Workspaces are the top-level organizational unit — each contains claims
  * and portfolios.  Provides create, rename, delete, and activation.
  *
- * State: { workspaces, activeWorkspaceId }
- * Actions: createWorkspace, deleteWorkspace, setActiveWorkspace
- * Persistence: localStorage key `cap_workspaces`
+ * State: { workspaces, activeWorkspaceId, isLoading }
+ * Actions: fetchWorkspaces, createWorkspace, updateWorkspace, deleteWorkspace, setActive, getActive
+ * Persistence: activeWorkspaceId only in localStorage (UI preference)
  */
 import { create } from 'zustand';
-import { generateUUID } from '../utils/uuid';
+import { api } from '../services/api';
 
-const STORAGE_KEY = 'cap_workspaces';
+const ACTIVE_WS_KEY = 'cap_active_workspace_id';
 
-function loadPersisted() {
+function loadActiveId() {
+  try { return localStorage.getItem(ACTIVE_WS_KEY); } catch { return null; }
+}
+
+function persistActiveId(id) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (id) localStorage.setItem(ACTIVE_WS_KEY, id);
+    else localStorage.removeItem(ACTIVE_WS_KEY);
   } catch { /* ignore */ }
-  return { workspaces: [], activeWorkspaceId: null };
 }
-
-function persist(state) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    workspaces: state.workspaces,
-    activeWorkspaceId: state.activeWorkspaceId,
-  }));
-}
-
-const initial = loadPersisted();
 
 export const useWorkspaceStore = create((set, get) => ({
-  workspaces: initial.workspaces,
-  activeWorkspaceId: initial.activeWorkspaceId,
+  workspaces: [],
+  activeWorkspaceId: loadActiveId(),
+  isLoading: false,
 
-  createWorkspace: (name, description = '') => {
-    const ws = {
-      id: generateUUID(),
-      name,
-      description,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    set((state) => {
-      const next = { ...state, workspaces: [...state.workspaces, ws] };
-      persist(next);
-      return next;
-    });
-    return ws;
+  fetchWorkspaces: async () => {
+    set({ isLoading: true });
+    try {
+      const { workspaces } = await api.get('/api/workspaces');
+      set({ workspaces: workspaces || [], isLoading: false });
+    } catch (err) {
+      set({ isLoading: false });
+      throw err;
+    }
   },
 
-  deleteWorkspace: (id) => {
-    set((state) => {
-      const next = {
-        ...state,
-        workspaces: state.workspaces.filter((w) => w.id !== id),
-        activeWorkspaceId: state.activeWorkspaceId === id ? null : state.activeWorkspaceId,
-      };
-      persist(next);
-      return next;
-    });
+  createWorkspace: async (name, description = '') => {
+    const { workspace } = await api.post('/api/workspaces', { name, description });
+    set((state) => ({ workspaces: [...state.workspaces, workspace] }));
+    return workspace;
+  },
+
+  updateWorkspace: async (id, updates) => {
+    const { workspace } = await api.put(`/api/workspaces/${encodeURIComponent(id)}`, updates);
+    set((state) => ({
+      workspaces: state.workspaces.map((w) => w.id === id ? workspace : w),
+    }));
+    return workspace;
+  },
+
+  deleteWorkspace: async (id) => {
+    await api.delete(`/api/workspaces/${encodeURIComponent(id)}`);
+    set((state) => ({
+      workspaces: state.workspaces.filter((w) => w.id !== id),
+      activeWorkspaceId: state.activeWorkspaceId === id ? null : state.activeWorkspaceId,
+    }));
   },
 
   setActive: (id) => {
-    set((state) => {
-      const next = { ...state, activeWorkspaceId: id };
-      persist(next);
-      return next;
-    });
+    persistActiveId(id);
+    set({ activeWorkspaceId: id });
   },
 
   getActive: () => {
     const { workspaces, activeWorkspaceId } = get();
     return workspaces.find((w) => w.id === activeWorkspaceId) ?? null;
+  },
+
+  /** Clear all workspace state (on logout) */
+  reset: () => {
+    persistActiveId(null);
+    set({ workspaces: [], activeWorkspaceId: null, isLoading: false });
   },
 }));

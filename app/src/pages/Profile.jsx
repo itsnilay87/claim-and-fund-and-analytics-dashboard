@@ -14,11 +14,13 @@ export default function Profile() {
   })
   const [saved, setSaved] = useState(false)
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault()
-    updateUser({ name: form.name, company: form.company })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    try {
+      await updateUser({ name: form.name, company: form.company })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch { /* error is in store */ }
   }
 
   return (

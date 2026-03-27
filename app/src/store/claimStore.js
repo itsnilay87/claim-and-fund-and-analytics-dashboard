@@ -1,50 +1,40 @@
 /**
  * @module claimStore
- * @description Zustand store for claim CRUD operations (localStorage-persisted per workspace).
+ * @description Zustand store for claim CRUD operations (server API-backed).
  *
  * Manages the lifecycle of individual claims within a workspace — create,
- * read, update, delete.  Claims are stored as JSON arrays keyed by workspace ID.
+ * read, update, delete.  All operations go through the centralized API client.
  *
- * State: { claims, activeClaim }
+ * State: { claims, activeClaim, isLoading }
  * Actions: loadClaims, createClaim, updateClaim, deleteClaim, setActiveClaim
- * Persistence: localStorage key `cap_ws_{wsId}_claims`
  */
 import { create } from 'zustand';
-import { generateUUID } from '../utils/uuid';
-
-const STORAGE_PREFIX = 'cap_ws_';
-
-function loadWsClaims(wsId) {
-  try {
-    const raw = localStorage.getItem(STORAGE_PREFIX + wsId + '_claims');
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return [];
-}
-
-function persistWsClaims(wsId, claims) {
-  localStorage.setItem(STORAGE_PREFIX + wsId + '_claims', JSON.stringify(claims));
-}
+import { api } from '../services/api';
 
 export const useClaimStore = create((set, get) => ({
   claims: [],
   activeClaim: null,
+  isLoading: false,
 
-  /** Load claims for a workspace */
-  loadClaims: (wsId) => {
-    const claims = loadWsClaims(wsId);
-    set({ claims });
+  /** Load claims for a workspace from server */
+  loadClaims: async (wsId) => {
+    set({ isLoading: true });
+    try {
+      const { claims } = await api.get(`/api/claims?workspace_id=${encodeURIComponent(wsId)}`);
+      set({ claims: claims || [], isLoading: false });
+    } catch (err) {
+      set({ isLoading: false });
+      throw err;
+    }
   },
 
-  /** Get claims filtered by workspace */
-  getClaimsByWorkspace: (wsId) => loadWsClaims(wsId),
-  getClaims: (wsId) => loadWsClaims(wsId),
+  /** Get claims from current in-memory state (synchronous, for selectors) */
+  getClaimsByWorkspace: (_wsId) => get().claims,
+  getClaims: (_wsId) => get().claims,
 
   /** Create a new claim with jurisdiction defaults */
-  createClaim: (wsId, jurisdiction, defaults = {}) => {
-    const id = generateUUID();
-    const claim = {
-      id,
+  createClaim: async (wsId, jurisdiction, defaults = {}) => {
+    const claimData = {
       workspace_id: wsId,
       name: '',
       claimant: '',
@@ -75,60 +65,33 @@ export const useClaimStore = create((set, get) => ({
       no_restart_mode: false,
       simulation_seed: 42,
       n_simulations: 10000,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     };
 
-    set((state) => {
-      const next = [...state.claims, claim];
-      persistWsClaims(wsId, next);
-      return { claims: next, activeClaim: claim };
-    });
+    const { claim } = await api.post('/api/claims', claimData);
+    set((state) => ({
+      claims: [...state.claims, claim],
+      activeClaim: claim,
+    }));
     return claim;
   },
 
   /** Update an existing claim */
-  updateClaim: (id, updates) => {
-    // Fields that affect simulation results — only these trigger stale marking
-    const CALC_FIELDS = new Set([
-      'soc_value_cr', 'jurisdiction', 'claim_type', 'current_stage',
-      'claimant_share_pct', 'quantum', 'arbitration', 'interest',
-      'timeline', 'legal_costs', 'probability_tree', 'dab',
-    ]);
-    set((state) => {
-      const claims = state.claims.map((c) => {
-        if (c.id !== id) return c;
-        const wasSimulated = c.status === 'simulated';
-        const merged = { ...c, ...updates, updated_at: new Date().toISOString() };
-        // Only mark stale if a calculation-relevant field changed
-        if (wasSimulated && updates.status === undefined) {
-          const hasCalcChange = Object.keys(updates).some((k) => CALC_FIELDS.has(k));
-          if (hasCalcChange) {
-            merged.status = 'stale';
-          }
-        }
-        return merged;
-      });
-      const wsId = claims.find((c) => c.id === id)?.workspace_id;
-      if (wsId) persistWsClaims(wsId, claims);
-      const activeClaim = state.activeClaim?.id === id
-        ? claims.find((c) => c.id === id)
-        : state.activeClaim;
-      return { claims, activeClaim };
-    });
+  updateClaim: async (id, updates) => {
+    const { claim } = await api.put(`/api/claims/${encodeURIComponent(id)}`, updates);
+    set((state) => ({
+      claims: state.claims.map((c) => c.id === id ? claim : c),
+      activeClaim: state.activeClaim?.id === id ? claim : state.activeClaim,
+    }));
+    return claim;
   },
 
   /** Delete a claim */
-  deleteClaim: (id) => {
-    set((state) => {
-      const claim = state.claims.find((c) => c.id === id);
-      const claims = state.claims.filter((c) => c.id !== id);
-      if (claim?.workspace_id) persistWsClaims(claim.workspace_id, claims);
-      return {
-        claims,
-        activeClaim: state.activeClaim?.id === id ? null : state.activeClaim,
-      };
-    });
+  deleteClaim: async (id) => {
+    await api.delete(`/api/claims/${encodeURIComponent(id)}`);
+    set((state) => ({
+      claims: state.claims.filter((c) => c.id !== id),
+      activeClaim: state.activeClaim?.id === id ? null : state.activeClaim,
+    }));
   },
 
   /** Compat: removeClaim(wsId, claimId) */
@@ -140,4 +103,7 @@ export const useClaimStore = create((set, get) => ({
       activeClaim: id ? state.claims.find((c) => c.id === id) || null : null,
     }));
   },
+
+  /** Clear all claim state (on logout) */
+  reset: () => set({ claims: [], activeClaim: null, isLoading: false }),
 }));
