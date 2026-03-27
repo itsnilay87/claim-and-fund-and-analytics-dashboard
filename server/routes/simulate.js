@@ -10,6 +10,8 @@ const express = require('express');
 const router = express.Router();
 const { startRun, startLegacyRun } = require('../services/simulationRunner');
 const { mergeConfig, getDefaults, loadDefaults, validateConfig } = require('../services/configService');
+const { authenticateToken } = require('../middleware/auth');
+const SimulationRun = require('../db/models/SimulationRun');
 const fs = require('fs');
 const path = require('path');
 
@@ -106,11 +108,45 @@ function enrichClaimConfig(claim) {
 }
 
 /**
- * POST /api/simulate/claim
- * Body: { claim_config: ClaimConfig, simulation: SimulationConfig }
- * Runs single-claim mode (no investment grid).
+ * Build DB status-update callbacks for a simulation run.
  */
-router.post('/claim', (req, res) => {
+function _buildDbCallbacks(userId) {
+  return {
+    async onComplete(runId, outputDir, summary) {
+      try {
+        await SimulationRun.updateStatus(runId, {
+          status: 'completed',
+          progress: 100,
+          completed_at: new Date().toISOString(),
+          results_path: outputDir,
+          summary,
+        });
+        // Auto-cleanup: keep last 10 unsaved runs
+        await SimulationRun.deleteOldUnsavedRuns(userId, 10);
+      } catch (err) {
+        console.error(`[simulate] DB onComplete error for ${runId}:`, err.message);
+      }
+    },
+    async onFail(runId, errorText) {
+      try {
+        await SimulationRun.updateStatus(runId, {
+          status: 'failed',
+          error_message: errorText,
+          completed_at: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.error(`[simulate] DB onFail error for ${runId}:`, err.message);
+      }
+    },
+  };
+}
+
+/**
+ * POST /api/simulate/claim
+ * Body: { claim_config: ClaimConfig, simulation: SimulationConfig, workspace_id?, claim_id? }
+ * Runs single-claim mode (no investment grid). Requires auth.
+ */
+router.post('/claim', authenticateToken, async (req, res) => {
   try {
     const { claim_config, simulation } = req.body;
 
@@ -151,7 +187,24 @@ router.post('/claim', (req, res) => {
       claims: [enrichedClaim],
     };
 
-    const { runId } = startRun(config, 'claim');
+    // Create DB record first to get the UUID
+    let dbRunId = null;
+    try {
+      const dbRun = await SimulationRun.create(req.user.id, {
+        workspaceId: req.body.workspace_id || null,
+        portfolioId: null,
+        claimId: req.body.claim_id || null,
+        mode: 'claim',
+        structureType: config.structure?.type,
+        config: config,
+      });
+      dbRunId = dbRun.id;
+    } catch (dbErr) {
+      console.error('[POST /api/simulate/claim] DB create failed (continuing without DB):', dbErr.message);
+    }
+
+    const callbacks = dbRunId ? _buildDbCallbacks(req.user.id) : null;
+    const { runId } = startRun(config, 'claim', dbRunId, callbacks);
     res.status(202).json({ runId, status: 'queued' });
   } catch (err) {
     console.error('[POST /api/simulate/claim]', err);
@@ -161,9 +214,10 @@ router.post('/claim', (req, res) => {
 
 /**
  * POST /api/simulate/portfolio
- * Body: { portfolio_config: PortfolioConfig, claims: ClaimConfig[] }
+ * Body: { portfolio_config: PortfolioConfig, claims: ClaimConfig[], workspace_id?, portfolio_id? }
+ * Requires auth.
  */
-router.post('/portfolio', (req, res) => {
+router.post('/portfolio', authenticateToken, async (req, res) => {
   try {
     const { portfolio_config, claims } = req.body;
 
@@ -207,7 +261,24 @@ router.post('/portfolio', (req, res) => {
       return res.status(400).json({ error: 'Validation failed', details: v2Errors });
     }
 
-    const { runId } = startRun(config, 'portfolio');
+    // Create DB record first to get the UUID
+    let dbRunId = null;
+    try {
+      const dbRun = await SimulationRun.create(req.user.id, {
+        workspaceId: req.body.workspace_id || null,
+        portfolioId: req.body.portfolio_id || null,
+        claimId: null,
+        mode: 'portfolio',
+        structureType: config.structure?.type,
+        config: config,
+      });
+      dbRunId = dbRun.id;
+    } catch (dbErr) {
+      console.error('[POST /api/simulate/portfolio] DB create failed (continuing without DB):', dbErr.message);
+    }
+
+    const callbacks = dbRunId ? _buildDbCallbacks(req.user.id) : null;
+    const { runId } = startRun(config, 'portfolio', dbRunId, callbacks);
     res.status(202).json({ runId, status: 'queued' });
   } catch (err) {
     console.error('[POST /api/simulate/portfolio]', err);

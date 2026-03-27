@@ -11,32 +11,63 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const { getStatus, listRunFiles, getResultFilePath, getLegacyResultFilePath, listRuns } = require('../services/simulationRunner');
+const SimulationRun = require('../db/models/SimulationRun');
+const { optionalAuth } = require('../middleware/auth');
 
 /**
  * GET /api/status/:runId
  * Returns current run status with progress info.
+ * Falls back to DB lookup if not found in-memory (survives server restarts).
  */
-router.get('/status/:runId', (req, res) => {
+router.get('/status/:runId', optionalAuth, async (req, res) => {
   const { runId } = req.params;
+
+  // Try in-memory first (fast path for active runs)
   const status = getStatus(runId);
 
-  if (!status) {
-    return res.status(404).json({ error: `Run '${runId}' not found` });
+  if (status) {
+    return res.json({
+      runId: status.runId,
+      status: status.status,
+      progress: status.progress,
+      stage: status.stage || null,
+      mode: status.mode || 'portfolio',
+      startedAt: status.startedAt,
+      completedAt: status.completedAt,
+      error: status.error,
+      portfolios: status.portfolios || null,
+      completedPortfolios: status.completedPortfolios || null,
+    });
   }
 
-  res.json({
-    runId: status.runId,
-    status: status.status,
-    progress: status.progress,
-    stage: status.stage || null,
-    mode: status.mode || 'portfolio',
-    startedAt: status.startedAt,
-    completedAt: status.completedAt,
-    error: status.error,
-    // Legacy TATA v2 fields (used by the claim-analytics app for result navigation)
-    portfolios: status.portfolios || null,
-    completedPortfolios: status.completedPortfolios || null,
-  });
+  // Fall back to DB lookup (survives server restarts)
+  try {
+    // If user is authenticated, scope by user; otherwise try unscoped internal lookup
+    let dbRun = null;
+    if (req.user) {
+      dbRun = await SimulationRun.findById(runId, req.user.id);
+    } else {
+      dbRun = await SimulationRun.findByIdInternal(runId);
+    }
+
+    if (dbRun) {
+      return res.json({
+        runId: dbRun.id,
+        status: dbRun.status,
+        progress: dbRun.progress || 0,
+        stage: dbRun.stage || null,
+        mode: dbRun.mode || 'portfolio',
+        startedAt: dbRun.started_at,
+        completedAt: dbRun.completed_at,
+        error: dbRun.error_message,
+      });
+    }
+  } catch (dbErr) {
+    // DB unavailable — don't fail, just report not found
+    console.warn('[GET /api/status] DB fallback failed:', dbErr.message);
+  }
+
+  return res.status(404).json({ error: `Run '${runId}' not found` });
 });
 
 /**

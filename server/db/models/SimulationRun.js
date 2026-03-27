@@ -156,6 +156,48 @@ const SimulationRun = {
   },
 
   /**
+   * Delete old unsaved runs for a user, keeping the newest N unsaved.
+   * Saved/bookmarked runs are exempt from auto-cleanup.
+   * Also removes the results directory from the filesystem.
+   * @param {string} userId - UUID
+   * @param {number} [keepCount=10] - number of newest unsaved runs to keep
+   * @returns {Promise<number>} count of deleted runs
+   */
+  async deleteOldUnsavedRuns(userId, keepCount = 10) {
+    // Find unsaved runs to delete (everything beyond the newest keepCount)
+    const { rows: toDelete } = await query(
+      `SELECT id, results_path FROM simulation_runs
+       WHERE user_id = $1 AND (saved IS NULL OR saved = FALSE)
+       ORDER BY created_at DESC
+       OFFSET $2`,
+      [userId, keepCount]
+    );
+
+    if (toDelete.length === 0) return 0;
+
+    const ids = toDelete.map((r) => r.id);
+
+    // Delete from DB
+    const { rowCount } = await query(
+      `DELETE FROM simulation_runs WHERE id = ANY($1) AND user_id = $2`,
+      [ids, userId]
+    );
+
+    // Clean up filesystem directories
+    for (const run of toDelete) {
+      if (run.results_path) {
+        try {
+          fs.rmSync(path.resolve(run.results_path), { recursive: true, force: true });
+        } catch {
+          // Best-effort cleanup — don't fail the operation
+        }
+      }
+    }
+
+    return rowCount;
+  },
+
+  /**
    * Delete old runs for a user, keeping the newest N.
    * Also removes the results directory from the filesystem.
    * @param {string} userId - UUID
@@ -221,6 +263,35 @@ const SimulationRun = {
     }
 
     return rowCount > 0;
+  },
+
+  /**
+   * Mark a run as saved (exempt from auto-cleanup) with optional name.
+   * @param {string} id - UUID
+   * @param {string} userId - UUID
+   * @param {string|null} name - Optional custom name
+   * @returns {Promise<object|null>} updated run or null
+   */
+  async markSaved(id, userId, name = null) {
+    const setClauses = ['saved = TRUE'];
+    const params = [];
+    let idx = 1;
+
+    if (name != null) {
+      setClauses.push(`name = $${idx}`);
+      params.push(name);
+      idx++;
+    }
+
+    params.push(id, userId);
+    const { rows } = await query(
+      `UPDATE simulation_runs
+       SET ${setClauses.join(', ')}
+       WHERE id = $${idx} AND user_id = $${idx + 1}
+       RETURNING *`,
+      params
+    );
+    return rows[0] || null;
   },
 
   /**

@@ -44,14 +44,42 @@ function _findPython() {
 // In-memory run status map
 const runStatus = new Map();
 
+// Registered callbacks for run completion/failure (keyed by runId)
+const runCallbacks = new Map();
+
+/**
+ * Extract a summary from dashboard_data.json for DB storage.
+ * @param {string} outputDir - Absolute path to outputs directory
+ * @returns {object} summary object or empty object
+ */
+function extractSummary(outputDir) {
+  try {
+    const dashPath = path.join(outputDir, 'dashboard_data.json');
+    if (!fs.existsSync(dashPath)) return {};
+    const data = JSON.parse(fs.readFileSync(dashPath, 'utf-8'));
+    return {
+      structure_type: data.structure_type || null,
+      n_claims: data.portfolio_summary?.n_claims || data.claims?.length || null,
+      n_simulations: data.portfolio_summary?.n_simulations || data.simulation?.n_simulations || null,
+      portfolio_moic: data.portfolio_summary?.expected_moic ?? null,
+      portfolio_irr: data.portfolio_summary?.expected_irr ?? null,
+      total_investment: data.portfolio_summary?.total_investment_cr ?? null,
+    };
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Start a simulation run.
  * @param {object} config - Full config object to write to disk
  * @param {string} mode - "claim" or "portfolio"
+ * @param {string|null} preGeneratedRunId - Optional UUID to use instead of generating one
+ * @param {object|null} callbacks - { onComplete, onFail } async callbacks
  * @returns {{ runId: string }}
  */
-function startRun(config, mode = 'portfolio') {
-  const runId = uuidv4();
+function startRun(config, mode = 'portfolio', preGeneratedRunId = null, callbacks = null) {
+  const runId = preGeneratedRunId || uuidv4();
   const runDir = path.join(RUNS_DIR, runId);
   const outputDir = path.join(runDir, 'outputs');
 
@@ -73,6 +101,11 @@ function startRun(config, mode = 'portfolio') {
   };
   runStatus.set(runId, status);
   _writeStatus(runDir, status);
+
+  // Store callbacks if provided
+  if (callbacks) {
+    runCallbacks.set(runId, callbacks);
+  }
 
   // Spawn Python process async
   setImmediate(() => _spawnPython(runId, configPath, outputDir, mode));
@@ -240,6 +273,14 @@ function _spawnPython(runId, configPath, outputDir, mode) {
     if (code === 0) {
       status.status = 'completed';
       status.progress = 100;
+      // Fire onComplete callback async (don't block)
+      const cb = runCallbacks.get(runId);
+      if (cb && cb.onComplete) {
+        const summary = extractSummary(outputDir);
+        cb.onComplete(runId, outputDir, summary).catch(err =>
+          console.error(`[SimRunner] onComplete callback error for ${runId}:`, err.message)
+        );
+      }
     } else {
       status.status = 'failed';
       status.error = `Python process exited with code ${code}`;
@@ -249,10 +290,18 @@ function _spawnPython(runId, configPath, outputDir, mode) {
         const lines = log.trim().split('\n');
         status.error += ': ' + lines.slice(-3).join(' | ');
       } catch { /* ignore */ }
+      // Fire onFail callback async
+      const cb = runCallbacks.get(runId);
+      if (cb && cb.onFail) {
+        cb.onFail(runId, status.error).catch(err =>
+          console.error(`[SimRunner] onFail callback error for ${runId}:`, err.message)
+        );
+      }
     }
     status.completedAt = new Date().toISOString();
     runStatus.set(runId, status);
     _writeStatus(path.dirname(configPath), status);
+    runCallbacks.delete(runId);
   });
 
   child.on('error', (err) => {
@@ -262,6 +311,14 @@ function _spawnPython(runId, configPath, outputDir, mode) {
     status.completedAt = new Date().toISOString();
     runStatus.set(runId, status);
     _writeStatus(path.dirname(configPath), status);
+    // Fire onFail callback async
+    const cb = runCallbacks.get(runId);
+    if (cb && cb.onFail) {
+      cb.onFail(runId, status.error).catch(cbErr =>
+        console.error(`[SimRunner] onFail callback error for ${runId}:`, cbErr.message)
+      );
+    }
+    runCallbacks.delete(runId);
   });
 }
 

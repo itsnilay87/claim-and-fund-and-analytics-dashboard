@@ -20,6 +20,12 @@
  *   POST   /api/auth/logout           — User logout
  *   GET    /api/auth/me               — Current user profile
  *   PUT    /api/auth/me               — Update user profile
+ *   GET    /api/runs                  — User's run history (auth) or legacy run list (no auth)
+ *   GET    /api/runs/:id              — Single run detail (auth)
+ *   DELETE /api/runs/:id              — Delete run (auth)
+ *   POST   /api/runs/:id/save         — Save/bookmark a run (auth)
+ *   POST   /api/runs/:id/discard      — Discard a run (auth)
+ *   GET    /api/runs/compare          — Compare two runs (auth)
  *
  * Port: 3001 (or PORT env var)
  */
@@ -38,6 +44,7 @@ const portfoliosRouter = require('./routes/portfolios');
 const workspacesRouter = require('./routes/workspaces');
 const templatesRouter = require('./routes/templates');
 const authRouter = require('./routes/auth');
+const runsRouter = require('./routes/runs');
 const { authenticateToken } = require('./middleware/auth');
 const { getDefaults } = require('./services/configService');
 const { listRuns } = require('./services/simulationRunner');
@@ -76,6 +83,7 @@ app.use('/api/jurisdictions', jurisdictionsRouter);
 app.use('/api/workspaces', authenticateToken, workspacesRouter);
 app.use('/api/claims', authenticateToken, claimsRouter);
 app.use('/api/portfolios', authenticateToken, portfoliosRouter);
+app.use('/api/runs', authenticateToken, runsRouter);
 app.use('/api/templates', templatesRouter);
 app.use('/api', resultsRouter);
 
@@ -111,8 +119,8 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
-// ── Legacy runs list (backward-compat with claim-analytics old app) ──
-app.get('/api/runs', (_req, res) => {
+// ── Legacy runs list (backward-compat with claim-analytics old app — no auth) ──
+app.get('/api/runs/legacy', (_req, res) => {
   try {
     const runs = listRuns();
     res.json({ runs });
