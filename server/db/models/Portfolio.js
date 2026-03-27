@@ -4,6 +4,19 @@
  */
 const { query } = require('../pool');
 
+/**
+ * Normalize a DB portfolio row to match the frontend-expected field names.
+ * DB uses structure_type / simulation_config; frontend expects structure / simulation.
+ */
+function normalizePortfolio(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    structure: row.structure_type,
+    simulation: row.simulation_config,
+  };
+}
+
 const Portfolio = {
   /**
    * List all portfolios in a workspace (user-scoped).
@@ -21,7 +34,7 @@ const Portfolio = {
        ORDER BY created_at DESC`,
       [workspaceId, userId]
     );
-    return rows;
+    return rows.map(normalizePortfolio);
   },
 
   /**
@@ -39,7 +52,7 @@ const Portfolio = {
        WHERE id = $1 AND user_id = $2`,
       [id, userId]
     );
-    return rows[0] || null;
+    return normalizePortfolio(rows[0]) || null;
   },
 
   /**
@@ -69,7 +82,7 @@ const Portfolio = {
         data.status || 'draft',
       ]
     );
-    return rows[0];
+    return normalizePortfolio(rows[0]);
   },
 
   /**
@@ -119,7 +132,7 @@ const Portfolio = {
       params
     );
     if (!rows[0]) throw new Error('Portfolio not found');
-    return rows[0];
+    return normalizePortfolio(rows[0]);
   },
 
   /**
@@ -153,7 +166,7 @@ const Portfolio = {
       [runId, id, userId]
     );
     if (!rows[0]) throw new Error('Portfolio not found');
-    return rows[0];
+    return normalizePortfolio(rows[0]);
   },
 
   /**
@@ -173,7 +186,7 @@ const Portfolio = {
       [status, id, userId]
     );
     if (!rows[0]) throw new Error('Portfolio not found');
-    return rows[0];
+    return normalizePortfolio(rows[0]);
   },
 };
 

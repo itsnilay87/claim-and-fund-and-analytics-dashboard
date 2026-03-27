@@ -63,21 +63,26 @@ export default function PortfolioBuilder() {
 
   // Handle run submission
   const handleRun = async () => {
-    // Save to store first
-    if (id) {
-      await updatePortfolio(id, {
-        name: portfolioName,
-        claim_ids: selectedClaims,
-        structure,
-        structure_config: structureConfig,
-        simulation,
-      });
-    }
+    try {
+      // Save to store first
+      if (id) {
+        await updatePortfolio(id, {
+          name: portfolioName,
+          claim_ids: selectedClaims,
+          structure,
+          structure_config: structureConfig,
+          simulation,
+        });
+      }
 
-    const config = buildConfig();
-    const runId = await run.submit(config);
-    if (runId && id) {
-      await updatePortfolio(id, { run_id: runId, status: 'running' });
+      const config = buildConfig();
+      const runId = await run.submit(config);
+      if (runId && id) {
+        await updatePortfolio(id, { run_id: runId, status: 'running' });
+      }
+    } catch (err) {
+      console.error('[PortfolioBuilder] handleRun error:', err);
+      run.reset();
     }
   };
 

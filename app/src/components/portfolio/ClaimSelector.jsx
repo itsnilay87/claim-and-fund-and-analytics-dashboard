@@ -15,6 +15,7 @@ import { CheckSquare, Square, AlertTriangle, Scale } from 'lucide-react';
 const JURISDICTION_LABELS = {
   indian_domestic: 'Indian Domestic',
   siac_singapore: 'SIAC Singapore',
+  hkiac_hongkong: 'HKIAC Hong Kong',
   icc_paris: 'ICC Paris',
   lcia_london: 'LCIA London',
 };
