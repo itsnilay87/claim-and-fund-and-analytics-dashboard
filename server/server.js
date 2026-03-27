@@ -14,12 +14,20 @@
  *   GET    /api/claims                — List stored claims
  *   POST   /api/claims                — Store a claim
  *   GET    /api/defaults              — Return server defaults
+ *   POST   /api/auth/register         — User registration
+ *   POST   /api/auth/login            — User login
+ *   POST   /api/auth/refresh          — Refresh access token
+ *   POST   /api/auth/logout           — User logout
+ *   GET    /api/auth/me               — Current user profile
+ *   PUT    /api/auth/me               — Update user profile
  *
  * Port: 3001 (or PORT env var)
  */
 
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 
 const simulateRouter = require('./routes/simulate');
@@ -27,6 +35,7 @@ const resultsRouter = require('./routes/results');
 const jurisdictionsRouter = require('./routes/jurisdictions');
 const claimsRouter = require('./routes/claims');
 const templatesRouter = require('./routes/templates');
+const authRouter = require('./routes/auth');
 const { getDefaults } = require('./services/configService');
 const { listRuns } = require('./services/simulationRunner');
 const { pool } = require('./db/pool');
@@ -35,6 +44,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ── Middleware ──
+app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
     // In production behind Nginx, origin is same-host (no origin header) or the server's own domain.
@@ -50,11 +60,14 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
+app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 
 // ── Routes (order matters — specific before wildcard) ──
+app.use('/api/auth', authRouter);
 app.use('/api/simulate', simulateRouter);
 app.use('/api/jurisdictions', jurisdictionsRouter);
 app.use('/api/claims', claimsRouter);
