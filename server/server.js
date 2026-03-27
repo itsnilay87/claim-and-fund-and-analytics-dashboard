@@ -29,6 +29,7 @@ const claimsRouter = require('./routes/claims');
 const templatesRouter = require('./routes/templates');
 const { getDefaults } = require('./services/configService');
 const { listRuns } = require('./services/simulationRunner');
+const { pool } = require('./db/pool');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -77,8 +78,19 @@ app.get('/api/defaults', (_req, res) => {
 });
 
 // ── Health check ──
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/api/health', async (_req, res) => {
+  const checks = { server: 'ok' };
+  try {
+    await pool.query('SELECT 1');
+    checks.database = 'ok';
+  } catch {
+    checks.database = 'error';
+  }
+  res.json({
+    status: checks.database === 'ok' ? 'ok' : 'degraded',
+    ...checks,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // ── Legacy runs list (backward-compat with claim-analytics old app) ──
@@ -107,6 +119,11 @@ app.listen(PORT, () => {
   console.log(`[Claim Analytics Server] Running on http://localhost:${PORT}`);
   console.log(`[Claim Analytics Server] Engine dir: ${path.resolve(__dirname, '..', 'engine')}`);
   console.log(`[Claim Analytics Server] Runs dir:   ${path.resolve(__dirname, 'runs')}`);
+
+  // Non-blocking DB connectivity check — server works without DB
+  pool.query('SELECT 1')
+    .then(() => console.log('[Claim Analytics Server] Database connected ✓'))
+    .catch((err) => console.warn('[Claim Analytics Server] Database unavailable — running without DB:', err.message));
 });
 
 module.exports = app;
