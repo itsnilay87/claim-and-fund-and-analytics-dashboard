@@ -269,7 +269,7 @@ export function usePortfolioBuilder(wsId, portfolioId) {
 
   // Summary stats
   const selectedClaimObjects = claims.filter((c) => selectedClaims.includes(c.id));
-  const totalSOC = selectedClaimObjects.reduce((sum, c) => sum + (c.soc_value_cr || 0), 0);
+  const totalSOC = selectedClaimObjects.reduce((sum, c) => sum + (parseFloat(c.soc_value_cr) || 0), 0);
   const jurisdictions = [...new Set(selectedClaimObjects.map((c) => c.jurisdiction))];
   const avgWinRate = selectedClaimObjects.length > 0
     ? selectedClaimObjects.reduce((sum, c) => sum + (c.arbitration?.win_probability || 0), 0) / selectedClaimObjects.length

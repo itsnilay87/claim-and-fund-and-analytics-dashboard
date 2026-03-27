@@ -42,6 +42,8 @@ function splitFields(obj) {
  */
 function mergeRow(row) {
   const { data, ...rest } = row;
+  // pg returns DECIMAL columns as strings — cast numeric fields
+  if (rest.soc_value_cr != null) rest.soc_value_cr = parseFloat(rest.soc_value_cr);
   return { ...data, ...rest };
 }
 
