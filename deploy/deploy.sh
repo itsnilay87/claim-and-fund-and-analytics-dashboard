@@ -68,8 +68,16 @@ ssh -i "$SSH_KEY" "root@${SERVER}" << 'REMOTE_EOF'
     echo "  ✓ deploy/.env already exists"
   fi
 
-  # ── 4. Stop old single-container setup if running ──
+  # ── 4. Stop anything using port 80 ──
+  # Stop old single-container setup
   docker stop claim-analytics 2>/dev/null && docker rm claim-analytics 2>/dev/null && echo "  ✓ Old container stopped" || true
+  # Stop previous docker-compose deployment
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yml down 2>/dev/null || true
+  # Stop host-level nginx (the container runs its own nginx)
+  systemctl stop nginx 2>/dev/null; systemctl disable nginx 2>/dev/null || true
+  # Kill anything still on port 80
+  fuser -k 80/tcp 2>/dev/null || true
+  sleep 2
 
   # ── 5. Build and start with docker-compose ──
   echo "▸ Building and starting services (web + PostgreSQL)..."
