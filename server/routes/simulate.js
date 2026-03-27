@@ -214,7 +214,7 @@ router.post('/claim', authenticateToken, simulateLimiter, async (req, res) => {
     }
 
     const callbacks = dbRunId ? _buildDbCallbacks(req.user.id) : null;
-    const { runId } = startRun(config, 'claim', dbRunId, callbacks);
+    const { runId } = startRun(config, 'claim', dbRunId, callbacks, req.user.id);
     res.status(202).json({ runId, status: 'queued' });
   } catch (err) {
     console.error('[POST /api/simulate/claim]', err);
@@ -288,7 +288,7 @@ router.post('/portfolio', authenticateToken, simulateLimiter, async (req, res) =
     }
 
     const callbacks = dbRunId ? _buildDbCallbacks(req.user.id) : null;
-    const { runId } = startRun(config, 'portfolio', dbRunId, callbacks);
+    const { runId } = startRun(config, 'portfolio', dbRunId, callbacks, req.user.id);
     res.status(202).json({ runId, status: 'queued' });
   } catch (err) {
     console.error('[POST /api/simulate/portfolio]', err);
@@ -374,8 +374,9 @@ function _validateV2ClaimFields(claim) {
  * Returns: { runId, status: 'queued', portfolios }
  *
  * This endpoint runs python -m TATA_code_v2.v2_run using the simulation-server runner.
+ * Requires authentication. A DB record is created for audit/ownership tracking.
  */
-router.post('/', (req, res) => {
+router.post('/', authenticateToken, simulateLimiter, async (req, res) => {
   try {
     const { config: overrides = {}, portfolios = ['all'] } = req.body;
 
@@ -386,7 +387,23 @@ router.post('/', (req, res) => {
       }
     }
 
-    const { runId } = startLegacyRun(overrides, portfolios);
+    // Create DB record for legacy runs
+    let dbRunId = null;
+    try {
+      const dbRun = await SimulationRun.create(req.user.id, {
+        workspaceId: null,
+        portfolioId: null,
+        claimId: null,
+        mode: 'legacy',
+        structureType: 'legacy_tata_v2',
+        config: overrides,
+      });
+      dbRunId = dbRun.id;
+    } catch (dbErr) {
+      console.error('[POST /api/simulate (legacy)] DB create failed:', dbErr.message);
+    }
+
+    const { runId } = startLegacyRun(overrides, portfolios, req.user.id);
     res.status(202).json({ runId, status: 'queued', portfolios, message: 'Simulation queued' });
   } catch (err) {
     console.error('[POST /api/simulate (legacy)]', err);

@@ -5,9 +5,8 @@
  * GET /api/results/:runId/files — List available output files
  * GET /api/results/:runId/*     — Serve output files
  *
- * Security: optionalAuth is applied to all routes. If a user is authenticated,
- * the run must belong to them (IDOR prevention). If no auth token, legacy
- * runs are accessible for backward compatibility.
+ * Security: authenticateToken is applied to all routes. The run must belong
+ * to the authenticated user (IDOR prevention via fail-closed ownership check).
  */
 
 const express = require('express');
@@ -16,15 +15,15 @@ const path = require('path');
 const fs = require('fs');
 const { getStatus, listRunFiles, getResultFilePath, getLegacyResultFilePath, listRuns } = require('../services/simulationRunner');
 const SimulationRun = require('../db/models/SimulationRun');
-const { optionalAuth } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // UUID v4 format validation regex
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Per-request ownership cache (attached to req object)
 async function verifyRunOwnership(req, runId) {
-  // If no authenticated user, allow (backward compat for legacy runs)
-  if (!req.user) return true;
+  // Auth is required — reject if no user
+  if (!req.user) return false;
 
   // Check in-request cache
   if (!req._runOwnershipCache) req._runOwnershipCache = {};
@@ -36,9 +35,9 @@ async function verifyRunOwnership(req, runId) {
     req._runOwnershipCache[runId] = owned;
     return owned;
   } catch {
-    // DB unavailable — allow for resilience (legacy behavior)
-    req._runOwnershipCache[runId] = true;
-    return true;
+    // Fail closed — deny access on DB error
+    req._runOwnershipCache[runId] = false;
+    return false;
   }
 }
 
@@ -47,12 +46,16 @@ async function verifyRunOwnership(req, runId) {
  * Returns current run status with progress info.
  * Falls back to DB lookup if not found in-memory (survives server restarts).
  */
-router.get('/status/:runId', optionalAuth, async (req, res) => {
+router.get('/status/:runId', authenticateToken, async (req, res) => {
   const { runId } = req.params;
   if (!UUID_RE.test(runId)) return res.status(400).json({ error: 'Invalid run ID format' });
 
+  // Verify ownership before returning any data
+  const owned = await verifyRunOwnership(req, runId);
+  if (!owned) return res.status(404).json({ error: 'Run not found' });
+
   // Try in-memory first (fast path for active runs)
-  const status = getStatus(runId);
+  const status = getStatus(runId, req.user.id);
 
   if (status) {
     return res.json({
@@ -71,13 +74,7 @@ router.get('/status/:runId', optionalAuth, async (req, res) => {
 
   // Fall back to DB lookup (survives server restarts)
   try {
-    // If user is authenticated, scope by user; otherwise try unscoped internal lookup
-    let dbRun = null;
-    if (req.user) {
-      dbRun = await SimulationRun.findById(runId, req.user.id);
-    } else {
-      dbRun = await SimulationRun.findByIdInternal(runId);
-    }
+    const dbRun = await SimulationRun.findById(runId, req.user.id);
 
     if (dbRun) {
       return res.json({
@@ -103,20 +100,20 @@ router.get('/status/:runId', optionalAuth, async (req, res) => {
  * GET /api/results/:runId/files
  * Lists available output files with categories.
  */
-router.get('/results/:runId/files', optionalAuth, async (req, res) => {
+router.get('/results/:runId/files', authenticateToken, async (req, res) => {
   const { runId } = req.params;
   if (!UUID_RE.test(runId)) return res.status(400).json({ error: 'Invalid run ID format' });
 
   const owned = await verifyRunOwnership(req, runId);
   if (!owned) return res.status(404).json({ error: 'Run not found' });
 
-  const status = getStatus(runId);
+  const status = getStatus(runId, req.user.id);
 
   if (!status) {
     return res.status(404).json({ error: `Run '${runId}' not found` });
   }
 
-  const files = listRunFiles(runId);
+  const files = listRunFiles(runId, req.user.id);
 
   const excel = files.filter(f => f.type === 'excel');
   const pdf = files.filter(f => f.type === 'pdf');
@@ -136,12 +133,12 @@ router.get('/results/:runId/files', optionalAuth, async (req, res) => {
  * GET /api/results/:runId/dashboard_data.json
  * Serves dashboard data JSON with proper Content-Type.
  */
-router.get('/results/:runId/dashboard_data.json', optionalAuth, async (req, res) => {
+router.get('/results/:runId/dashboard_data.json', authenticateToken, async (req, res) => {
   const { runId } = req.params;
   if (!UUID_RE.test(runId)) return res.status(400).json({ error: 'Invalid run ID format' });
   const owned = await verifyRunOwnership(req, runId);
   if (!owned) return res.status(404).json({ error: 'Not found' });
-  const absPath = getResultFilePath(runId, 'dashboard_data.json');
+  const absPath = getResultFilePath(runId, 'dashboard_data.json', req.user.id);
   if (!absPath) return res.status(404).json({ error: 'dashboard_data.json not found' });
   res.setHeader('Content-Type', 'application/json');
   res.sendFile(absPath);
@@ -151,12 +148,12 @@ router.get('/results/:runId/dashboard_data.json', optionalAuth, async (req, res)
  * GET /api/results/:runId/stochastic_pricing.json
  * Serves stochastic pricing grid results with proper Content-Type.
  */
-router.get('/results/:runId/stochastic_pricing.json', optionalAuth, async (req, res) => {
+router.get('/results/:runId/stochastic_pricing.json', authenticateToken, async (req, res) => {
   const { runId } = req.params;
   if (!UUID_RE.test(runId)) return res.status(400).json({ error: 'Invalid run ID format' });
   const owned = await verifyRunOwnership(req, runId);
   if (!owned) return res.status(404).json({ error: 'Not found' });
-  const absPath = getResultFilePath(runId, 'stochastic_pricing.json');
+  const absPath = getResultFilePath(runId, 'stochastic_pricing.json', req.user.id);
   if (!absPath) return res.status(404).json({ error: 'stochastic_pricing.json not found' });
   res.setHeader('Content-Type', 'application/json');
   res.sendFile(absPath);
@@ -166,12 +163,12 @@ router.get('/results/:runId/stochastic_pricing.json', optionalAuth, async (req, 
  * GET /api/results/:runId/pricing_surface.json
  * Serves pricing surface data with proper Content-Type.
  */
-router.get('/results/:runId/pricing_surface.json', optionalAuth, async (req, res) => {
+router.get('/results/:runId/pricing_surface.json', authenticateToken, async (req, res) => {
   const { runId } = req.params;
   if (!UUID_RE.test(runId)) return res.status(400).json({ error: 'Invalid run ID format' });
   const owned = await verifyRunOwnership(req, runId);
   if (!owned) return res.status(404).json({ error: 'Not found' });
-  const absPath = getResultFilePath(runId, 'pricing_surface.json');
+  const absPath = getResultFilePath(runId, 'pricing_surface.json', req.user.id);
   if (!absPath) return res.status(404).json({ error: 'pricing_surface.json not found' });
   res.setHeader('Content-Type', 'application/json');
   res.sendFile(absPath);
@@ -181,15 +178,15 @@ router.get('/results/:runId/pricing_surface.json', optionalAuth, async (req, res
  * GET /api/results/:runId/charts.zip
  * Creates and serves a zip archive of all chart PNG files.
  */
-router.get('/results/:runId/charts.zip', optionalAuth, async (req, res) => {
+router.get('/results/:runId/charts.zip', authenticateToken, async (req, res) => {
   const { runId } = req.params;
   if (!UUID_RE.test(runId)) return res.status(400).json({ error: 'Invalid run ID format' });
   const owned = await verifyRunOwnership(req, runId);
   if (!owned) return res.status(404).json({ error: 'Not found' });
-  const status = getStatus(runId);
+  const status = getStatus(runId, req.user.id);
   if (!status) return res.status(404).json({ error: `Run '${runId}' not found` });
 
-  const chartsDir = getResultFilePath(runId, 'charts');
+  const chartsDir = getResultFilePath(runId, 'charts', req.user.id);
   if (!chartsDir || !fs.existsSync(chartsDir) || !fs.statSync(chartsDir).isDirectory()) {
     return res.status(404).json({ error: 'No charts directory found for this run' });
   }
@@ -220,7 +217,7 @@ router.get('/results/:runId/charts.zip', optionalAuth, async (req, res) => {
  * GET /api/results/:runId/*
  * Serves individual output files.
  */
-router.get('/results/:runId/*', optionalAuth, async (req, res) => {
+router.get('/results/:runId/*', authenticateToken, async (req, res) => {
   const { runId } = req.params;
   if (!UUID_RE.test(runId)) return res.status(400).json({ error: 'Invalid run ID format' });
   const owned = await verifyRunOwnership(req, runId);
@@ -232,12 +229,12 @@ router.get('/results/:runId/*', optionalAuth, async (req, res) => {
     return res.status(400).json({ error: 'File path required' });
   }
 
-  const status = getStatus(runId);
+  const status = getStatus(runId, req.user.id);
   if (!status) {
     return res.status(404).json({ error: `Run '${runId}' not found` });
   }
 
-  let absPath = getResultFilePath(runId, filePath);
+  let absPath = getResultFilePath(runId, filePath, req.user.id);
 
   // Fallback 1: strip portfolio-mode prefix (e.g. "all/dashboard_data.json" → "dashboard_data.json")
   // Single-claim runs output files at root level, but the dashboard requests with mode prefix.
@@ -245,7 +242,7 @@ router.get('/results/:runId/*', optionalAuth, async (req, res) => {
     const segments = filePath.split('/');
     if (segments.length > 1) {
       const stripped = segments.slice(1).join('/');
-      absPath = getResultFilePath(runId, stripped);
+      absPath = getResultFilePath(runId, stripped, req.user.id);
     }
   }
 
@@ -253,7 +250,7 @@ router.get('/results/:runId/*', optionalAuth, async (req, res) => {
   if (!absPath) {
     const segments = filePath.split('/');
     if (segments.length > 1) {
-      absPath = getLegacyResultFilePath(runId, segments[0], segments.slice(1).join('/'));
+      absPath = getLegacyResultFilePath(runId, segments[0], segments.slice(1).join('/'), req.user.id);
     }
   }
 

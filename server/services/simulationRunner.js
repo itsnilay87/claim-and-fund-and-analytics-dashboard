@@ -78,9 +78,11 @@ function extractSummary(outputDir) {
  * @param {object|null} callbacks - { onComplete, onFail } async callbacks
  * @returns {{ runId: string }}
  */
-function startRun(config, mode = 'portfolio', preGeneratedRunId = null, callbacks = null) {
+function startRun(config, mode = 'portfolio', preGeneratedRunId = null, callbacks = null, userId = null) {
   const runId = preGeneratedRunId || uuidv4();
-  const runDir = path.join(RUNS_DIR, runId);
+  const runDir = userId
+    ? path.join(RUNS_DIR, userId, runId)
+    : path.join(RUNS_DIR, runId);
   const outputDir = path.join(runDir, 'outputs');
 
   fs.mkdirSync(outputDir, { recursive: true });
@@ -118,12 +120,23 @@ function startRun(config, mode = 'portfolio', preGeneratedRunId = null, callback
  * @param {string} runId
  * @returns {object|null}
  */
-function getStatus(runId) {
+function getStatus(runId, userId = null) {
   // Check in-memory first
   if (runStatus.has(runId)) {
     return runStatus.get(runId);
   }
-  // Fall back to disk
+  // Try namespaced path first (runs/{userId}/{runId}/status.json)
+  if (userId) {
+    const nsPath = path.join(RUNS_DIR, userId, runId, 'status.json');
+    if (fs.existsSync(nsPath)) {
+      try {
+        const s = JSON.parse(fs.readFileSync(nsPath, 'utf-8'));
+        runStatus.set(runId, s);
+        return s;
+      } catch { /* fall through to legacy path */ }
+    }
+  }
+  // Fall back to legacy flat path (runs/{runId}/status.json)
   const statusPath = path.join(RUNS_DIR, runId, 'status.json');
   if (fs.existsSync(statusPath)) {
     try {
@@ -140,8 +153,14 @@ function getStatus(runId) {
  * @param {string} runId
  * @returns {Array<{name: string, path: string, type: string, size: number}>}
  */
-function listRunFiles(runId) {
-  const outputDir = path.join(RUNS_DIR, runId, 'outputs');
+function listRunFiles(runId, userId = null) {
+  // Try namespaced path first, fall back to legacy flat path
+  let outputDir = userId
+    ? path.join(RUNS_DIR, userId, runId, 'outputs')
+    : null;
+  if (!outputDir || !fs.existsSync(outputDir)) {
+    outputDir = path.join(RUNS_DIR, runId, 'outputs');
+  }
   if (!fs.existsSync(outputDir)) return [];
 
   const files = [];
@@ -155,14 +174,20 @@ function listRunFiles(runId) {
  * @param {string} filePath - Relative path within outputs/
  * @returns {string|null} Absolute path or null if invalid/missing
  */
-function getResultFilePath(runId, filePath) {
+function getResultFilePath(runId, filePath, userId = null) {
+  // Try namespaced path first (runs/{userId}/{runId}/outputs/)
+  if (userId) {
+    const nsOutputDir = path.join(RUNS_DIR, userId, runId, 'outputs');
+    const nsResolved = path.resolve(nsOutputDir, filePath);
+    if (nsResolved.startsWith(nsOutputDir) && fs.existsSync(nsResolved)) {
+      return nsResolved;
+    }
+  }
+  // Fall back to legacy flat path (runs/{runId}/outputs/)
   const outputDir = path.join(RUNS_DIR, runId, 'outputs');
   const resolved = path.resolve(outputDir, filePath);
-
-  // Prevent directory traversal
   if (!resolved.startsWith(outputDir)) return null;
   if (!fs.existsSync(resolved)) return null;
-
   return resolved;
 }
 
@@ -387,9 +412,11 @@ function _deepMergeLegacy(target, source) {
  * @param {string[]} portfolios - e.g. ['all'], ['siac','domestic']
  * @returns {{ runId: string }}
  */
-function startLegacyRun(overrides, portfolios = ['all']) {
+function startLegacyRun(overrides, portfolios = ['all'], userId = null) {
   const runId = uuidv4();
-  const runDir = path.join(RUNS_DIR, runId);
+  const runDir = userId
+    ? path.join(RUNS_DIR, userId, runId)
+    : path.join(RUNS_DIR, runId);
   fs.mkdirSync(runDir, { recursive: true });
 
   // Merge overrides onto simulation-server defaults
@@ -507,9 +534,18 @@ function _runLegacyPortfolio(runId, runDir, configPath, config, portfolio, pytho
  * @param {string} filePath  - relative path within the portfolio dir
  * @returns {string|null}
  */
-function getLegacyResultFilePath(runId, portfolio, filePath) {
+function getLegacyResultFilePath(runId, portfolio, filePath, userId = null) {
   const allowed = ['all', 'siac', 'domestic', 'hkiac', 'compare'];
   if (!allowed.includes(portfolio)) return null;
+  // Try namespaced path first
+  if (userId) {
+    const nsDir = path.join(RUNS_DIR, userId, runId, portfolio);
+    const nsResolved = path.resolve(nsDir, filePath);
+    if ((nsResolved.startsWith(nsDir + path.sep) || nsResolved === nsDir) && fs.existsSync(nsResolved)) {
+      return nsResolved;
+    }
+  }
+  // Fall back to legacy flat path
   const portDir = path.join(RUNS_DIR, runId, portfolio);
   const resolved = path.resolve(portDir, filePath);
   if (!resolved.startsWith(portDir + path.sep) && resolved !== portDir) return null;
