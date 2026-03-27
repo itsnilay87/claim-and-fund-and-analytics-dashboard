@@ -57,6 +57,10 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
+// ── Trust proxy — required for express-rate-limit behind Nginx reverse proxy ──
+// Tells Express to trust X-Forwarded-For from 1 proxy hop (Nginx)
+app.set('trust proxy', 1);
+
 // ── Security: Helmet with configured CSP ──
 app.use(helmet({
   contentSecurityPolicy: IS_PRODUCTION ? {
