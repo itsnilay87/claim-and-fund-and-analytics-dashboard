@@ -5,6 +5,7 @@
  * by category (Excel, PDF, Data, Charts, Logs).
  */
 import { useState, useEffect, useCallback } from 'react';
+import { api, getAccessToken } from '../../services/api';
 
 const API_BASE = '';  // Relative — Nginx proxies /api/ to Node backend
 
@@ -98,9 +99,20 @@ function getFileDescription(name) {
 }
 
 function FileRow({ file, runId }) {
-  const handleDownload = () => {
-    const url = `${API_BASE}/api/results/${runId}/${file.path}?download=1`;
-    window.open(url, '_blank');
+  const handleDownload = async () => {
+    const url = `${API_BASE}/api/results/${encodeURIComponent(runId)}/${file.path}?download=1`;
+    const token = getAccessToken();
+    const res = await fetch(url, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      credentials: 'include',
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = file.name;
+    a.click();
+    URL.revokeObjectURL(a.href);
   };
 
   const desc = getFileDescription(file.name);
@@ -173,9 +185,7 @@ export default function DownloadsPanel({ runId, isOpen, onClose }) {
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/api/results/${runId}/files`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await api.get(`/api/results/${encodeURIComponent(runId)}/files`);
       setFileData(data);
     } catch (err) {
       setError(err.message);
@@ -194,10 +204,21 @@ export default function DownloadsPanel({ runId, isOpen, onClose }) {
       ...(fileData.categories.excel || []),
       ...(fileData.categories.pdf || []),
     ];
+    const token = getAccessToken();
     downloadable.forEach((file, i) => {
-      setTimeout(() => {
-        const url = `${API_BASE}/api/results/${runId}/${file.path}?download=1`;
-        window.open(url, '_blank');
+      setTimeout(async () => {
+        const url = `${API_BASE}/api/results/${encodeURIComponent(runId)}/${file.path}?download=1`;
+        const res = await fetch(url, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          credentials: 'include',
+        });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(a.href);
       }, i * 500);
     });
   };

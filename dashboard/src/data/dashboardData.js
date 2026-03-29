@@ -17,6 +17,48 @@ import { useState, useEffect, useCallback } from 'react';
 // Cache per portfolio mode
 const cache = {};
 
+// --- Auth helper: obtain access token via refresh cookie (same-origin) ---
+let _accessToken = null;
+let _tokenPromise = null;
+
+/**
+ * Get a valid access token by calling the refresh endpoint.
+ * The HttpOnly refresh-token cookie is sent automatically (same origin).
+ * Result is cached for the session; returns null if not authenticated.
+ */
+async function getAccessToken(apiBase = '') {
+  if (_accessToken) return _accessToken;
+  if (_tokenPromise) return _tokenPromise;
+
+  _tokenPromise = (async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      _accessToken = data.accessToken || null;
+      return _accessToken;
+    } catch {
+      return null;
+    } finally {
+      _tokenPromise = null;
+    }
+  })();
+
+  return _tokenPromise;
+}
+
+/** Authenticated fetch: attaches Bearer token + credentials */
+async function authFetch(url, apiBase = '') {
+  const token = await getAccessToken(apiBase);
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return fetch(url, { headers, credentials: 'include' });
+}
+
 /** Portfolio mode definitions */
 export const PORTFOLIO_MODES = [
   { id: 'all',      label: 'Full Portfolio (6 Claims)', color: '#2E75B6' },
@@ -223,9 +265,9 @@ export function useDashboardData() {
     if (simContext) {
       const { runId, apiBase } = simContext;
       try {
-        // Fetch dashboard data from simulation API (no mode prefix — server handles routing)
+        // Fetch dashboard data from simulation API (authenticated via refresh cookie)
         const dashUrl = `${apiBase}/api/results/${runId}/dashboard_data.json`;
-        const dashRes = await fetch(dashUrl);
+        const dashRes = await authFetch(dashUrl, apiBase);
         if (!dashRes.ok) {
           throw new Error(`Failed to load results: ${dashRes.status}`);
         }
@@ -236,7 +278,7 @@ export function useDashboardData() {
         if (!stochData) {
           try {
             const stochUrl = `${apiBase}/api/results/${runId}/stochastic_pricing.json`;
-            const stochRes = await fetch(stochUrl);
+            const stochRes = await authFetch(stochUrl, apiBase);
             if (stochRes.ok) {
               stochData = await stochRes.json();
             }
@@ -249,7 +291,7 @@ export function useDashboardData() {
         let surfaceData = null;
         try {
           const surfaceUrl = `${apiBase}/api/results/${runId}/pricing_surface.json`;
-          const surfaceRes = await fetch(surfaceUrl);
+          const surfaceRes = await authFetch(surfaceUrl, apiBase);
           if (surfaceRes.ok) {
             surfaceData = await surfaceRes.json();
           }
