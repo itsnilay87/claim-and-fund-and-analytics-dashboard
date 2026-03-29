@@ -1,8 +1,8 @@
 # ─────────────────────────────────────────────────────────
-#  CI/CD Pipeline — Build & Deploy to Hetzner
+#  CI/CD Pipeline — Test → Build → Deploy to Hetzner
 #
 #  Triggers on push to main branch or manual dispatch.
-#  Builds Docker image → pushes to GHCR → deploys to server.
+#  Runs tests → Builds Docker image → pushes to GHCR → deploys to server.
 #
 #  Required GitHub Secrets:
 #    DEPLOY_SSH_KEY  — Private SSH key for root@server
@@ -10,10 +10,12 @@
 #    GHCR_PAT        — Personal Access Token with read:packages
 # ─────────────────────────────────────────────────────────
 
-name: Build & Deploy
+name: Test, Build & Deploy
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -21,7 +23,48 @@ env:
   IMAGE_NAME: ghcr.io/itsnilay87/claim-analytics-platform
 
 jobs:
+  # ── Stage 1: Run tests (gates deployment) ──
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Run server API tests
+        working-directory: server
+        env:
+          NODE_ENV: test
+        run: npx vitest run
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: npm ci
+
+      - name: Build dashboard
+        working-directory: dashboard
+        run: npm run build
+
+      - name: Install app dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build app
+        working-directory: app
+        run: npm run build
+
+  # ── Stage 2: Build & Deploy (only on main, after tests pass) ──
   build-and-deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -61,28 +104,8 @@ jobs:
             echo "$GHCR_PAT" | docker login ghcr.io -u itsnilay87 --password-stdin
             docker pull ghcr.io/itsnilay87/claim-analytics-platform:latest
 
-            # Stop old manual deployment if it exists
-            cd /root/claim-analytics-platform/deploy 2>/dev/null && docker compose down 2>/dev/null || true
-
-            mkdir -p /opt/claim-analytics
-            cat > /opt/claim-analytics/docker-compose.yml << 'EOF'
-            services:
-              web:
-                image: ghcr.io/itsnilay87/claim-analytics-platform:latest
-                ports:
-                  - "80:80"
-                volumes:
-                  - runs-data:/app/server/runs
-                restart: unless-stopped
-                environment:
-                  - NODE_ENV=production
-                  - PORT=3001
-            volumes:
-              runs-data:
-            EOF
-
-            cd /opt/claim-analytics
-            docker compose down 2>/dev/null || true
-            docker compose up -d
+            cd /root/claim-analytics-platform
+            git pull origin main 2>/dev/null || true
+            docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
             docker image prune -f
             echo "Deploy complete at $(date)"

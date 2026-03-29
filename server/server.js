@@ -180,8 +180,8 @@ app.use((err, _req, res, _next) => {
   }
 });
 
-// ── Start server ──
-app.listen(PORT, () => {
+// ── Start server (skip when imported for testing) ──
+if (process.env.NODE_ENV !== 'test') app.listen(PORT, () => {
   console.log(`[Claim Analytics Server] Running on http://localhost:${PORT}`);
   console.log(`[Claim Analytics Server] Engine dir: ${path.resolve(__dirname, '..', 'engine')}`);
   console.log(`[Claim Analytics Server] Runs dir:   ${path.resolve(__dirname, 'runs')}`);
