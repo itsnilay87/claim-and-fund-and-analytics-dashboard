@@ -27,6 +27,7 @@ import { COLORS, FONT, SIZES, SPACE, CHART_COLORS, useUISettings, fmtPct, fmtMOI
 import { Card, SectionTitle, KPI, CustomTooltip } from './Shared';
 import D3ProbabilityTree from './D3ProbabilityTree';
 import ProbabilitySensitivity from './ProbabilitySensitivity';
+import { getClaimDisplayName } from '../../utils/claimNames';
 
 /* ═══════════════════════════════════════════════════════════
  * Constants & Palettes
@@ -41,6 +42,16 @@ const PROB_VIOLET = '#8B5CF6';
 const PROB_TEAL   = '#14B8A6';
 const PROB_AMBER  = '#F59E0B';
 const PROB_ROSE   = '#F43F5E';
+
+/* Jurisdiction display labels and flags */
+const JURISDICTION_META = {
+  domestic:        { label: 'Indian Domestic',    flag: '🇮🇳', pipeline: 'S.34 → S.37 → SLP'   },
+  indian_domestic: { label: 'Indian Domestic',    flag: '🇮🇳', pipeline: 'S.34 → S.37 → SLP'   },
+  siac:            { label: 'SIAC (Singapore)',   flag: '🇸🇬', pipeline: 'HC → COA'             },
+  siac_singapore:  { label: 'SIAC (Singapore)',   flag: '🇸🇬', pipeline: 'HC → COA'             },
+  hkiac:           { label: 'HKIAC (Hong Kong)',  flag: '🇭🇰', pipeline: 'CFI → CA'             },
+  hkiac_hk:        { label: 'HKIAC (Hong Kong)',  flag: '🇭🇰', pipeline: 'CFI → CA'             },
+};
 
 /* Quantum band labels and colors */
 const QUANTUM_BANDS = [
@@ -57,6 +68,15 @@ const QUANTUM_BANDS = [
 
 /** Safe percentage formatter that handles nulls */
 const safePct = (v) => v != null ? ((v * 100).toFixed(2) + '%') : '—';
+
+/** Normalize jurisdiction key to tree_nodes key (domestic, siac, hkiac) */
+const normalizeJurisdiction = (j) => {
+  if (!j) return 'domestic';
+  const lower = j.toLowerCase();
+  if (lower.includes('siac') || lower.includes('singapore')) return 'siac';
+  if (lower.includes('hkiac') || lower.includes('hong_kong') || lower.includes('hongkong')) return 'hkiac';
+  return 'domestic';
+};
 
 /** Collect all terminal paths with depth info */
 function collectPaths(node, depth = 0, chain = [], results = []) {
@@ -110,6 +130,7 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
   const claims = data?.claims || [];
   const simMeta = data?.simulation_meta || {};
   const treeNodes = prob?.tree_nodes;
+  const isPortfolioMode = claims.length > 1 && !claimJurisdiction;
 
   // ── Party names (from backend, fallback to generic labels) ──
   const partyNames = data?.party_names || {};
@@ -117,11 +138,22 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
   const respondentName = partyNames.respondent || 'Respondent';
   const perspective = data?.perspective || 'claimant';
 
+  // ── Claim selector state (portfolio mode only) ──
+  const [selectedClaimId, setSelectedClaimId] = useState(null);
+  const selectedClaim = claims.find(c => c.claim_id === selectedClaimId) || null;
+
+  // Derive jurisdiction from selected claim or fall back to portfolio-level toggle
+  const selectedClaimJurisdiction = selectedClaim
+    ? normalizeJurisdiction(selectedClaim.jurisdiction)
+    : null;
+
   // When claimJurisdiction is provided (single claim view), lock to that jurisdiction
-  const [jurisdiction, setJurisdiction] = useState(
+  const [manualJurisdiction, setManualJurisdiction] = useState(
     claimJurisdiction || (prob?.domestic?.aggregate ? 'domestic' : 'siac')
   );
-  const isLockedJurisdiction = !!claimJurisdiction;
+  // Effective jurisdiction: selected claim > single-claim prop > manual toggle
+  const jurisdiction = selectedClaimJurisdiction || claimJurisdiction || manualJurisdiction;
+  const isLockedJurisdiction = !!claimJurisdiction || !!selectedClaimJurisdiction;
   const [scenario, setScenario]         = useState('scenario_a');
 
   /* ── Safe aggregates with null guards for single-portfolio modes ── */
@@ -247,6 +279,105 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
       </div>
 
       {/* ═══════════════════════════════════════════════════════
+       *  CLAIM SELECTOR (portfolio mode only)
+       * ═══════════════════════════════════════════════════════ */}
+
+      {isPortfolioMode && (
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <span style={{
+              color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: '0.06em',
+            }}>
+              Select Claim:
+            </span>
+
+            {/* "Portfolio Overview" button */}
+            <button
+              onClick={() => setSelectedClaimId(null)}
+              style={{
+                padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                fontFamily: FONT, fontSize: ui.sizes.sm, fontWeight: !selectedClaimId ? 700 : 500,
+                color: !selectedClaimId ? '#fff' : COLORS.textMuted,
+                background: !selectedClaimId
+                  ? `linear-gradient(135deg, ${COLORS.accent1}, ${COLORS.accent2})`
+                  : COLORS.card,
+                transition: 'all 0.2s ease',
+              }}
+            >
+              📊 Portfolio Overview
+            </button>
+
+            {/* Individual claim buttons */}
+            {claims.map(c => {
+              const jMeta = JURISDICTION_META[c.jurisdiction] || JURISDICTION_META.domestic;
+              const active = selectedClaimId === c.claim_id;
+              return (
+                <button
+                  key={c.claim_id}
+                  onClick={() => setSelectedClaimId(c.claim_id)}
+                  style={{
+                    padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                    fontFamily: FONT, fontSize: ui.sizes.sm, fontWeight: active ? 700 : 500,
+                    color: active ? '#fff' : COLORS.text,
+                    background: active
+                      ? `linear-gradient(135deg, ${COLORS.accent1}, ${COLORS.accent2})`
+                      : COLORS.card,
+                    transition: 'all 0.2s ease',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  <span>{jMeta.flag}</span>
+                  <span>{getClaimDisplayName(c)}</span>
+                  <span style={{
+                    fontSize: 10, padding: '1px 6px', borderRadius: 4,
+                    background: active ? 'rgba(255,255,255,0.2)' : `${COLORS.cardBorder}40`,
+                    color: active ? 'rgba(255,255,255,0.9)' : COLORS.textMuted,
+                  }}>
+                    {jMeta.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Selected claim info banner */}
+          {selectedClaim && (() => {
+            const jMeta = JURISDICTION_META[selectedClaim.jurisdiction] || JURISDICTION_META.domestic;
+            const od = selectedClaim.outcome_distribution || {};
+            const total = (od.TRUE_WIN || 0) + (od.RESTART || 0) + (od.LOSE || 0);
+            const pWin = total > 0 ? od.TRUE_WIN / total : 0;
+            return (
+              <div style={{
+                marginTop: 14, padding: '12px 18px', borderRadius: 10,
+                background: '#111827', border: `1px solid ${COLORS.cardBorder}`,
+                display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
+              }}>
+                <div>
+                  <span style={{ fontSize: 22, marginRight: 8 }}>{jMeta.flag}</span>
+                  <span style={{ fontSize: ui.sizes.base, fontWeight: 700, color: COLORS.textBright }}>
+                    {getClaimDisplayName(selectedClaim)}
+                  </span>
+                </div>
+                <div style={{ fontSize: ui.sizes.sm, color: COLORS.textMuted }}>
+                  Jurisdiction: <span style={{ fontWeight: 700, color: COLORS.accent2 }}>{jMeta.label}</span>
+                </div>
+                <div style={{ fontSize: ui.sizes.sm, color: COLORS.textMuted }}>
+                  Pipeline: <span style={{ fontWeight: 600, color: COLORS.text }}>{jMeta.pipeline}</span>
+                </div>
+                <div style={{ fontSize: ui.sizes.sm, color: COLORS.textMuted }}>
+                  SOC: <span style={{ fontWeight: 700, color: COLORS.textBright }}>{fmtCr(selectedClaim.soc_value_cr)}</span>
+                </div>
+                <div style={{ fontSize: ui.sizes.sm, color: COLORS.textMuted }}>
+                  Win Rate: <span style={{ fontWeight: 700, color: pWin >= 0.5 ? OUTCOME_COLORS.TRUE_WIN : OUTCOME_COLORS.LOSE }}>{safePct(selectedClaim.win_rate)}</span>
+                </div>
+              </div>
+            );
+          })()}
+        </Card>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════
        *  § 0  FOUNDATIONAL PROBABILITY KPIs
        * ═══════════════════════════════════════════════════════ */}
 
@@ -268,13 +399,13 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
         </div>
       </div>
 
-      {/* Row 2 — Domestic Aggregate */}
-      {hasDomestic && (
+      {/* Row 2 — Domestic Aggregate (hidden when specific claim of different jurisdiction selected) */}
+      {hasDomestic && (!selectedClaim || jurisdiction === 'domestic') && (
         <div>
           <div style={{
             fontSize: ui.sizes.xs, color: COLORS.textMuted, textTransform: 'uppercase',
             letterSpacing: '0.08em', fontWeight: 700, marginBottom: ui.space.sm, paddingLeft: 4,
-          }}>Aggregate Outcomes — Domestic (S.34 → SLP pipeline)</div>
+          }}>Aggregate Outcomes — Domestic (S.34 → SLP pipeline){selectedClaim ? ` — ${getClaimDisplayName(selectedClaim)}` : ''}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: ui.space.md }}>
             <KPI label="P(Win)" value={safePct(domAgg.true_win)}
               sub="Weighted across both arb scenarios" color={OUTCOME_COLORS.TRUE_WIN} />
@@ -286,13 +417,13 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
         </div>
       )}
 
-      {/* Row 3 — SIAC Aggregate */}
-      {hasSiac && (
+      {/* Row 3 — SIAC Aggregate (hidden when specific claim of different jurisdiction selected) */}
+      {hasSiac && (!selectedClaim || jurisdiction === 'siac') && (
         <div>
           <div style={{
             fontSize: ui.sizes.xs, color: COLORS.textMuted, textTransform: 'uppercase',
             letterSpacing: '0.08em', fontWeight: 700, marginBottom: ui.space.sm, paddingLeft: 4,
-          }}>Aggregate Outcomes — SIAC (HC → COA pipeline)</div>
+          }}>Aggregate Outcomes — SIAC (HC → COA pipeline){selectedClaim ? ` — ${getClaimDisplayName(selectedClaim)}` : ''}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: ui.space.md }}>
             <KPI label="P(Win)" value={safePct(siacAgg.true_win)}
               sub="Weighted across both arb scenarios" color={OUTCOME_COLORS.TRUE_WIN} />
@@ -304,13 +435,64 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
         </div>
       )}
 
+      {/* Selected claim MC outcome distribution */}
+      {selectedClaim && (() => {
+        const od = selectedClaim.outcome_distribution || {};
+        const total = (od.TRUE_WIN || 0) + (od.RESTART || 0) + (od.LOSE || 0);
+        const pWin  = total > 0 ? od.TRUE_WIN / total : 0;
+        const pRest = total > 0 ? od.RESTART / total : 0;
+        const pLose = total > 0 ? od.LOSE / total : 0;
+        const jMeta = JURISDICTION_META[selectedClaim.jurisdiction] || JURISDICTION_META.domestic;
+        return (
+          <div>
+            <div style={{
+              fontSize: ui.sizes.xs, color: COLORS.textMuted, textTransform: 'uppercase',
+              letterSpacing: '0.08em', fontWeight: 700, marginBottom: ui.space.sm, paddingLeft: 4,
+            }}>Monte Carlo Outcomes — {getClaimDisplayName(selectedClaim)} ({jMeta.label})</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: ui.space.md }}>
+              <KPI label="MC Win Rate" value={safePct(pWin)}
+                sub={`${od.TRUE_WIN || 0} of ${total} paths`} color={OUTCOME_COLORS.TRUE_WIN} />
+              <KPI label="MC Restart Rate" value={safePct(pRest)}
+                sub={`${od.RESTART || 0} of ${total} paths`} color={OUTCOME_COLORS.RESTART} />
+              <KPI label="MC Lose Rate" value={safePct(pLose)}
+                sub={`${od.LOSE || 0} of ${total} paths`} color={OUTCOME_COLORS.LOSE} />
+              <KPI label="Avg Duration" value={`${(selectedClaim.mean_duration_months || 0).toFixed(1)}m`}
+                sub="Mean resolution time" color={PROB_AMBER} />
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ═══════════════════════════════════════════════════════
        *  § 1  INTERACTIVE D3 DECISION TREE
        * ═══════════════════════════════════════════════════════ */}
 
       {/* Jurisdiction + Scenario toggles */}
-      <div style={{ display: 'flex', gap: ui.space.lg, flexWrap: 'wrap' }}>
-        {/* jurisdiction - hidden when locked to single claim's jurisdiction */}
+      <div style={{ display: 'flex', gap: ui.space.lg, flexWrap: 'wrap', alignItems: 'center' }}>
+        {/* Jurisdiction indicator when claim is selected */}
+        {selectedClaim && (() => {
+          const jMeta = JURISDICTION_META[selectedClaim.jurisdiction] || JURISDICTION_META.domestic;
+          return (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 16px', borderRadius: 8,
+              background: `${COLORS.accent2}15`, border: `1px solid ${COLORS.accent2}30`,
+            }}>
+              <span style={{ fontSize: 16 }}>{jMeta.flag}</span>
+              <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600 }}>
+                Jurisdiction:
+              </span>
+              <span style={{ color: COLORS.accent2, fontSize: ui.sizes.sm, fontWeight: 700 }}>
+                {jMeta.label}
+              </span>
+              <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs }}>
+                ({jMeta.pipeline})
+              </span>
+            </div>
+          );
+        })()}
+
+        {/* jurisdiction toggle - hidden when claim selected or single claim mode */}
         {!isLockedJurisdiction && (
           <div style={{ display: 'flex', gap: ui.space.sm }}>
             <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600, lineHeight: '36px' }}>
@@ -320,7 +502,7 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
               { key: 'domestic', label: 'Domestic (S.34→SLP)', show: hasDomestic },
               { key: 'siac',     label: 'SIAC (HC→COA)',       show: hasSiac },
             ].filter(j => j.show).map(j => (
-              <button key={j.key} onClick={() => setJurisdiction(j.key)} style={{
+              <button key={j.key} onClick={() => setManualJurisdiction(j.key)} style={{
                 padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
                 fontFamily: FONT, fontSize: ui.sizes.sm,
                 fontWeight: jurisdiction === j.key ? 700 : 500,
@@ -360,10 +542,12 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
       <Card>
         <SectionTitle
           number="§1"
-          title={`${jurisdiction === 'domestic' ? 'Domestic' : 'SIAC'} Decision Tree — Scenario ${scenario === 'scenario_a' ? 'A' : 'B'}`}
+          title={`${selectedClaim ? getClaimDisplayName(selectedClaim) + ' — ' : ''}${(JURISDICTION_META[jurisdiction] || JURISDICTION_META.domestic).label} Decision Tree — Scenario ${scenario === 'scenario_a' ? 'A' : 'B'}`}
           subtitle={jurisdiction === 'domestic'
             ? 'Arbitration → S.34 Appeal → S.37 Appeal → SLP Gate → SLP Merits'
-            : 'Arbitration → High Court → Court of Appeal'}
+            : jurisdiction === 'hkiac'
+              ? 'Arbitration → Court of First Instance → Court of Appeal'
+              : 'Arbitration → High Court → Court of Appeal'}
         />
         {currentTree ? (
           <D3ProbabilityTree
@@ -723,14 +907,29 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
                   const pRest = total > 0 ? od.RESTART / total : 0;
                   const pLose = total > 0 ? od.LOSE / total : 0;
                   const isViable = c.economically_viable !== false;
+                  const isSelected = selectedClaimId === c.claim_id;
+                  const jMeta = JURISDICTION_META[c.jurisdiction] || JURISDICTION_META.domestic;
 
                   return (
-                    <tr key={c.claim_id} style={{ background: i % 2 === 0 ? 'transparent' : '#ffffff03' }}>
-                      <td style={{ ...tdStyle, fontWeight: 700, color: COLORS.textBright }}>
-                        {c.claim_id}
+                    <tr
+                      key={c.claim_id}
+                      onClick={isPortfolioMode ? () => setSelectedClaimId(isSelected ? null : c.claim_id) : undefined}
+                      style={{
+                        background: isSelected
+                          ? `${COLORS.accent2}15`
+                          : i % 2 === 0 ? 'transparent' : '#ffffff03',
+                        cursor: isPortfolioMode ? 'pointer' : 'default',
+                        outline: isSelected ? `2px solid ${COLORS.accent2}50` : 'none',
+                        borderRadius: isSelected ? 4 : 0,
+                        transition: 'background 0.15s ease',
+                      }}
+                    >
+                      <td style={{ ...tdStyle, fontWeight: 700, color: isSelected ? COLORS.accent2 : COLORS.textBright }}>
+                        {isSelected && <span style={{ marginRight: 4 }}>▸</span>}
+                        {getClaimDisplayName(c)}
                       </td>
                       <td style={{ ...tdStyle }}>
-                        <Tag text={c.jurisdiction?.toUpperCase()} color={c.jurisdiction === 'siac' ? COLORS.accent2 : COLORS.accent1} />
+                        <Tag text={`${jMeta.flag} ${jMeta.label}`} color={normalizeJurisdiction(c.jurisdiction) === 'siac' ? COLORS.accent2 : normalizeJurisdiction(c.jurisdiction) === 'hkiac' ? '#F59E0B' : COLORS.accent1} />
                       </td>
                       <td style={{
                         ...tdStyle, fontWeight: 700, fontSize: ui.sizes.base,
