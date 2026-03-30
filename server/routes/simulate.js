@@ -114,6 +114,17 @@ function enrichClaimConfig(claim) {
     }
   }
 
+  // Backfill empty name — use archetype or short-form ID
+  if (!claim.name || claim.name === '') {
+    if (claim.claim_type) {
+      claim.name = claim.claim_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    } else if (claim.id) {
+      claim.name = `Claim ${claim.id.slice(0, 8)}`;
+    } else {
+      claim.name = 'Unnamed Claim';
+    }
+  }
+
   return claim;
 }
 

@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { COLORS, FONT, CHART_COLORS, useUISettings, fmtCr, fmtPct, fmtMOIC } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip, Badge } from './Shared';
+import { getClaimDisplayName } from '../utils/claimNames';
 import JCurveFanChart from './JCurveFanChart';
 import DistributionExplorer from './DistributionExplorer';
 import KPIRow from './kpis';
@@ -31,7 +32,7 @@ export default function ExecutiveSummary({ data, structureType }) {
   // Pie data — SOC distribution
   const pieData = useMemo(() =>
     claims.map((c, i) => ({
-      name: c.name || c.claim_id,
+      name: getClaimDisplayName(c),
       value: c.soc_value_cr,
       fill: CHART_COLORS[i % CHART_COLORS.length],
     })),

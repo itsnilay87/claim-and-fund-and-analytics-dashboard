@@ -14,6 +14,7 @@
 import React, { useState, useMemo } from 'react';
 import { COLORS, FONT, useUISettings, fmtCr, fmtPct, fmtMOIC, fmtMo } from '../../theme';
 import { Card, SectionTitle, KPI, Badge } from '../Shared';
+import { getClaimDisplayName } from '../../utils/claimNames';
 import DistributionExplorer from '../DistributionExplorer';
 import JCurveFanChart from '../JCurveFanChart';
 
@@ -22,7 +23,7 @@ import JCurveFanChart from '../JCurveFanChart';
  * ═══════════════════════════════════════════════════════════ */
 function ClaimIdentityCard({ claim }) {
   const { ui } = useUISettings();
-  const claimName = claim.name || claim.claim_id || 'N/A';
+  const claimName = getClaimDisplayName(claim);
   const fields = [
     { label: 'Claim Name',     value: claimName },
     { label: 'Jurisdiction',   value: (claim.jurisdiction || 'N/A').toUpperCase() },
@@ -57,7 +58,7 @@ function RecoveryCalculation({ claim, metrics }) {
   const { ui } = useUISettings();
   const [showFormulas, setShowFormulas] = useState(false);
   const { totalPrincipal, totalInterest, totalCollected, totalLegal, netRecovery, recoveryRate, interestEnabled } = metrics;
-  const claimName = claim.name || claim.claim_id || 'Claim';
+  const claimName = getClaimDisplayName(claim);
 
   return (
     <Card>
@@ -105,7 +106,7 @@ function ClaimOverviewCard({ claim }) {
   const od = claim.outcome_distribution || {};
   const total = (od.TRUE_WIN || 0) + (od.RESTART || 0) + (od.LOSE || 0);
   const isViable = claim.economically_viable !== false;
-  const claimName = claim.name || claim.claim_id || 'Claim';
+  const claimName = getClaimDisplayName(claim);
 
   return (
     <Card>

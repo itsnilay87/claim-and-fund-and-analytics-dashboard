@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { COLORS, FONT, CHART_COLORS, useUISettings, fmtCr, fmtPct, fmtMo } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip, DataTable } from './Shared';
+import { getClaimDisplayName } from '../utils/claimNames';
 
 const NODATA = <span style={{ color: COLORS.textMuted }}>Data not available</span>;
 
@@ -43,7 +44,7 @@ export default function QuantumTimeline({ data }) {
     const q = perClaimQ[c.claim_id] || {};
     return {
       id: c.claim_id,
-      name: c.name || c.claim_id,
+      name: getClaimDisplayName(c),
       soc: c.soc_value_cr || 0,
       eq: q.eq_cr || c.mean_quantum_cr || 0,
       eqPct: q.eq_pct || (c.mean_quantum_cr && c.soc_value_cr > 0 ? c.mean_quantum_cr / c.soc_value_cr : 0),

@@ -11,6 +11,7 @@
 
 import React, { useState } from 'react';
 import { COLORS, FONT, UI_TEXT_SCALE_OPTIONS, useUISettings } from './theme';
+import { getClaimDisplayName } from './utils/claimNames';
 import { useDashboardData } from './data/dashboardData';
 import { TabBar, LoadingScreen, ErrorScreen, Card, ErrorBoundary } from './components/Shared';
 
@@ -247,7 +248,7 @@ export default function App() {
               color: COLORS.textMuted,
             }}>
               {claimMode
-                ? `Single Claim Analysis${data?.claims?.[0]?.name ? ` — ${data.claims[0].name}` : ''}`
+                ? `Single Claim Analysis${data?.claims?.[0] ? ` — ${getClaimDisplayName(data.claims[0])}` : ''}`
                 : `${STRUCTURE_LABELS[structureType] || structureType} — ${meta.n_claims || '?'} claims`}
               {' — '}
               {(meta.n_paths || 0).toLocaleString()} MC paths

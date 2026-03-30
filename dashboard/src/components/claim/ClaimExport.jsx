@@ -8,6 +8,7 @@
 import React, { useMemo } from 'react';
 import { COLORS, FONT, useUISettings, fmtCr, fmtPct, fmtMOIC } from '../../theme';
 import { Card, SectionTitle } from '../Shared';
+import { getClaimDisplayName } from '../../utils/claimNames';
 import ExportPanel from '../ExportPanel';
 
 /* ═══════════════════════════════════════════════════════════
@@ -41,7 +42,7 @@ function ScoreCard({ data }) {
   const grade = useMemo(() => getRiskGrade(pLoss), [pLoss]);
 
   const fields = [
-    { label: 'Claim Name', value: claim.name || claim.claim_id || 'N/A' },
+    { label: 'Claim Name', value: getClaimDisplayName(claim) },
     { label: 'Jurisdiction', value: (claim.jurisdiction || 'N/A').toUpperCase().replace(/_/g, ' ') },
     { label: 'SOC', value: fmtCr(claim.soc_value_cr) },
     { label: 'Win Rate', value: fmtPct(claim.win_rate || claim.effective_win_rate || 0) },

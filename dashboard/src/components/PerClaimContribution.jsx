@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import { COLORS, FONT, CHART_COLORS, useUISettings, fmtCr, fmtPct, fmtMOIC, BAR_CURSOR } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip, DataTable, Badge } from './Shared';
+import { getClaimDisplayName, truncateClaimName } from '../utils/claimNames';
 
 /* ── helpers ── */
 const safeDivide = (a, b) => b > 0.001 ? a / b : 0;
@@ -85,7 +86,7 @@ export default function PerClaimContribution({ data, structureType }) {
     const jLabel = JURISDICTION_LABELS[c.jurisdiction] || c.jurisdiction;
     const jFlag = JURISDICTION_FLAGS[c.jurisdiction] || '';
     return [
-      <span style={{ color: COLORS.textBright, fontWeight: 700 }}>{c.name || c.claim_id}</span>,
+      <span style={{ color: COLORS.textBright, fontWeight: 700 }}>{getClaimDisplayName(c)}</span>,
       <span>{jFlag} <Badge text={jLabel} color={c.jurisdiction?.includes('siac') ? COLORS.accent2 : COLORS.accent1} /></span>,
       <span style={{ textTransform: 'capitalize' }}>{(c.claim_type || '').replace(/_/g, ' ')}</span>,
       <span style={{ fontWeight: 600 }}>{fmtCr(c.soc_value_cr)}</span>,
@@ -101,7 +102,7 @@ export default function PerClaimContribution({ data, structureType }) {
    * Section 2 — MOIC horizontal bar chart
    * ═══════════════════════════════════════════════════════════ */
   const moicBarData = enriched.map(c => ({
-    name: (c.name || c.claim_id).length > 20 ? (c.name || c.claim_id).slice(0, 20) + '…' : (c.name || c.claim_id),
+    name: truncateClaimName(c, 20),
     moic: c.eMoic,
     fill: c.eMoic >= 1.0 ? '#34D399' : COLORS.accent5,
   }));
@@ -125,7 +126,7 @@ export default function PerClaimContribution({ data, structureType }) {
       const moicWithout = othersWeight > 0.001 ? othersWeightedMoic / othersWeight : 0;
       const delta = portfolioMoic - moicWithout;
       return {
-        claim: c.name || c.claim_id,
+        claim: getClaimDisplayName(c),
         moicWith: portfolioMoic,
         moicWithout: +moicWithout.toFixed(3),
         delta: +delta.toFixed(3),
@@ -137,13 +138,13 @@ export default function PerClaimContribution({ data, structureType }) {
    * Section 4 — Capital Allocation
    * ═══════════════════════════════════════════════════════════ */
   const capitalPieData = enriched.map((c, i) => ({
-    name: c.name || c.claim_id,
+    name: getClaimDisplayName(c),
     value: c.soc_value_cr,
     fill: c.color,
   }));
 
   const stackBarData = enriched.map(c => ({
-    name: (c.name || c.claim_id).length > 15 ? (c.name || c.claim_id).slice(0, 15) + '…' : (c.name || c.claim_id),
+    name: truncateClaimName(c, 15),
     investment: c.soc_value_cr * (refKey ? parseFloat(refKey.split('_')[0]) / 100 : 0.10),
     expected_return: Math.max(0, c.eCollected),
   }));
@@ -266,7 +267,7 @@ export default function PerClaimContribution({ data, structureType }) {
           <ResponsiveContainer width="100%" height={Math.max(200, enriched.length * 50 + 60)}>
             <BarChart
               data={enriched.map(c => ({
-                name: (c.name || c.claim_id).length > 20 ? (c.name || c.claim_id).slice(0, 20) + '…' : (c.name || c.claim_id),
+                name: truncateClaimName(c, 20),
                 breakeven: c.cf.breakeven_pct != null ? c.cf.breakeven_pct * 100 : (c.pLoss < 0.5 ? (1 / (c.eMoic || 1)) * 100 : null),
                 pLoss: (c.pLoss || 0) * 100,
               }))}
