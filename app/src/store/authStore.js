@@ -48,12 +48,11 @@ export const useAuthStore = create((set, get) => ({
    * Step 1 of registration: request an OTP to be sent to the email.
    */
   requestOtp: async (email, password, full_name) => {
-    set({ isLoading: true, error: null });
+    set({ error: null });
     try {
       await api.post('/api/auth/register/request-otp', { email, password, full_name });
-      set({ isLoading: false });
     } catch (err) {
-      set({ error: err.message, isLoading: false });
+      set({ error: err.message });
       throw err;
     }
   },
@@ -62,13 +61,13 @@ export const useAuthStore = create((set, get) => ({
    * Step 2 of registration: verify OTP → creates account → issues tokens.
    */
   verifyOtp: async (email, otp) => {
-    set({ isLoading: true, error: null });
+    set({ error: null });
     try {
       const { user, accessToken } = await api.post('/api/auth/register/verify-otp', { email, otp });
       setAccessToken(accessToken);
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (err) {
-      set({ error: err.message, isLoading: false });
+      set({ error: err.message });
       throw err;
     }
   },
@@ -77,12 +76,11 @@ export const useAuthStore = create((set, get) => ({
    * Resend OTP for a pending registration.
    */
   resendOtp: async (email) => {
-    set({ isLoading: true, error: null });
+    set({ error: null });
     try {
       await api.post('/api/auth/register/resend-otp', { email });
-      set({ isLoading: false });
     } catch (err) {
-      set({ error: err.message, isLoading: false });
+      set({ error: err.message });
       throw err;
     }
   },
