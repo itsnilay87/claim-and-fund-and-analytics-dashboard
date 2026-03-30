@@ -111,6 +111,12 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
   const simMeta = data?.simulation_meta || {};
   const treeNodes = prob?.tree_nodes;
 
+  // ── Party names (from backend, fallback to generic labels) ──
+  const partyNames = data?.party_names || {};
+  const claimantName = partyNames.claimant || 'Claimant';
+  const respondentName = partyNames.respondent || 'Respondent';
+  const perspective = data?.perspective || 'claimant';
+
   // When claimJurisdiction is provided (single claim view), lock to that jurisdiction
   const [jurisdiction, setJurisdiction] = useState(
     claimJurisdiction || (prob?.domestic?.aggregate ? 'domestic' : 'siac')
@@ -222,6 +228,24 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: ui.space.xl }}>
 
+      {/* ── Perspective Banner ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '10px 18px', borderRadius: 10,
+        background: perspective === 'claimant' ? `${PROB_BLUE}15` : `${PROB_VIOLET}15`,
+        border: `1px solid ${perspective === 'claimant' ? PROB_BLUE : PROB_VIOLET}40`,
+      }}>
+        <span style={{ fontSize: 18 }}>{perspective === 'claimant' ? '⚖️' : '🛡️'}</span>
+        <span style={{ fontSize: ui.sizes.sm, color: COLORS.text, fontWeight: 600 }}>
+          Viewing from <span style={{ color: perspective === 'claimant' ? PROB_BLUE : PROB_VIOLET }}>
+            {perspective === 'claimant' ? claimantName : respondentName}
+          </span> ({perspective}) perspective
+        </span>
+        <span style={{ fontSize: ui.sizes.xs, color: COLORS.textMuted, marginLeft: 'auto' }}>
+          "Win" = {claimantName} prevails &nbsp;|&nbsp; "Lose" = {respondentName} prevails
+        </span>
+      </div>
+
       {/* ═══════════════════════════════════════════════════════
        *  § 0  FOUNDATIONAL PROBABILITY KPIs
        * ═══════════════════════════════════════════════════════ */}
@@ -315,8 +339,8 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
             Scenario:
           </span>
           {[
-            { key: 'scenario_a', label: 'A: TATA Wins Arb' },
-            { key: 'scenario_b', label: 'B: TATA Loses Arb' },
+            { key: 'scenario_a', label: `A: ${claimantName} Wins Arb` },
+            { key: 'scenario_b', label: `B: ${claimantName} Loses Arb` },
           ].map(s => (
             <button key={s.key} onClick={() => setScenario(s.key)} style={{
               padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
@@ -938,7 +962,7 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
                   What is the Quantum?
                 </div>
                 <p style={{ margin: '0 0 10px' }}>
-                  The <strong>quantum</strong> is the monetary award amount. If TATA wins the arbitration, the
+                  The <strong>quantum</strong> is the monetary award amount. If {claimantName} wins the arbitration, the
                   tribunal determines what percentage of the Statement of Claim (SOC) they actually receive.
                   This is modeled as a 5-band discrete distribution.
                 </p>

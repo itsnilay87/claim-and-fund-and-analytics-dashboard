@@ -19,6 +19,10 @@ export default function ProbabilityAnalysis({ data }) {
   const [treeView, setTreeView] = useState('domestic');
   const isNarrow = typeof window !== 'undefined' && window.innerWidth < 1400;
 
+  // Dynamic party names
+  const partyNames = data?.party_names || {};
+  const claimantName = partyNames.claimant || 'Claimant';
+
   const arbWin = prob.arb_win_probability;
 
   // Domestic aggregate
@@ -128,7 +132,7 @@ export default function ProbabilityAnalysis({ data }) {
       <Card>
         <SectionTitle
           number="3"
-          title={`${treeView === 'domestic' ? 'Domestic' : 'SIAC'} Scenario A — TATA Won Arbitration (${fmtPct(arbWin)})`}
+          title={`${treeView === 'domestic' ? 'Domestic' : 'SIAC'} Scenario A — ${claimantName} Won Arbitration (${fmtPct(arbWin)})`}
           subtitle="Path probabilities (absolute = arb_win × conditional)"
         />
         <ResponsiveContainer width="100%" height={treeView === 'domestic' ? ui.chartHeight.md : Math.round(ui.chartHeight.sm * 0.8)}>
@@ -173,7 +177,7 @@ export default function ProbabilityAnalysis({ data }) {
       <Card>
         <SectionTitle
           number="4"
-          title={`${treeView === 'domestic' ? 'Domestic' : 'SIAC'} Scenario B — TATA Lost Arbitration (${fmtPct(1 - arbWin)})`}
+          title={`${treeView === 'domestic' ? 'Domestic' : 'SIAC'} Scenario B — ${claimantName} Lost Arbitration (${fmtPct(1 - arbWin)})`}
           subtitle="Path probabilities (absolute = arb_lose × conditional)"
         />
         <ResponsiveContainer width="100%" height={treeView === 'domestic' ? ui.chartHeight.md : Math.round(ui.chartHeight.sm * 0.8)}>

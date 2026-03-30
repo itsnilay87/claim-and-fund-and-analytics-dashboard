@@ -204,6 +204,11 @@ def _build_probability_summary() -> dict:
     dom_re += sum(p["conditional_prob"] for p in MI.DOMESTIC_PATHS_B if p["outcome"] == "RESTART") * arb_lose
     dom_lo += sum(p["conditional_prob"] for p in MI.DOMESTIC_PATHS_B if p["outcome"] == "LOSE") * arb_lose
 
+    # Normalize domestic aggregates to ensure they sum to exactly 1.0
+    dom_total = dom_tw + dom_re + dom_lo
+    if dom_total > 0:
+        dom_tw, dom_re, dom_lo = dom_tw / dom_total, dom_re / dom_total, dom_lo / dom_total
+
     siac_tw = sum(p["conditional_prob"] for p in MI.SIAC_PATHS_A if p["outcome"] == "TRUE_WIN") * arb_win
     siac_re = sum(p["conditional_prob"] for p in MI.SIAC_PATHS_A if p["outcome"] == "RESTART") * arb_win
     siac_lo = sum(p["conditional_prob"] for p in MI.SIAC_PATHS_A if p["outcome"] == "LOSE") * arb_win
@@ -211,24 +216,33 @@ def _build_probability_summary() -> dict:
     siac_re += sum(p["conditional_prob"] for p in MI.SIAC_PATHS_B if p["outcome"] == "RESTART") * arb_lose
     siac_lo += sum(p["conditional_prob"] for p in MI.SIAC_PATHS_B if p["outcome"] == "LOSE") * arb_lose
 
+    # Normalize SIAC aggregates to ensure they sum to exactly 1.0
+    siac_total = siac_tw + siac_re + siac_lo
+    if siac_total > 0:
+        siac_tw, siac_re, siac_lo = siac_tw / siac_total, siac_re / siac_total, siac_lo / siac_total
+
     # ── Build hierarchical tree nodes for SVG visualization ──
+    # ── Party names for dynamic labels ──
+    claimant = getattr(MI, 'CLAIMANT_NAME', 'Claimant') or 'Claimant'
+    respondent = getattr(MI, 'RESPONDENT_NAME', 'Respondent') or 'Respondent'
+
     def _build_domestic_tree(scenario_label, paths, arb_prob):
         """Build a hierarchical node tree from flat domestic paths."""
         root = {
             "id": f"arb_{scenario_label.lower()}",
-            "label": f"Arbitration\n{'TATA Wins' if scenario_label == 'A' else 'TATA Loses'}",
+            "label": f"Arbitration\n{claimant + ' Wins' if scenario_label == 'A' else claimant + ' Loses'}",
             "prob": round(arb_prob, 4),
             "children": [],
         }
         # Group by S.34 outcome
         s34_groups = {}
         for p in paths:
-            s34_key = "tata_wins" if p.get("s34_tata_wins") else "dfccil_wins"
+            s34_key = "claimant_wins" if p.get("s34_tata_wins") else "respondent_wins"
             if s34_key not in s34_groups:
                 s34_prob = p["s34_prob"]
                 s34_groups[s34_key] = {
                     "id": f"s34_{s34_key}_{scenario_label}",
-                    "label": f"S.34\n{'TATA wins' if s34_key == 'tata_wins' else 'DFCCIL wins'}",
+                    "label": f"S.34\n{claimant + ' wins' if s34_key == 'claimant_wins' else respondent + ' wins'}",
                     "prob": round(s34_prob, 4),
                     "children": [],
                     "_paths": [],
@@ -239,11 +253,11 @@ def _build_probability_summary() -> dict:
             # Group by S.37 outcome
             s37_groups = {}
             for p in s34_node["_paths"]:
-                s37_key = "tata_wins" if p.get("s37_tata_wins") else "dfccil_wins"
+                s37_key = "claimant_wins" if p.get("s37_tata_wins") else "respondent_wins"
                 if s37_key not in s37_groups:
                     s37_groups[s37_key] = {
                         "id": f"s37_{s37_key}_{s34_key}_{scenario_label}",
-                        "label": f"S.37\n{'TATA wins' if s37_key == 'tata_wins' else 'DFCCIL wins'}",
+                        "label": f"S.37\n{claimant + ' wins' if s37_key == 'claimant_wins' else respondent + ' wins'}",
                         "prob": round(p.get("s37_prob", 0.5), 4),
                         "children": [],
                         "_paths": [],
@@ -274,10 +288,10 @@ def _build_probability_summary() -> dict:
                     else:
                         # SLP merits
                         for p in slp_node["_paths"]:
-                            merits_key = "tata_wins" if p.get("slp_merits_tata_wins") else "tata_loses"
+                            merits_key = "claimant_wins" if p.get("slp_merits_tata_wins") else "claimant_loses"
                             child = {
                                 "id": f"merits_{merits_key}_{slp_key}_{s37_key}_{s34_key}_{scenario_label}",
-                                "label": f"SLP Merits\n{'TATA wins' if merits_key == 'tata_wins' else 'TATA loses'}",
+                                "label": f"SLP Merits\n{claimant + ' wins' if merits_key == 'claimant_wins' else claimant + ' loses'}",
                                 "prob": round(p.get("slp_merits_prob", 0.5), 4),
                                 "outcome": p["outcome"],
                                 "abs_prob": round(p["conditional_prob"] * arb_prob, 6),
@@ -299,25 +313,25 @@ def _build_probability_summary() -> dict:
         """Build a hierarchical node tree from flat SIAC paths."""
         root = {
             "id": f"arb_{scenario_label.lower()}_siac",
-            "label": f"Arbitration\n{'TATA Wins' if scenario_label == 'A' else 'TATA Loses'}",
+            "label": f"Arbitration\n{claimant + ' Wins' if scenario_label == 'A' else claimant + ' Loses'}",
             "prob": round(arb_prob, 4),
             "children": [],
         }
         hc_groups = {}
         for p in paths:
-            hc_key = "tata_wins" if p.get("hc_tata_wins") else "tata_loses"
+            hc_key = "claimant_wins" if p.get("hc_tata_wins") else "claimant_loses"
             if hc_key not in hc_groups:
                 hc_groups[hc_key] = {
                     "id": f"hc_{hc_key}_{scenario_label}",
-                    "label": f"High Court\n{'TATA wins' if hc_key == 'tata_wins' else 'TATA loses'}",
+                    "label": f"High Court\n{claimant + ' wins' if hc_key == 'claimant_wins' else claimant + ' loses'}",
                     "prob": round(p["hc_prob"], 4),
                     "children": [],
                 }
             # COA node is terminal
-            coa_key = "tata_wins" if p.get("coa_tata_wins") else "tata_loses"
+            coa_key = "claimant_wins" if p.get("coa_tata_wins") else "claimant_loses"
             hc_groups[hc_key]["children"].append({
                 "id": f"coa_{coa_key}_{hc_key}_{scenario_label}",
-                "label": f"Court of Appeal\n{'TATA wins' if coa_key == 'tata_wins' else 'TATA loses'}",
+                "label": f"Court of Appeal\n{claimant + ' wins' if coa_key == 'claimant_wins' else claimant + ' loses'}",
                 "prob": round(p["coa_prob"], 4),
                 "outcome": p["outcome"],
                 "abs_prob": round(p["conditional_prob"] * arb_prob, 6),
@@ -1273,6 +1287,11 @@ def export_dashboard_json(
     print(f"  J-curve: {len(jcurve_data['scenarios'])} scenario combos computed")
 
     data = {
+        "party_names": {
+            "claimant": getattr(MI, 'CLAIMANT_NAME', 'Claimant') or 'Claimant',
+            "respondent": getattr(MI, 'RESPONDENT_NAME', 'Respondent') or 'Respondent',
+        },
+        "perspective": getattr(MI, 'PERSPECTIVE', 'claimant') or 'claimant',
         "claims": _build_claims_section(sim, claims),
         "probability_summary": _build_probability_summary(),
         "quantum_summary": _build_quantum_summary(sim, claims),

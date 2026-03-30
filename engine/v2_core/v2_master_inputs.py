@@ -37,6 +37,16 @@ _EXPECTED_OUTCOME_TOTALS: dict | None = None
 """Dynamically computed outcome subtotals for validate_tree() to check
 against when CONFIG_OVERRIDE_ACTIVE is True. Set by load_config_override()."""
 
+# ── Party Names (dynamic, patched by adapter per claim) ──
+CLAIMANT_NAME: str = "Claimant"
+"""Display name for the claimant (award holder). Default: 'Claimant'."""
+
+RESPONDENT_NAME: str = "Respondent"
+"""Display name for the respondent (challenger). Default: 'Respondent'."""
+
+PERSPECTIVE: str = "claimant"
+"""Modelling perspective — 'claimant' or 'respondent'. Affects outcome labelling."""
+
 
 # ============================================================================
 # SECTION 1: SIMULATION ENGINE

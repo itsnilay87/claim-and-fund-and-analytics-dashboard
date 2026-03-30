@@ -230,6 +230,10 @@ export default function ProbabilityTree({ data }) {
   const probData = data?.probability_summary;
   const treeNodes = probData?.tree_nodes;
 
+  // Dynamic party names
+  const partyNames = data?.party_names || {};
+  const claimantName = partyNames.claimant || 'Claimant';
+
   const [jurisdiction, setJurisdiction] = useState('domestic');
   const [scenario, setScenario] = useState('scenario_a');
   const [viewMode, setViewMode] = useState('overview');
@@ -354,8 +358,8 @@ export default function ProbabilityTree({ data }) {
         <div style={{ display: 'flex', gap: ui.space.sm }}>
           <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600, lineHeight: '36px' }}>Scenario:</span>
           {[
-            { key: 'scenario_a', label: 'A: TATA Wins Arb' },
-            { key: 'scenario_b', label: 'B: TATA Loses Arb' },
+            { key: 'scenario_a', label: `A: ${claimantName} Wins Arb` },
+            { key: 'scenario_b', label: `B: ${claimantName} Loses Arb` },
           ].map(s => (
             <button key={s.key} onClick={() => setScenario(s.key)} style={{
               padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',

@@ -93,6 +93,10 @@ _MI_PATCHABLE_ATTRS: list[str] = [
     # Config override flag
     "CONFIG_OVERRIDE_ACTIVE",
     "_EXPECTED_OUTCOME_TOTALS",
+    # Party names (dynamic per claim)
+    "CLAIMANT_NAME",
+    "RESPONDENT_NAME",
+    "PERSPECTIVE",
 ]
 
 
@@ -322,6 +326,11 @@ def patch_master_inputs_for_claim(
     MI.CLAIMS_BY_ID = {claim_dict["claim_id"]: claim_dict}
     MI.PORTFOLIO_SOC_CR = claim.soc_value_cr
     MI.CONFIG_OVERRIDE_ACTIVE = True
+
+    # ── Party names ──
+    MI.CLAIMANT_NAME = claim.claimant or "Claimant"
+    MI.RESPONDENT_NAME = claim.respondent or "Respondent"
+    MI.PERSPECTIVE = getattr(claim, 'perspective', 'claimant') or "claimant"
 
 
 def _patch_timeline_durations(
