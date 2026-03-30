@@ -1,13 +1,16 @@
 /**
- * Auth routes — register, login, refresh, logout, profile.
+ * Auth routes — register (OTP-verified), login, refresh, logout, profile.
  */
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const User = require('../db/models/User');
 const RefreshToken = require('../db/models/RefreshToken');
+const PendingRegistration = require('../db/models/PendingRegistration');
 const { generateAccessToken, generateRefreshToken, hashToken } = require('../utils/jwt');
 const { authenticateToken } = require('../middleware/auth');
+const { sendOtpEmail } = require('../services/email');
 
 const router = express.Router();
 
@@ -35,9 +38,20 @@ const BCRYPT_SALT_ROUNDS = 12;
 const REFRESH_TOKEN_DAYS = 7;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_OTP_ATTEMPTS = 5;
+
 // Cookie secure flag: only true if COOKIE_SECURE=true or if HTTPS is detected
 // Default to false for plain HTTP deployments (e.g. http://178.104.35.208)
 const COOKIE_SECURE = process.env.COOKIE_SECURE === 'true';
+
+/**
+ * Generate a cryptographically random 6-digit OTP.
+ */
+function generateOtp() {
+  // crypto.randomInt gives a uniform integer in [0, 900000) → add 100000 → [100000, 999999]
+  return String(crypto.randomInt(100000, 1000000));
+}
 
 /**
  * Set the refresh token as an HttpOnly cookie.
@@ -85,9 +99,10 @@ async function issueTokens(res, user) {
   return accessToken;
 }
 
-// ── POST /api/auth/register ──
+// ── POST /api/auth/register/request-otp ──
+// Step 1: Validate input, hash password + OTP, store in pending_registrations, send OTP email.
 
-router.post('/register', authLimiter, async (req, res) => {
+router.post('/register/request-otp', authLimiter, async (req, res) => {
   try {
     const { email, password, full_name } = req.body;
 
@@ -102,19 +117,104 @@ router.post('/register', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Full name is required' });
     }
 
-    // Check if email already exists
-    const existing = await User.findByEmail(email.toLowerCase());
+    const normEmail = email.toLowerCase();
+
+    // Check if email already has a verified account
+    const existing = await User.findByEmail(normEmail);
     if (existing) {
       return res.status(409).json({ error: 'Email already registered' });
     }
 
-    // Hash password and create user
+    // Hash password and OTP
     const password_hash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
-    const user = await User.create({
-      email: email.toLowerCase(),
+    const otp = generateOtp();
+    const otp_hash = await bcrypt.hash(otp, BCRYPT_SALT_ROUNDS);
+    const expires_at = new Date(Date.now() + OTP_EXPIRY_MS);
+
+    // Upsert into pending_registrations (replaces any previous pending for same email)
+    await PendingRegistration.upsert({
+      email: normEmail,
       password_hash,
       full_name: full_name.trim(),
+      otp_hash,
+      expires_at,
     });
+
+    // Opportunistic cleanup of expired rows
+    PendingRegistration.deleteExpired().catch(() => {});
+
+    // Send OTP email (falls back to console.log in dev)
+    const sent = await sendOtpEmail(normEmail, otp);
+    if (!sent) {
+      return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
+    }
+
+    res.status(200).json({ message: 'Verification code sent', email: normEmail });
+  } catch (err) {
+    console.error('[AUTH] Request OTP error:', err.message);
+    res.status(500).json({ error: 'Failed to send verification code' });
+  }
+});
+
+// ── POST /api/auth/register/verify-otp ──
+// Step 2: Verify OTP → create user account → issue tokens.
+
+router.post('/register/verify-otp', authLimiter, async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Email and verification code are required' });
+    }
+
+    const normEmail = email.toLowerCase();
+
+    const pending = await PendingRegistration.findByEmail(normEmail);
+    if (!pending) {
+      return res.status(400).json({ error: 'No pending registration found. Please request a new code.' });
+    }
+
+    // Check expiry
+    if (new Date(pending.expires_at) < new Date()) {
+      await PendingRegistration.deleteByEmail(normEmail);
+      return res.status(410).json({ error: 'Verification code expired. Please request a new one.' });
+    }
+
+    // Check attempt limit
+    if (pending.attempts >= MAX_OTP_ATTEMPTS) {
+      await PendingRegistration.deleteByEmail(normEmail);
+      return res.status(429).json({ error: 'Too many failed attempts. Please request a new code.' });
+    }
+
+    // Verify OTP
+    const valid = await bcrypt.compare(String(otp), pending.otp_hash);
+    if (!valid) {
+      await PendingRegistration.incrementAttempts(normEmail);
+      const remaining = MAX_OTP_ATTEMPTS - pending.attempts - 1;
+      return res.status(401).json({
+        error: `Invalid verification code. ${remaining > 0 ? remaining + ' attempts remaining.' : 'Please request a new code.'}`,
+      });
+    }
+
+    // OTP is valid — create the real user account
+    // Double-check email isn't taken (race condition guard)
+    const existingUser = await User.findByEmail(normEmail);
+    if (existingUser) {
+      await PendingRegistration.deleteByEmail(normEmail);
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    const user = await User.create({
+      email: normEmail,
+      password_hash: pending.password_hash,
+      full_name: pending.full_name,
+    });
+
+    // Mark email as verified
+    await User.markEmailVerified(user.id);
+
+    // Clean up pending row
+    await PendingRegistration.deleteByEmail(normEmail);
 
     // Issue tokens
     const accessToken = await issueTokens(res, user);
@@ -124,8 +224,50 @@ router.post('/register', authLimiter, async (req, res) => {
       accessToken,
     });
   } catch (err) {
-    console.error('[AUTH] Register error:', err.message);
-    res.status(500).json({ error: 'Registration failed' });
+    console.error('[AUTH] Verify OTP error:', err.message);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// ── POST /api/auth/register/resend-otp ──
+// Resend a new OTP for an existing pending registration.
+
+router.post('/register/resend-otp', authLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const normEmail = email.toLowerCase();
+
+    const pending = await PendingRegistration.findByEmail(normEmail);
+    if (!pending) {
+      return res.status(400).json({ error: 'No pending registration found. Please sign up again.' });
+    }
+
+    // Generate new OTP and update the row
+    const otp = generateOtp();
+    const otp_hash = await bcrypt.hash(otp, BCRYPT_SALT_ROUNDS);
+    const expires_at = new Date(Date.now() + OTP_EXPIRY_MS);
+
+    await PendingRegistration.upsert({
+      email: normEmail,
+      password_hash: pending.password_hash,
+      full_name: pending.full_name,
+      otp_hash,
+      expires_at,
+    });
+
+    const sent = await sendOtpEmail(normEmail, otp);
+    if (!sent) {
+      return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
+    }
+
+    res.status(200).json({ message: 'New verification code sent' });
+  } catch (err) {
+    console.error('[AUTH] Resend OTP error:', err.message);
+    res.status(500).json({ error: 'Failed to resend verification code' });
   }
 });
 

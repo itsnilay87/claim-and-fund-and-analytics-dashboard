@@ -39,10 +39,18 @@ const User = {
     const { rows } = await query(
       `INSERT INTO users (email, password_hash, full_name)
        VALUES ($1, $2, $3)
-       RETURNING id, email, full_name, role, created_at, updated_at`,
+       RETURNING id, email, full_name, role, email_verified, created_at, updated_at`,
       [email, password_hash, full_name]
     );
     return rows[0];
+  },
+
+  /**
+   * Set email_verified = TRUE for a user.
+   * @param {string} id - UUID
+   */
+  async markEmailVerified(id) {
+    await query('UPDATE users SET email_verified = TRUE WHERE id = $1', [id]);
   },
 
   /**
