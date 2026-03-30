@@ -277,6 +277,7 @@ def _build_portfolio_context(
     v2_claims = [
         V2ClaimConfig(
             claim_id=c.id,
+            name=c.name,
             archetype=c.claim_type or "other",
             soc_value_cr=c.soc_value_cr,
             jurisdiction=_JURISDICTION_MAP.get(c.jurisdiction, c.jurisdiction),
