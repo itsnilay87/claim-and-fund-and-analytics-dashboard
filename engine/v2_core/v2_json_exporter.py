@@ -221,6 +221,39 @@ def _build_probability_summary() -> dict:
     if siac_total > 0:
         siac_tw, siac_re, siac_lo = siac_tw / siac_total, siac_re / siac_total, siac_lo / siac_total
 
+    # HKIAC path data
+    hkiac_a = []
+    for p in MI.HKIAC_PATHS_A:
+        hkiac_a.append({
+            "path_id": p["path_id"],
+            "outcome": p["outcome"],
+            "conditional_prob": _pct(p["conditional_prob"]),
+            "absolute_prob": _pct(p["conditional_prob"] * arb_win),
+            "description": p.get("description", ""),
+        })
+
+    hkiac_b = []
+    for p in MI.HKIAC_PATHS_B:
+        hkiac_b.append({
+            "path_id": p["path_id"],
+            "outcome": p["outcome"],
+            "conditional_prob": _pct(p["conditional_prob"]),
+            "absolute_prob": _pct(p["conditional_prob"] * arb_lose),
+            "description": p.get("description", ""),
+        })
+
+    # HKIAC aggregate outcome probabilities
+    hk_tw = sum(p["conditional_prob"] for p in MI.HKIAC_PATHS_A if p["outcome"] == "TRUE_WIN") * arb_win
+    hk_re = sum(p["conditional_prob"] for p in MI.HKIAC_PATHS_A if p["outcome"] == "RESTART") * arb_win
+    hk_lo = sum(p["conditional_prob"] for p in MI.HKIAC_PATHS_A if p["outcome"] == "LOSE") * arb_win
+    hk_tw += sum(p["conditional_prob"] for p in MI.HKIAC_PATHS_B if p["outcome"] == "TRUE_WIN") * arb_lose
+    hk_re += sum(p["conditional_prob"] for p in MI.HKIAC_PATHS_B if p["outcome"] == "RESTART") * arb_lose
+    hk_lo += sum(p["conditional_prob"] for p in MI.HKIAC_PATHS_B if p["outcome"] == "LOSE") * arb_lose
+
+    hk_total = hk_tw + hk_re + hk_lo
+    if hk_total > 0:
+        hk_tw, hk_re, hk_lo = hk_tw / hk_total, hk_re / hk_total, hk_lo / hk_total
+
     # ── Build hierarchical tree nodes for SVG visualization ──
     # ── Party names for dynamic labels ──
     claimant = getattr(MI, 'CLAIMANT_NAME', 'Claimant') or 'Claimant'
@@ -342,6 +375,85 @@ def _build_probability_summary() -> dict:
 
         return root
 
+    def _build_hkiac_tree(scenario_label, paths, arb_prob):
+        """Build a hierarchical node tree from flat HKIAC paths: CFI → CA → CFA."""
+        root = {
+            "id": f"arb_{scenario_label.lower()}_hkiac",
+            "label": f"Arbitration\n{claimant + ' Wins' if scenario_label == 'A' else claimant + ' Loses'}",
+            "prob": round(arb_prob, 4),
+            "children": [],
+        }
+        cfi_groups = {}
+        for p in paths:
+            cfi_key = "upheld" if p.get("cfi_tata_wins") else "set_aside"
+            if cfi_key not in cfi_groups:
+                cfi_groups[cfi_key] = {
+                    "id": f"cfi_{cfi_key}_{scenario_label}",
+                    "label": f"CFI\n{'Upheld' if cfi_key == 'upheld' else 'Set Aside'}",
+                    "prob": round(p["cfi_prob"] if cfi_key == "upheld" else (1 - p["cfi_prob"]), 4),
+                    "children": [],
+                    "_paths": [],
+                }
+            cfi_groups[cfi_key]["_paths"].append(p)
+
+        for cfi_key, cfi_node in cfi_groups.items():
+            ca_groups = {}
+            for p in cfi_node["_paths"]:
+                ca_key = "claimant_wins" if p.get("ca_tata_wins") else "claimant_loses"
+                if ca_key not in ca_groups:
+                    ca_groups[ca_key] = {
+                        "id": f"ca_{ca_key}_{cfi_key}_{scenario_label}",
+                        "label": f"CA\n{claimant + ' wins' if ca_key == 'claimant_wins' else claimant + ' loses'}",
+                        "prob": round(p["ca_prob"], 4),
+                        "children": [],
+                        "_paths": [],
+                    }
+                ca_groups[ca_key]["_paths"].append(p)
+
+            for ca_key, ca_node in ca_groups.items():
+                cfa_gate_groups = {}
+                for p in ca_node["_paths"]:
+                    gate_key = "granted" if p.get("cfa_leave_granted") else "refused"
+                    if gate_key not in cfa_gate_groups:
+                        cfa_gate_groups[gate_key] = {
+                            "id": f"cfa_leave_{gate_key}_{ca_key}_{cfi_key}_{scenario_label}",
+                            "label": f"CFA Leave\n{gate_key.title()}",
+                            "prob": round(p["cfa_leave_prob"] if gate_key == "granted" else (1 - p["cfa_leave_prob"]), 4),
+                            "children": [],
+                            "_paths": [],
+                        }
+                    cfa_gate_groups[gate_key]["_paths"].append(p)
+
+                for gate_key, gate_node in cfa_gate_groups.items():
+                    if gate_key == "refused":
+                        # Terminal node — leave refused ends here
+                        p = gate_node["_paths"][0]
+                        gate_node["outcome"] = p["outcome"]
+                        gate_node["abs_prob"] = round(p["conditional_prob"] * arb_prob, 6)
+                    else:
+                        # CFA merits
+                        for p in gate_node["_paths"]:
+                            merits_key = "claimant_wins" if p.get("cfa_tata_wins") else "claimant_loses"
+                            child = {
+                                "id": f"cfa_merits_{merits_key}_{gate_key}_{ca_key}_{cfi_key}_{scenario_label}",
+                                "label": f"CFA Merits\n{claimant + ' wins' if merits_key == 'claimant_wins' else claimant + ' loses'}",
+                                "prob": round(p.get("cfa_merits_prob", 0.5), 4),
+                                "outcome": p["outcome"],
+                                "abs_prob": round(p["conditional_prob"] * arb_prob, 6),
+                            }
+                            gate_node["children"].append(child)
+
+                    del gate_node["_paths"]
+                    ca_node["children"].append(gate_node)
+
+                del ca_node["_paths"]
+                cfi_node["children"].append(ca_node)
+
+            del cfi_node["_paths"]
+            root["children"].append(cfi_node)
+
+        return root
+
     # Build tree structures
     tree_nodes = {
         "domestic": {
@@ -351,6 +463,10 @@ def _build_probability_summary() -> dict:
         "siac": {
             "scenario_a": _build_siac_tree("A", MI.SIAC_PATHS_A, arb_win),
             "scenario_b": _build_siac_tree("B", MI.SIAC_PATHS_B, arb_lose),
+        },
+        "hkiac": {
+            "scenario_a": _build_hkiac_tree("A", MI.HKIAC_PATHS_A, arb_win),
+            "scenario_b": _build_hkiac_tree("B", MI.HKIAC_PATHS_B, arb_lose),
         },
     }
 
@@ -374,6 +490,15 @@ def _build_probability_summary() -> dict:
                 "true_win": _pct(siac_tw),
                 "restart": _pct(siac_re),
                 "lose": _pct(siac_lo),
+            },
+        },
+        "hkiac": {
+            "scenario_a": hkiac_a,
+            "scenario_b": hkiac_b,
+            "aggregate": {
+                "true_win": _pct(hk_tw),
+                "restart": _pct(hk_re),
+                "lose": _pct(hk_lo),
             },
         },
     }
