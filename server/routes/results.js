@@ -20,6 +20,8 @@ const { authenticateToken } = require('../middleware/auth');
 // UUID v4 format validation regex
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const RUNS_DIR = path.resolve(__dirname, '..', 'runs');
+
 // Per-request ownership cache (attached to req object)
 async function verifyRunOwnership(req, runId) {
   // Auth is required — reject if no user
@@ -29,16 +31,24 @@ async function verifyRunOwnership(req, runId) {
   if (!req._runOwnershipCache) req._runOwnershipCache = {};
   if (runId in req._runOwnershipCache) return req._runOwnershipCache[runId];
 
+  // Strategy 1: DB lookup (preferred — survives server restart)
   try {
     const dbRun = await SimulationRun.findById(runId, req.user.id);
-    const owned = !!dbRun;
-    req._runOwnershipCache[runId] = owned;
-    return owned;
+    if (dbRun) {
+      req._runOwnershipCache[runId] = true;
+      return true;
+    }
   } catch {
-    // Fail closed — deny access on DB error
-    req._runOwnershipCache[runId] = false;
-    return false;
+    // DB unavailable — fall through to filesystem check
   }
+
+  // Strategy 2: Filesystem — runs are stored at runs/{userId}/{runId}/
+  // This covers the case where DB was unavailable when the run was created
+  // but the simulation still ran successfully via the in-memory runner.
+  const userRunDir = path.join(RUNS_DIR, req.user.id, runId);
+  const owned = fs.existsSync(userRunDir);
+  req._runOwnershipCache[runId] = owned;
+  return owned;
 }
 
 /**
