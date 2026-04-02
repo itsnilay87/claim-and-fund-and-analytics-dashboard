@@ -481,6 +481,25 @@ If you add a new Python dependency, add it to `engine/requirements.txt`.
 
 Simulation run outputs are stored in `/app/server/runs` inside the container, mounted as a Docker volume `runs-data`. This data **survives container restarts and re-deployments**.
 
+### 9. Known Outcomes & Post-Arb Stages
+
+Claims at post-arbitration stages (s34_pending, hc_challenge_pending, etc.) use
+`known_outcomes` to FORCE the arb_won draw and partially traverse the challenge tree.
+
+**Key rules:**
+- `arb_won` is NEVER drawn randomly when `known_outcomes.arb_outcome` is set
+- `known_quantum` uses a TruncatedNormal distribution (NOT deterministic) centered on the known amount
+- Challenge tree traversal forces known nodes but draws stochastically for remaining nodes
+- The RNG still consumes draws even when outcomes are forced (for seed reproducibility)
+- `enforcement` stage bypasses the entire MC pipeline and returns a fixed PathResult
+- Post-arb stages return an empty pipeline from `derive_pipeline()` — the MC engine handles everything
+
+**Validation chain:**
+KnownOutcomes.s37_outcome requires s34_outcome,
+slp_gate_outcome requires s37_outcome,
+slp_merits_outcome requires slp_gate_outcome='admitted', etc.
+The Pydantic model enforces this at parse time.
+
 ---
 
 ## Simulation Data Flow

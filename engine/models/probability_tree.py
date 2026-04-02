@@ -21,13 +21,14 @@ RNG contract:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 
 from engine.config.schema import (
     ChallengeTreeConfig,
     JurisdictionTemplate,
+    KnownOutcomes,
     ScenarioTree,
     TreeNode,
 )
@@ -353,3 +354,303 @@ def _validate_node(
 
     for child in node.children:
         _validate_node(child, scenario, errors, terminal_count)
+
+
+# ============================================================================
+# 5. simulate_challenge_tree_with_known_outcomes — partial tree traversal
+# ============================================================================
+
+def simulate_challenge_tree_with_known_outcomes(
+    tree: ScenarioTree,
+    known_outcomes: KnownOutcomes,
+    jurisdiction: str,
+    rng: np.random.Generator,
+    *,
+    scenario_label: str = "",
+) -> ChallengeResult:
+    """Traverse a challenge tree with some nodes already decided.
+
+    For each level of the tree, checks if a known_outcome exists for
+    that court stage.  If known:
+      - Forces the selection to the known branch (no RNG draw)
+      - Still draws duration from that node's duration_distribution
+    If unknown:
+      - Falls back to standard stochastic selection (rng.random())
+
+    Parameters
+    ----------
+    tree : ScenarioTree
+    known_outcomes : KnownOutcomes
+    jurisdiction : str
+        One of 'domestic', 'siac', 'hkiac'.
+    rng : np.random.Generator
+    scenario_label : str
+
+    Returns
+    -------
+    ChallengeResult
+    """
+    node = tree.root
+    path_names: list[str] = []
+    stages: list[dict[str, Any]] = []
+    total_duration = 0.0
+    slp_admitted = False
+
+    while node.children:
+        forced = _get_forced_child(node, known_outcomes, jurisdiction, scenario_label)
+
+        if forced is not None:
+            selected = forced
+            u = -1.0  # sentinel: not drawn
+        else:
+            # Standard stochastic draw
+            u = rng.random()
+            cumulative = 0.0
+            selected = None
+            for child in node.children:
+                cumulative += child.probability
+                if u < cumulative:
+                    selected = child
+                    break
+            if selected is None:
+                selected = node.children[-1]
+
+        # Draw duration (always stochastic, even for known nodes)
+        dur = _draw_duration(selected, rng) if selected.duration_distribution else 0.0
+        if dur > 0.0 or selected.duration_distribution:
+            stages.append({
+                "stage": selected.name,
+                "duration": dur,
+                "draw": float(u),
+                "known": forced is not None,
+            })
+            total_duration += dur
+
+        path_names.append(selected.name)
+        if "slp admitted" in selected.name.lower():
+            slp_admitted = True
+
+        node = selected
+
+    return ChallengeResult(
+        scenario=scenario_label,
+        outcome=node.outcome,
+        path_description=" → ".join(path_names),
+        challenge_duration_months=total_duration,
+        stages_traversed=stages,
+        slp_admitted=slp_admitted,
+    )
+
+
+# ============================================================================
+# Known-outcome helpers: identify decision level & force correct child
+# ============================================================================
+
+def _find_child_by_keyword(parent: TreeNode, keyword: str) -> Optional[TreeNode]:
+    """Find a child whose name contains *keyword* (case-insensitive)."""
+    kw = keyword.lower()
+    for c in parent.children:
+        if kw in c.name.lower():
+            return c
+    return None
+
+
+def _get_forced_child(
+    parent_node: TreeNode,
+    known_outcomes: KnownOutcomes,
+    jurisdiction: str,
+    scenario_label: str,
+) -> Optional[TreeNode]:
+    """Determine if this node's decision is already known.
+
+    Identifies the decision level by examining the FIRST child's name,
+    then maps the corresponding ``known_outcomes`` field to the correct
+    child.  Returns ``None`` when the decision is unknown (stochastic).
+    """
+    if not parent_node.children:
+        return None
+    first_cn = parent_node.children[0].name.lower()
+
+    if jurisdiction == "domestic":
+        return _forced_child_domestic(parent_node, known_outcomes, first_cn)
+    elif jurisdiction == "siac":
+        return _forced_child_siac(parent_node, known_outcomes, first_cn, scenario_label)
+    elif jurisdiction == "hkiac":
+        return _forced_child_hkiac(parent_node, known_outcomes, first_cn, scenario_label)
+    return None
+
+
+def _forced_child_domestic(
+    parent: TreeNode, ko: KnownOutcomes, first_cn: str,
+) -> Optional[TreeNode]:
+    """Indian Domestic: S.34 → S.37 → SLP gate → SLP merits."""
+    # Check from most-specific to least-specific to avoid collisions
+    if "merits" in first_cn:
+        # SLP merits level
+        if ko.slp_merits_outcome is None:
+            return None
+        if ko.slp_merits_outcome == "claimant_won":
+            return _find_child_by_keyword(parent, "tata wins")
+        else:
+            # Respondent won merits — pick child NOT containing "tata wins"
+            f = _find_child_by_keyword(parent, "dfccil wins")
+            if f:
+                return f
+            for c in parent.children:
+                if "tata wins" not in c.name.lower():
+                    return c
+            return None
+
+    if "slp" in first_cn and "s.3" not in first_cn:
+        # SLP gate level (children: "... SLP dismissed", "... SLP admitted")
+        if ko.slp_gate_outcome is None:
+            return None
+        if ko.slp_gate_outcome == "dismissed":
+            return _find_child_by_keyword(parent, "dismissed")
+        else:
+            return _find_child_by_keyword(parent, "admitted")
+
+    if "s.37" in first_cn:
+        if ko.s37_outcome is None:
+            return None
+        if ko.s37_outcome == "claimant_won":
+            # "dismissed" (Scenario A) or "tata wins" (Scenario B)
+            return (
+                _find_child_by_keyword(parent, "dismissed")
+                or _find_child_by_keyword(parent, "tata wins")
+            )
+        else:
+            return (
+                _find_child_by_keyword(parent, "dfccil wins")
+                or _find_child_by_keyword(parent, "loses")
+                or _find_child_by_keyword(parent, "fails")
+            )
+
+    if "s.34" in first_cn:
+        if ko.s34_outcome is None:
+            return None
+        if ko.s34_outcome == "claimant_won":
+            return (
+                _find_child_by_keyword(parent, "dismissed")
+                or _find_child_by_keyword(parent, "tata wins")
+            )
+        else:
+            return (
+                _find_child_by_keyword(parent, "dfccil wins")
+                or _find_child_by_keyword(parent, "fails")
+            )
+
+    return None
+
+
+def _forced_child_siac(
+    parent: TreeNode, ko: KnownOutcomes, first_cn: str, scenario: str,
+) -> Optional[TreeNode]:
+    """SIAC Singapore: HC → COA."""
+    if "hc" in first_cn:
+        if ko.hc_outcome is None:
+            return None
+        if scenario == "A":
+            # Scenario A: respondent challenges. upheld = claimant_won
+            if ko.hc_outcome == "claimant_won":
+                return _find_child_by_keyword(parent, "upheld")
+            else:
+                return _find_child_by_keyword(parent, "set aside")
+        else:
+            # Scenario B: claimant challenges. overturns = claimant_won
+            if ko.hc_outcome == "claimant_won":
+                return _find_child_by_keyword(parent, "overturns")
+            else:
+                return _find_child_by_keyword(parent, "upholds")
+
+    if "coa" in first_cn:
+        if ko.coa_outcome is None:
+            return None
+        if scenario == "A":
+            if ko.hc_outcome == "claimant_won":
+                # Under "HC award upheld": upheld vs set aside
+                return _find_child_by_keyword(
+                    parent, "upheld" if ko.coa_outcome == "claimant_won" else "set aside"
+                )
+            else:
+                # Under "HC award set aside": restores vs upholds
+                return _find_child_by_keyword(
+                    parent, "restores" if ko.coa_outcome == "claimant_won" else "upholds"
+                )
+        else:
+            if ko.hc_outcome == "claimant_won":
+                # Under "HC overturns adverse": upholds (overturn) vs restores (adverse)
+                return _find_child_by_keyword(
+                    parent, "upholds" if ko.coa_outcome == "claimant_won" else "restores"
+                )
+            else:
+                # Under "HC upholds adverse": overturns vs upholds
+                return _find_child_by_keyword(
+                    parent, "overturns" if ko.coa_outcome == "claimant_won" else "upholds"
+                )
+
+    return None
+
+
+def _forced_child_hkiac(
+    parent: TreeNode, ko: KnownOutcomes, first_cn: str, scenario: str,
+) -> Optional[TreeNode]:
+    """HKIAC Hong Kong: CFI → CA → CFA gate → CFA merits."""
+    if "cfi" in first_cn:
+        if ko.cfi_outcome is None:
+            return None
+        if scenario == "A":
+            return _find_child_by_keyword(
+                parent, "upheld" if ko.cfi_outcome == "claimant_won" else "set aside"
+            )
+        else:
+            return _find_child_by_keyword(
+                parent, "overturns" if ko.cfi_outcome == "claimant_won" else "upholds"
+            )
+
+    # CFA before CA — "cfa" won't match "ca " but need explicit ordering
+    if "cfa" in first_cn:
+        if "leave" in first_cn:
+            # CFA gate level
+            if ko.cfa_gate_outcome is None:
+                return None
+            return _find_child_by_keyword(
+                parent, "refused" if ko.cfa_gate_outcome == "dismissed" else "granted"
+            )
+        else:
+            # CFA merits level — children are terminal nodes, match by outcome
+            if ko.cfa_merits_outcome is None:
+                return None
+            if ko.cfa_merits_outcome == "claimant_won":
+                target = "TRUE_WIN" if scenario == "A" else "RESTART"
+            else:
+                target = "LOSE"
+            for c in parent.children:
+                if c.outcome == target:
+                    return c
+            return None
+
+    if "ca " in first_cn:
+        if ko.ca_outcome is None:
+            return None
+        # CA follows same contextual pattern as CFI outcome
+        if scenario == "A":
+            if ko.cfi_outcome == "claimant_won":
+                return _find_child_by_keyword(
+                    parent, "upheld" if ko.ca_outcome == "claimant_won" else "set aside"
+                )
+            else:
+                return _find_child_by_keyword(
+                    parent, "restores" if ko.ca_outcome == "claimant_won" else "upholds"
+                )
+        else:
+            if ko.cfi_outcome == "claimant_won":
+                return _find_child_by_keyword(
+                    parent, "upholds" if ko.ca_outcome == "claimant_won" else "restores"
+                )
+            else:
+                return _find_child_by_keyword(
+                    parent, "overturns" if ko.ca_outcome == "claimant_won" else "upholds"
+                )
+
+    return None

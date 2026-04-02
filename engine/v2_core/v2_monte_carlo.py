@@ -94,11 +94,35 @@ def _simulate_claim_path(
     timeline = draw_pipeline_duration(claim, rng)
 
     # ── Step 2: Draw arbitration outcome ──
-    arb_won = rng.random() < MI.ARB_WIN_PROBABILITY
+    ko = getattr(MI, 'KNOWN_OUTCOMES', None)
+    if ko is not None and ko.arb_outcome is not None:
+        arb_won = (ko.arb_outcome == "won")
+        _ = rng.random()  # consume draw for reproducibility
+    else:
+        arb_won = rng.random() < MI.ARB_WIN_PROBABILITY
 
     # ── Step 3: Draw quantum (conditional on arb outcome) ──
     if arb_won:
-        quantum = draw_quantum(claim.soc_value_cr, rng)
+        # Check for known quantum amount
+        if ko is not None and ko.known_quantum_pct is not None:
+            raw = rng.normal(ko.known_quantum_pct, 0.10)
+            known_pct = float(np.clip(raw, 0.0, 1.0))
+            quantum = QuantumResult(
+                band_idx=-2, quantum_pct=known_pct,
+                quantum_cr=claim.soc_value_cr * known_pct,
+                expected_quantum_cr=claim.soc_value_cr * ko.known_quantum_pct,
+            )
+        elif ko is not None and ko.known_quantum_cr is not None:
+            kp = ko.known_quantum_cr / claim.soc_value_cr if claim.soc_value_cr > 0 else 0.0
+            raw = rng.normal(kp, 0.10)
+            known_pct = float(np.clip(raw, 0.0, 1.0))
+            quantum = QuantumResult(
+                band_idx=-2, quantum_pct=known_pct,
+                quantum_cr=claim.soc_value_cr * known_pct,
+                expected_quantum_cr=ko.known_quantum_cr,
+            )
+        else:
+            quantum = draw_quantum(claim.soc_value_cr, rng)
     else:
         # LOSE: quantum = 0, but carry expected quantum for reference
         eq_cr = compute_expected_quantum(claim.soc_value_cr)

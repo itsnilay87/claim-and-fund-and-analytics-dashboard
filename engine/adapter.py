@@ -93,6 +93,8 @@ _MI_PATCHABLE_ATTRS: list[str] = [
     # Config override flag
     "CONFIG_OVERRIDE_ACTIVE",
     "_EXPECTED_OUTCOME_TOTALS",
+    # Known outcomes (for post-arb stage handling)
+    "KNOWN_OUTCOMES",
     # Party names (dynamic per claim)
     "CLAIMANT_NAME",
     "RESPONDENT_NAME",
@@ -135,9 +137,11 @@ def save_and_restore_mi():
 _JURISDICTION_MAP: dict[str, str] = {
     "indian_domestic": "domestic",
     "siac_singapore": "siac",
+    "hkiac_hongkong": "hkiac",
     # Direct V2 values pass through
     "domestic": "domestic",
     "siac": "siac",
+    "hkiac": "hkiac",
 }
 
 # Map platform claim_type → V2 archetype
@@ -200,24 +204,49 @@ _DOMESTIC_FULL_PIPELINE = ["dab", "arbitration", "challenge_tree"]
 # Full SIAC pipeline stages in order
 _SIAC_FULL_PIPELINE = ["dab", "arbitration", "challenge_tree"]
 
-# Maps current_stage → index into the full pipeline (how many to skip)
+# Stage categories:
+#   "pre_arb"  → skip into ["dab", "arbitration", "challenge_tree"]
+#   "post_arb" → pipeline is empty (all pre-arb stages completed)
+#
+# Post-arb stages are handled by the MC engine itself using known_outcomes
+# to determine which tree branch to enter and how far to skip.
+
 _STAGE_SKIP_MAP: dict[str, int] = {
-    # Not started yet or at beginning
+    # ── Pre-arbitration stages (pipeline = dab → arb → challenge_tree) ──
     "": 0,
     "not_started": 0,
+    "pre_dab": 0,
     "soc_filed_at_dab": 0,
     "dab_constituted": 0,
     "dab_commenced": 0,
-    # DAB done → skip DAB
-    "dab_award_done": 1,
+    "dab": 0,
+    "dab_found_premature": 0,  # special-cased in derive_pipeline()
+    "dab_award_done": 1,       # DAB done → skip DAB stage
     "dab_completed": 1,
-    "dab_found_premature": 0,  # needs re-referral then DAB
-    # In arbitration → partial arb remaining
-    "arb_hearings_ongoing": 1,  # uses arb_remaining pipeline
-    "arb_commenced": 1,
-    # Arbitration done → skip to challenge tree
-    "arb_award_done": 2,
-    "challenge_pending": 2,
+    "arb_commenced": 1,        # in arbitration → skip DAB
+    "arb_hearings_ongoing": 1, # special-cased: uses arb_remaining
+    # ── Post-arbitration stages (pipeline is empty) ──
+    "arb_award_done": 3,
+    "challenge_pending": 3,
+    # Indian Domestic post-arb
+    "s34_pending": 3,
+    "s34_decided": 3,
+    "s37_pending": 3,
+    "s37_decided": 3,
+    "slp_pending": 3,
+    # SIAC Singapore post-arb
+    "hc_challenge_pending": 3,
+    "hc_decided": 3,
+    "coa_pending": 3,
+    "coa_decided": 3,
+    # HKIAC Hong Kong post-arb
+    "cfi_challenge_pending": 3,
+    "cfi_decided": 3,
+    "ca_pending": 3,
+    "ca_decided": 3,
+    "cfa_pending": 3,
+    # All jurisdictions
+    "enforcement": 3,
 }
 
 
@@ -227,18 +256,12 @@ def derive_pipeline(
 ) -> list[str]:
     """Determine remaining V2 pipeline stages for this claim.
 
-    Based on ``claim.current_stage`` and ``claim.jurisdiction``:
-    - Domestic claims: ``['dab', 'arbitration', 'challenge_tree']``
-    - SIAC claims: ``['dab', 'arbitration', 'challenge_tree']``
-    - Mid-pipeline stages truncate stages already completed.
-
-    Special cases:
-    - ``dab_found_premature`` → ``['re_referral', 'dab', 'arbitration', 'challenge_tree']``
-    - ``arb_hearings_ongoing`` → ``['arb_remaining', 'challenge_tree']``
+    Post-arbitration stages return an EMPTY pipeline — the MC engine
+    handles them directly using known_outcomes.
     """
     stage = claim.current_stage or ""
 
-    # Special: re-referral needed
+    # Special: re-referral needed (Indian Domestic only)
     if stage == "dab_found_premature":
         return ["re_referral", "dab", "arbitration", "challenge_tree"]
 
@@ -254,7 +277,72 @@ def derive_pipeline(
     else:
         full = list(_DOMESTIC_FULL_PIPELINE)
 
+    # Post-arb stages: pipeline is empty (skip >= len(full))
+    if skip >= len(full):
+        return []
+
     return full[skip:]
+
+
+def derive_known_outcomes_from_stage(
+    stage: str,
+    jurisdiction: str,
+) -> dict:
+    """Return the MINIMUM known_outcomes fields implied by a current_stage.
+
+    For post-arb stages, the arb_outcome is automatically set.
+    For challenge stages, preceding challenge outcomes must be set.
+    Returns a dict that can be merged into known_outcomes.
+
+    The user must still fill in the SPECIFIC outcome values (won/lost),
+    but this function determines WHICH fields must be non-null.
+
+    Example: stage='s37_pending' implies arb_outcome and s34_outcome
+    must be set (but the user chooses won/lost for each).
+    """
+    result: dict = {}
+
+    _POST_ARB_STAGES = {
+        'arb_award_done', 'challenge_pending', 'enforcement',
+        # Indian Domestic
+        's34_pending', 's34_decided', 's37_pending', 's37_decided', 'slp_pending',
+        # SIAC
+        'hc_challenge_pending', 'hc_decided', 'coa_pending', 'coa_decided',
+        # HKIAC
+        'cfi_challenge_pending', 'cfi_decided', 'ca_pending', 'ca_decided', 'cfa_pending',
+    }
+
+    if stage not in _POST_ARB_STAGES:
+        return result
+
+    _STAGE_REQUIRED_OUTCOMES: dict[str, list[str]] = {
+        'arb_award_done': ['arb_outcome'],
+        'challenge_pending': ['arb_outcome'],
+        # Indian Domestic
+        's34_pending': ['arb_outcome'],
+        's34_decided': ['arb_outcome', 's34_outcome'],
+        's37_pending': ['arb_outcome', 's34_outcome'],
+        's37_decided': ['arb_outcome', 's34_outcome', 's37_outcome'],
+        'slp_pending': ['arb_outcome', 's34_outcome', 's37_outcome'],
+        # SIAC
+        'hc_challenge_pending': ['arb_outcome'],
+        'hc_decided': ['arb_outcome', 'hc_outcome'],
+        'coa_pending': ['arb_outcome', 'hc_outcome'],
+        'coa_decided': ['arb_outcome', 'hc_outcome', 'coa_outcome'],
+        # HKIAC
+        'cfi_challenge_pending': ['arb_outcome'],
+        'cfi_decided': ['arb_outcome', 'cfi_outcome'],
+        'ca_pending': ['arb_outcome', 'cfi_outcome'],
+        'ca_decided': ['arb_outcome', 'cfi_outcome', 'ca_outcome'],
+        'cfa_pending': ['arb_outcome', 'cfi_outcome', 'ca_outcome'],
+        # Final
+        'enforcement': ['arb_outcome'],
+    }
+
+    return {
+        'required_fields': _STAGE_REQUIRED_OUTCOMES.get(stage, []),
+        'is_post_arb': True,
+    }
 
 
 # ============================================================================
@@ -331,6 +419,9 @@ def patch_master_inputs_for_claim(
     MI.CLAIMANT_NAME = claim.claimant or "Claimant"
     MI.RESPONDENT_NAME = claim.respondent or "Respondent"
     MI.PERSPECTIVE = getattr(claim, 'perspective', 'claimant') or "claimant"
+
+    # ── Known outcomes (for post-arb stage handling) ──
+    MI.KNOWN_OUTCOMES = claim.known_outcomes if hasattr(claim, 'known_outcomes') else None
 
 
 def _patch_timeline_durations(

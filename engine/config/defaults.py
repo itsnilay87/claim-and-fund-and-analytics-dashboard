@@ -19,6 +19,7 @@ from .schema import (
     ChallengeTreeConfig,
     ClaimConfig,
     InterestConfig,
+    KnownOutcomes,
     LegalCostConfig,
     QuantumBand,
     QuantumConfig,

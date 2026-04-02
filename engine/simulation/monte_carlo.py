@@ -37,14 +37,22 @@ from engine.config.schema import (
 from engine.models.probability_tree import (
     ChallengeResult,
     simulate_challenge_tree,
+    simulate_challenge_tree_with_known_outcomes,
 )
 from engine.models.quantum_model import (
     QuantumResult,
     compute_interest_on_quantum,
+    draw_known_quantum,
     draw_quantum,
 )
 from engine.models.timeline_model import draw_pipeline_duration
 from engine.models.legal_cost_model import build_monthly_legal_costs
+
+# Jurisdiction code mapping for challenge tree known-outcome traversal
+_JUR_MAP: dict[str, str] = {
+    "domestic": "domestic", "siac": "siac", "hkiac": "hkiac",
+    "indian_domestic": "domestic", "siac_singapore": "siac", "hkiac_hongkong": "hkiac",
+}
 
 
 # ============================================================================
@@ -170,19 +178,67 @@ def simulate_one_path(
     """
     max_horizon = claim.timeline.max_horizon_months
     payment_delay = claim.timeline.payment_delay_months
+    ko = claim.known_outcomes  # KnownOutcomes (all None if not set)
+
+    # ── Special case: enforcement stage ──
+    # All legal proceedings complete — just compute collection.
+    if claim.current_stage == 'enforcement':
+        arb_won = (ko.arb_outcome == 'won') if ko.arb_outcome else True
+        if arb_won:
+            if ko.known_quantum_pct is not None:
+                quantum_pct = ko.known_quantum_pct
+            elif ko.known_quantum_cr is not None:
+                quantum_pct = ko.known_quantum_cr / claim.soc_value_cr if claim.soc_value_cr > 0 else 0.0
+            else:
+                quantum_pct = claim.quantum.expected_quantum_pct
+            quantum_cr = claim.soc_value_cr * quantum_pct
+            collected = quantum_cr * claim.claimant_share_pct
+        else:
+            quantum_pct = 0.0
+            quantum_cr = 0.0
+            collected = 0.0
+
+        return PathResult(
+            outcome="TRUE_WIN" if arb_won else "LOSE",
+            quantum_cr=quantum_cr,
+            quantum_pct=min(quantum_pct, 1.0),
+            timeline_months=payment_delay,
+            legal_costs_cr=0.0,
+            collected_cr=collected,
+            challenge_path_id="ENFORCEMENT",
+            stages_traversed=["enforcement"],
+            band_idx=-3,
+            interest_cr=0.0,
+        )
 
     # ── Step 1: Draw pre-arbitration pipeline durations ──
     timeline_months, stage_durations = draw_pipeline_duration(claim, rng)
 
     # ── Step 2: Draw arbitration outcome ──
-    arb_won = rng.random() < claim.arbitration.win_probability
+    if ko.arb_outcome is not None:
+        # FORCED: arb outcome is already known
+        arb_won = (ko.arb_outcome == "won")
+        # Still consume an RNG draw to maintain reproducibility
+        _ = rng.random()
+    else:
+        arb_won = rng.random() < claim.arbitration.win_probability
 
     # ── Step 3: Draw quantum (conditional on arb outcome) ──
     quantum_result: Optional[QuantumResult] = None
     if arb_won:
-        quantum_result = draw_quantum(claim.soc_value_cr, claim.quantum, rng)
+        if ko.known_quantum_pct is not None:
+            quantum_result = draw_known_quantum(
+                claim.soc_value_cr, ko.known_quantum_pct, rng,
+            )
+        elif ko.known_quantum_cr is not None:
+            known_pct = ko.known_quantum_cr / claim.soc_value_cr if claim.soc_value_cr > 0 else 0.0
+            quantum_result = draw_known_quantum(
+                claim.soc_value_cr, known_pct, rng,
+            )
+        else:
+            quantum_result = draw_quantum(claim.soc_value_cr, claim.quantum, rng)
 
-    # ── Step 4: Simulate post-award challenge tree (GENERIC) ──
+    # ── Step 4: Simulate post-award challenge tree ──
     if arb_won:
         tree = claim.challenge_tree.scenario_a
         scenario_label = "A"
@@ -190,9 +246,22 @@ def simulate_one_path(
         tree = claim.challenge_tree.scenario_b
         scenario_label = "B"
 
-    challenge_result = simulate_challenge_tree(
-        tree, rng, scenario_label=scenario_label,
-    )
+    # Use partial traversal if any challenge outcomes are known
+    _has_known_challenge = any([
+        ko.s34_outcome, ko.s37_outcome, ko.slp_gate_outcome, ko.slp_merits_outcome,
+        ko.hc_outcome, ko.coa_outcome,
+        ko.cfi_outcome, ko.ca_outcome, ko.cfa_gate_outcome, ko.cfa_merits_outcome,
+    ])
+
+    if _has_known_challenge:
+        engine_jur = _JUR_MAP.get(claim.jurisdiction, "domestic")
+        challenge_result = simulate_challenge_tree_with_known_outcomes(
+            tree, ko, engine_jur, rng, scenario_label=scenario_label,
+        )
+    else:
+        challenge_result = simulate_challenge_tree(
+            tree, rng, scenario_label=scenario_label,
+        )
 
     # ── NO_RESTART_MODE: remap RESTART → LOSE ──
     if claim.no_restart_mode and challenge_result.outcome == "RESTART":

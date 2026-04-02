@@ -25,6 +25,13 @@ import InterestEditor from '../components/claim/InterestEditor';
 import ClaimSummaryCard from '../components/claim/ClaimSummaryCard';
 import TemplateSelector from '../components/claim/TemplateSelector';
 
+const POST_ARB_STAGES = new Set([
+  'arb_award_done', 'challenge_pending', 'enforcement',
+  's34_pending', 's34_decided', 's37_pending', 's37_decided', 'slp_pending',
+  'hc_challenge_pending', 'hc_decided', 'coa_pending', 'coa_decided',
+  'cfi_challenge_pending', 'cfi_decided', 'ca_pending', 'ca_decided', 'cfa_pending',
+]);
+
 const TABS = [
   { id: 'basics', label: 'Basics', icon: FileText },
   { id: 'arbitration', label: 'Arbitration', icon: Scale },
@@ -135,7 +142,19 @@ export default function ClaimEditor() {
   const handleStageChange = (stageName) => {
     updateField('current_stage', stageName);
 
-    // Find the selected stage in available_stages
+    // For post-arb stages, the pipeline is empty (no pre_arb_stages to set)
+    const isPostArb = POST_ARB_STAGES.has(stageName);
+
+    if (isPostArb) {
+      // Clear pre_arb_stages since we're past arbitration
+      updateField('timeline', {
+        ...(draft?.timeline || {}),
+        pre_arb_stages: [],
+      });
+      return;
+    }
+
+    // For pre-arb stages, build pipeline as before
     const stagePool = template?.available_stages || [];
     if (stagePool.length === 0) return;
 
@@ -163,6 +182,17 @@ export default function ClaimEditor() {
     updateField('timeline', {
       ...currentTimeline,
       pre_arb_stages: preArbStages,
+    });
+
+    // Reset known_outcomes when switching to pre-arb stage
+    updateField('known_outcomes', {
+      dab_outcome: null, arb_outcome: null,
+      known_quantum_cr: null, known_quantum_pct: null,
+      s34_outcome: null, s37_outcome: null,
+      slp_gate_outcome: null, slp_merits_outcome: null,
+      hc_outcome: null, coa_outcome: null,
+      cfi_outcome: null, ca_outcome: null,
+      cfa_gate_outcome: null, cfa_merits_outcome: null,
     });
   };
 

@@ -17,6 +17,7 @@ const CALC_FIELDS = new Set([
   'soc_value_cr', 'jurisdiction', 'claim_type', 'current_stage',
   'claimant_share_pct', 'quantum', 'arbitration', 'interest',
   'timeline', 'legal_costs', 'probability_tree', 'dab',
+  'known_outcomes',
 ]);
 
 // Valid claim status values

@@ -345,49 +345,118 @@
 
   "available_stages": [
     {
+      "name": "pre_dab",
+      "label": "Pre-DAB (Claim Preparation)",
+      "duration_low": 0, "duration_high": 0,
+      "legal_cost_low": 0, "legal_cost_high": 0,
+      "pipeline_after": ["dab", "arbitration"],
+      "stage_category": "pre_arb"
+    },
+    {
       "name": "dab",
       "label": "DAB (Dispute Adjudication Board)",
-      "duration_low": 4.8,
-      "duration_high": 13.1,
-      "legal_cost_low": 0.50,
-      "legal_cost_high": 1.0,
-      "pipeline_after": ["arbitration"]
+      "duration_low": 4.8, "duration_high": 13.1,
+      "legal_cost_low": 0.50, "legal_cost_high": 1.0,
+      "pipeline_after": ["arbitration"],
+      "stage_category": "pre_arb"
     },
     {
-      "name": "arbitration",
-      "label": "Arbitration",
-      "duration_low": 20.3,
-      "duration_high": 23.4,
-      "legal_cost_low": 8.0,
-      "legal_cost_high": 8.0,
-      "pipeline_after": []
+      "name": "dab_found_premature",
+      "label": "DAB — Found Premature (Re-referral Required)",
+      "duration_low": 0, "duration_high": 0,
+      "legal_cost_low": 0, "legal_cost_high": 0,
+      "pipeline_after": ["dab", "arbitration"],
+      "stage_category": "pre_arb",
+      "notes": "Engine inserts re_referral stage internally"
     },
     {
-      "name": "arb_remaining",
-      "label": "Arbitration Remaining",
-      "duration_low": 6.0,
-      "duration_high": 12.0,
-      "legal_cost_low": 4.0,
-      "legal_cost_high": 4.0,
-      "pipeline_after": []
+      "name": "dab_award_done",
+      "label": "DAB Award Issued",
+      "duration_low": 0, "duration_high": 0,
+      "legal_cost_low": 0, "legal_cost_high": 0,
+      "pipeline_after": ["arbitration"],
+      "stage_category": "pre_arb",
+      "requires_outcome": ["dab_outcome"]
     },
     {
-      "name": "re_referral",
-      "label": "Re-Referral",
-      "duration_low": 3.0,
-      "duration_high": 7.0,
-      "legal_cost_low": 0.25,
-      "legal_cost_high": 0.50,
-      "pipeline_after": ["dab", "arbitration"]
+      "name": "arb_commenced",
+      "label": "Arbitration Filed / Commenced",
+      "duration_low": 20.3, "duration_high": 23.4,
+      "legal_cost_low": 8.0, "legal_cost_high": 8.0,
+      "pipeline_after": [],
+      "stage_category": "arb"
     },
     {
-      "name": "re_arbitration",
-      "label": "Re-Arbitration",
-      "duration_low": 20.3,
-      "duration_high": 23.4,
-      "legal_cost_low": 8.0,
-      "legal_cost_high": 8.0,
-      "pipeline_after": []
+      "name": "arb_hearings_ongoing",
+      "label": "Arbitration Hearings Ongoing",
+      "duration_low": 6.0, "duration_high": 12.0,
+      "legal_cost_low": 4.0, "legal_cost_high": 4.0,
+      "pipeline_after": [],
+      "stage_category": "arb",
+      "notes": "Partial arbitration remaining"
+    },
+    {
+      "name": "arb_award_done",
+      "label": "Arbitration Award Issued",
+      "duration_low": 0, "duration_high": 0,
+      "legal_cost_low": 0, "legal_cost_high": 0,
+      "pipeline_after": [],
+      "stage_category": "post_arb",
+      "requires_outcome": ["arb_outcome"]
+    },
+    {
+      "name": "s34_pending",
+      "label": "S.34 Challenge Pending",
+      "duration_low": 9.0, "duration_high": 18.0,
+      "legal_cost_low": 2.0, "legal_cost_high": 3.0,
+      "pipeline_after": [],
+      "stage_category": "post_arb",
+      "requires_outcome": ["arb_outcome"]
+    },
+    {
+      "name": "s34_decided",
+      "label": "S.34 Challenge Decided",
+      "duration_low": 0, "duration_high": 0,
+      "legal_cost_low": 0, "legal_cost_high": 0,
+      "pipeline_after": [],
+      "stage_category": "post_arb",
+      "requires_outcome": ["arb_outcome", "s34_outcome"]
+    },
+    {
+      "name": "s37_pending",
+      "label": "S.37 Appeal Pending",
+      "duration_low": 6.0, "duration_high": 12.0,
+      "legal_cost_low": 1.0, "legal_cost_high": 2.0,
+      "pipeline_after": [],
+      "stage_category": "post_arb",
+      "requires_outcome": ["arb_outcome", "s34_outcome"]
+    },
+    {
+      "name": "s37_decided",
+      "label": "S.37 Appeal Decided",
+      "duration_low": 0, "duration_high": 0,
+      "legal_cost_low": 0, "legal_cost_high": 0,
+      "pipeline_after": [],
+      "stage_category": "post_arb",
+      "requires_outcome": ["arb_outcome", "s34_outcome", "s37_outcome"]
+    },
+    {
+      "name": "slp_pending",
+      "label": "SLP Before Supreme Court — Pending",
+      "duration_low": 4.0, "duration_high": 24.0,
+      "legal_cost_low": 2.0, "legal_cost_high": 3.0,
+      "pipeline_after": [],
+      "stage_category": "post_arb",
+      "requires_outcome": ["arb_outcome", "s34_outcome", "s37_outcome"]
+    },
+    {
+      "name": "enforcement",
+      "label": "Enforcement / Collection",
+      "duration_low": 3.0, "duration_high": 6.0,
+      "legal_cost_low": 0.5, "legal_cost_high": 1.0,
+      "pipeline_after": [],
+      "stage_category": "post_arb",
+      "notes": "Final stage — all legal challenges resolved, collecting award"
     }
   ],
 

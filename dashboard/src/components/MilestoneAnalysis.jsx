@@ -35,12 +35,29 @@ export default function MilestoneAnalysis({ data }) {
   const v2Summary = milestoneData?.summary || null;
 
   // Derive milestone frequency from claims stage data
-  const stages = ['dab_commenced', 'dab_award_done', 'arb_hearings_ongoing', 'arb_award_done', 'enforcement'];
+  const stages = [
+    'pre_dab', 'dab', 'dab_award_done',
+    'arb_commenced', 'arb_hearings_ongoing', 'arb_award_done',
+    's34_pending', 's37_pending', 'slp_pending',
+    'hc_challenge_pending', 'coa_pending',
+    'cfi_challenge_pending', 'ca_pending', 'cfa_pending',
+    'enforcement',
+  ];
   const stageLabels = {
-    dab_commenced: 'DAB Filed',
+    pre_dab: 'Pre-DAB',
+    dab: 'DAB',
     dab_award_done: 'DAB Award',
+    arb_commenced: 'Arb Filed',
     arb_hearings_ongoing: 'Arb Hearing',
     arb_award_done: 'Arb Award',
+    s34_pending: 'S.34',
+    s37_pending: 'S.37',
+    slp_pending: 'SLP',
+    hc_challenge_pending: 'HC Challenge',
+    coa_pending: 'COA',
+    cfi_challenge_pending: 'CFI',
+    ca_pending: 'CA',
+    cfa_pending: 'CFA',
     enforcement: 'Enforcement',
   };
 

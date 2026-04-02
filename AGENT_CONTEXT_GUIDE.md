@@ -212,6 +212,29 @@ No matter what change you're making, **always** attach:
 | `server/routes/simulate.js` | Jurisdiction-aware config enrichment |
 | `app/src/pages/ClaimEditor.jsx` | Jurisdiction picker UI |
 
+### 10. Known Outcomes / Legal Stage Changes
+
+When modifying how legal stages or known outcomes work:
+
+**Always attach:**
+- `engine/config/schema.py` — `KnownOutcomes` model, `ClaimConfig.known_outcomes`
+- `engine/adapter.py` — `_STAGE_SKIP_MAP`, `derive_pipeline()`, `derive_known_outcomes_from_stage()`
+- `engine/simulation/monte_carlo.py` — `simulate_one_path()` (known_outcomes logic)
+- `engine/v2_core/v2_monte_carlo.py` — `_simulate_claim_path()` (V2 known_outcomes logic)
+
+**For tree traversal changes:**
+- `engine/models/probability_tree.py` — `simulate_challenge_tree_with_known_outcomes()`
+- `engine/models/quantum_model.py` — `draw_known_quantum()`
+
+**For frontend stage/outcome changes:**
+- `app/src/components/claim/ClaimBasicsForm.jsx` — Stage dropdown, known outcomes section
+- `app/src/pages/ClaimEditor.jsx` — `handleStageChange()`
+
+**For jurisdiction template changes:**
+- `engine/jurisdictions/indian_domestic.json`
+- `engine/jurisdictions/siac_singapore.json`
+- `engine/jurisdictions/hkiac_hongkong.json`
+
 ---
 
 ## Prompt Template for AI Agent

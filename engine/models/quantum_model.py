@@ -150,3 +150,48 @@ def compute_interest_on_quantum(
         interest = quantum_cr * rate * (duration_months / 12.0)
 
     return interest
+
+
+# ============================================================================
+# Known Quantum Distribution Draw
+# ============================================================================
+
+def draw_known_quantum(
+    soc_cr: float,
+    known_quantum_pct: float,
+    rng: np.random.Generator,
+    sigma: float = 0.10,
+) -> QuantumResult:
+    """Draw quantum centered on a KNOWN award amount.
+
+    When a claim has a known arbitration award, the quantum is not fully
+    deterministic — it could still change through court challenges
+    (partial set-aside, remand, etc.).  We model this uncertainty as a
+    truncated normal distribution centered on the known percentage.
+
+    Parameters
+    ----------
+    soc_cr : float
+        Statement of Claim value in currency Cr.
+    known_quantum_pct : float
+        Known quantum as fraction of SOC (the award amount / SOC).
+    rng : np.random.Generator
+    sigma : float
+        Standard deviation for the normal distribution (default 0.10 = 10%).
+
+    Returns
+    -------
+    QuantumResult
+
+    Distribution:
+        quantum_pct ~ TruncatedNormal(μ=known_quantum_pct, σ=sigma, [0, 1])
+    """
+    raw = rng.normal(known_quantum_pct, sigma)
+    quantum_pct = float(np.clip(raw, 0.0, 1.0))
+    quantum_cr = soc_cr * quantum_pct
+
+    return QuantumResult(
+        band_idx=-2,  # -2 signals "known quantum distribution" (vs -1 for loss)
+        quantum_pct=quantum_pct,
+        quantum_cr=quantum_cr,
+    )

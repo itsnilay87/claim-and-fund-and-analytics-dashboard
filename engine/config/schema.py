@@ -499,6 +499,146 @@ class ArbitrationConfig(BaseModel):
 
 
 # ============================================================================
+# 10a. KnownOutcomes
+# ============================================================================
+
+class KnownOutcomes(BaseModel):
+    """Known legal outcomes for claims at post-decision stages.
+
+    When a claim has progressed past arbitration or past specific court
+    challenges, these fields record the known results.  The MC engine
+    uses these to SKIP random draws for already-decided events and to
+    enter the correct scenario tree branch.
+
+    All fields default to None (= not yet decided / unknown).
+    """
+
+    # ── Arbitration-level outcomes ──
+    dab_outcome: Optional[Literal["favorable", "adverse", "premature"]] = Field(
+        default=None,
+        description="DAB decision outcome. 'favorable' = DAB awarded in claimant's favor, "
+                    "'adverse' = DAB ruled against claimant, "
+                    "'premature' = DAB found claim premature (Indian Domestic only).",
+    )
+    arb_outcome: Optional[Literal["won", "lost"]] = Field(
+        default=None,
+        description="Arbitration award outcome. 'won' = claimant won arbitration, "
+                    "'lost' = claimant lost arbitration.",
+    )
+
+    # ── Known quantum (when arb_outcome = 'won') ──
+    known_quantum_cr: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Known awarded quantum in currency Cr. "
+                    "Used as the CENTER of a stochastic distribution (not deterministic). "
+                    "The actual quantum in simulation is drawn from "
+                    "TruncatedNormal(\u03bc=known_quantum_pct, \u03c3=0.10, [0, 1]).",
+    )
+    known_quantum_pct: Optional[float] = Field(
+        default=None, ge=0.0, le=2.0,
+        description="Known awarded quantum as fraction of SOC (e.g. 0.85 = 85% of SOC). "
+                    "If both known_quantum_cr and known_quantum_pct are set, "
+                    "known_quantum_pct takes precedence for the distribution center.",
+    )
+
+    # ── Indian Domestic challenge outcomes (S.34 \u2192 S.37 \u2192 SLP) ──
+    s34_outcome: Optional[Literal["claimant_won", "respondent_won"]] = Field(
+        default=None,
+        description="S.34 challenge result. 'claimant_won' = S.34 challenge dismissed "
+                    "(award upheld), 'respondent_won' = S.34 set aside award.",
+    )
+    s37_outcome: Optional[Literal["claimant_won", "respondent_won"]] = Field(
+        default=None,
+        description="S.37 appeal result. Same semantics as s34_outcome.",
+    )
+    slp_gate_outcome: Optional[Literal["dismissed", "admitted"]] = Field(
+        default=None,
+        description="SLP gate decision. 'dismissed' = SLP not admitted (final win), "
+                    "'admitted' = SLP proceeds to merits hearing.",
+    )
+    slp_merits_outcome: Optional[Literal["claimant_won", "respondent_won"]] = Field(
+        default=None,
+        description="SLP merits hearing result.",
+    )
+
+    # ── SIAC Singapore challenge outcomes (HC \u2192 COA) ──
+    hc_outcome: Optional[Literal["claimant_won", "respondent_won"]] = Field(
+        default=None,
+        description="High Court challenge result (SIAC Singapore).",
+    )
+    coa_outcome: Optional[Literal["claimant_won", "respondent_won"]] = Field(
+        default=None,
+        description="Court of Appeal result (SIAC Singapore).",
+    )
+
+    # ── HKIAC Hong Kong challenge outcomes (CFI \u2192 CA \u2192 CFA) ──
+    cfi_outcome: Optional[Literal["claimant_won", "respondent_won"]] = Field(
+        default=None,
+        description="Court of First Instance challenge result (HKIAC Hong Kong).",
+    )
+    ca_outcome: Optional[Literal["claimant_won", "respondent_won"]] = Field(
+        default=None,
+        description="Court of Appeal result (HKIAC Hong Kong).",
+    )
+    cfa_gate_outcome: Optional[Literal["dismissed", "admitted"]] = Field(
+        default=None,
+        description="Court of Final Appeal leave-to-appeal decision (HKIAC HK).",
+    )
+    cfa_merits_outcome: Optional[Literal["claimant_won", "respondent_won"]] = Field(
+        default=None,
+        description="Court of Final Appeal merits result (HKIAC HK).",
+    )
+
+    @model_validator(mode="after")
+    def _quantum_requires_arb_won(self) -> "KnownOutcomes":
+        """known_quantum fields only valid when arb_outcome = 'won'."""
+        if (self.known_quantum_cr is not None or self.known_quantum_pct is not None):
+            if self.arb_outcome != "won":
+                raise ValueError(
+                    "KnownOutcomes: known_quantum_cr/known_quantum_pct require arb_outcome='won'."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _challenge_requires_arb_outcome(self) -> "KnownOutcomes":
+        """Post-award challenge outcomes require arb_outcome to be set."""
+        challenge_fields = [
+            's34_outcome', 's37_outcome', 'slp_gate_outcome', 'slp_merits_outcome',
+            'hc_outcome', 'coa_outcome',
+            'cfi_outcome', 'ca_outcome', 'cfa_gate_outcome', 'cfa_merits_outcome',
+        ]
+        has_challenge = any(getattr(self, f) is not None for f in challenge_fields)
+        if has_challenge and self.arb_outcome is None:
+            raise ValueError(
+                "KnownOutcomes: post-award challenge outcomes require arb_outcome to be set."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _sequential_consistency(self) -> "KnownOutcomes":
+        """Validate that outcomes are sequentially consistent.
+        e.g., s37_outcome requires s34_outcome; slp_gate requires s37_outcome."""
+        # Indian Domestic chain
+        if self.s37_outcome and not self.s34_outcome:
+            raise ValueError("KnownOutcomes: s37_outcome requires s34_outcome to be set.")
+        if self.slp_gate_outcome and not self.s37_outcome:
+            raise ValueError("KnownOutcomes: slp_gate_outcome requires s37_outcome to be set.")
+        if self.slp_merits_outcome and self.slp_gate_outcome != "admitted":
+            raise ValueError("KnownOutcomes: slp_merits_outcome requires slp_gate_outcome='admitted'.")
+        # SIAC chain
+        if self.coa_outcome and not self.hc_outcome:
+            raise ValueError("KnownOutcomes: coa_outcome requires hc_outcome to be set.")
+        # HKIAC chain
+        if self.ca_outcome and not self.cfi_outcome:
+            raise ValueError("KnownOutcomes: ca_outcome requires cfi_outcome to be set.")
+        if self.cfa_gate_outcome and not self.ca_outcome:
+            raise ValueError("KnownOutcomes: cfa_gate_outcome requires ca_outcome to be set.")
+        if self.cfa_merits_outcome and self.cfa_gate_outcome != "admitted":
+            raise ValueError("KnownOutcomes: cfa_merits_outcome requires cfa_gate_outcome='admitted'.")
+        return self
+
+
+# ============================================================================
 # 11. ClaimConfig
 # ============================================================================
 
@@ -552,6 +692,11 @@ class ClaimConfig(BaseModel):
     current_stage: str = Field(
         default="",
         description="Current pipeline position, e.g. 'dab_commenced', 'arb_hearings_ongoing'.",
+    )
+    known_outcomes: KnownOutcomes = Field(
+        default_factory=KnownOutcomes,
+        description="Known legal outcomes for claims at post-decision stages. "
+                    "Used by the MC engine to skip random draws for decided events.",
     )
     perspective: Literal["claimant", "respondent"] = Field(
         default="claimant",

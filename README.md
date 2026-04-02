@@ -65,6 +65,12 @@ Built using Claude Opus 4.6 agent prompts.
 - [ ] Phase 10: Documentation
 - [ ] Phase 11: Final Polish
 
+## Key Features
+
+- **Known Outcomes**: Claims at post-arbitration stages record known legal results (`known_outcomes`). The MC engine forces decided outcomes and uses TruncatedNormal distributions for known quantum amounts, eliminating modeling errors for decided awards.
+- **Jurisdiction-specific legal stages**: Indian Domestic (S.34/S.37/SLP), SIAC Singapore (HC/COA), HKIAC Hong Kong (CFI/CA/CFA) with full post-award stage support.
+- **Multi-structure portfolio analysis**: Litigation funding, monetisation (full purchase, upfront+tail, staged), and comparative views.
+
 ## Tech Stack
 
 | Layer | Technology |
