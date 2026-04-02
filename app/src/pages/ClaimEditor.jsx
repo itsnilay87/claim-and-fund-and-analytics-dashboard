@@ -121,10 +121,11 @@ export default function ClaimEditor() {
     }
   };
 
-  // When simulation completes, update claim status and allow navigation
+  // When simulation completes, update claim status and auto-navigate to results
   useEffect(() => {
     if (simRun.isComplete && simRun.runId && draft?.id) {
       updateClaim(draft.id, { status: 'simulated', run_id: simRun.runId });
+      navigate(`/workspace/${wsId}/claim/${draft.id}/results?runId=${simRun.runId}`);
     }
   }, [simRun.isComplete, simRun.runId, draft?.id]);
 

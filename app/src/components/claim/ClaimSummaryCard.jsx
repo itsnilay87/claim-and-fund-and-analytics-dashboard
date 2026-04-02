@@ -11,7 +11,7 @@
  * @prop {Object} [result] - Simulation result summary (optional).
  * @prop {boolean} [running] - Whether simulation is currently running.
  */
-import { Play, AlertTriangle, CheckCircle, Clock, Loader2, ExternalLink } from 'lucide-react';
+import { Play, AlertTriangle, CheckCircle, Clock, Loader2, ExternalLink, XCircle } from 'lucide-react';
 
 const FLAG_EMOJI = { indian_domestic: '🇮🇳', siac_singapore: '🇸🇬', hkiac_hongkong: '🇭🇰' };
 const JURISDICTION_SHORT = { indian_domestic: 'Indian Domestic', siac_singapore: 'SIAC Singapore', hkiac_hongkong: 'HKIAC Hong Kong' };
@@ -30,6 +30,7 @@ export default function ClaimSummaryCard({ draft, metrics, errors, onSimulate, s
   const canSimulate = !hasErrors && draft.name?.trim() && !simRun?.isRunning;
   const isRunning = simRun?.isRunning;
   const isComplete = simRun?.isComplete || draft.status === 'simulated';
+  const isFailed = simRun?.isFailed;
 
   return (
     <div className="glass-card p-5 space-y-5 sticky top-6">
@@ -118,6 +119,18 @@ export default function ClaimSummaryCard({ draft, metrics, errors, onSimulate, s
             />
           </div>
           <div className="text-[10px] text-slate-500 text-right">{simRun?.progress || 0}%</div>
+        </div>
+      )}
+
+      {/* Simulation failed error */}
+      {isFailed && (
+        <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/20 mb-2">
+          <div className="flex items-center gap-1.5 text-xs text-red-400 font-medium mb-1">
+            <XCircle className="w-3.5 h-3.5" /> Simulation Failed
+          </div>
+          <p className="text-[11px] text-red-400/80 pl-5">
+            {simRun?.error || 'The simulation engine encountered an error. Check server logs for details.'}
+          </p>
         </div>
       )}
 
