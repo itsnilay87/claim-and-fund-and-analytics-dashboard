@@ -33,9 +33,9 @@ import { getClaimDisplayName } from '../../utils/claimNames';
  * Constants & Palettes
  * ═══════════════════════════════════════════════════════════ */
 
-const OUTCOME_COLORS = { TRUE_WIN: '#10B981', RESTART: '#F59E0B', LOSE: '#EF4444' };
-const OUTCOME_ICONS  = { TRUE_WIN: '✓', RESTART: '⟳', LOSE: '✗' };
-const OUTCOME_LABELS = { TRUE_WIN: 'Win', RESTART: 'Restart', LOSE: 'Lose' };
+const OUTCOME_COLORS = { TRUE_WIN: '#10B981', RESTART: '#F59E0B', LOSE: '#EF4444', SETTLED: '#3B82F6' };
+const OUTCOME_ICONS  = { TRUE_WIN: '✓', RESTART: '⟳', LOSE: '✗', SETTLED: '🤝' };
+const OUTCOME_LABELS = { TRUE_WIN: 'Win', RESTART: 'Restart', LOSE: 'Lose', SETTLED: 'Settled' };
 
 const PROB_BLUE   = '#3B82F6';
 const PROB_VIOLET = '#8B5CF6';
@@ -364,24 +364,30 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
       {/* Selected claim MC outcome distribution */}
       {selectedClaim && (() => {
         const od = selectedClaim.outcome_distribution || {};
-        const total = (od.TRUE_WIN || 0) + (od.RESTART || 0) + (od.LOSE || 0);
+        const total = (od.TRUE_WIN || 0) + (od.RESTART || 0) + (od.LOSE || 0) + (od.SETTLED || 0);
         const pWin  = total > 0 ? od.TRUE_WIN / total : 0;
         const pRest = total > 0 ? od.RESTART / total : 0;
         const pLose = total > 0 ? od.LOSE / total : 0;
+        const pSettled = total > 0 ? (od.SETTLED || 0) / total : 0;
         const jMeta = JURISDICTION_META[selectedClaim.jurisdiction] || JURISDICTION_META.domestic;
+        const hasSettled = (od.SETTLED || 0) > 0;
         return (
           <div>
             <div style={{
               fontSize: ui.sizes.xs, color: COLORS.textMuted, textTransform: 'uppercase',
               letterSpacing: '0.08em', fontWeight: 700, marginBottom: ui.space.sm, paddingLeft: 4,
             }}>Monte Carlo Outcomes — {getClaimDisplayName(selectedClaim)} ({jMeta.label})</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: ui.space.md }}>
+            <div style={{ display: 'grid', gridTemplateColumns: hasSettled ? 'repeat(5, 1fr)' : 'repeat(4, 1fr)', gap: ui.space.md }}>
               <KPI label="MC Win Rate" value={safePct(pWin)}
                 sub={`${od.TRUE_WIN || 0} of ${total} paths`} color={OUTCOME_COLORS.TRUE_WIN} />
               <KPI label="MC Restart Rate" value={safePct(pRest)}
                 sub={`${od.RESTART || 0} of ${total} paths`} color={OUTCOME_COLORS.RESTART} />
               <KPI label="MC Lose Rate" value={safePct(pLose)}
                 sub={`${od.LOSE || 0} of ${total} paths`} color={OUTCOME_COLORS.LOSE} />
+              {hasSettled && (
+                <KPI label="MC Settled Rate" value={safePct(pSettled)}
+                  sub={`${od.SETTLED || 0} of ${total} paths`} color={OUTCOME_COLORS.SETTLED} />
+              )}
               <KPI label="Avg Duration" value={`${(selectedClaim.mean_duration_months || 0).toFixed(1)}m`}
                 sub="Mean resolution time" color={PROB_AMBER} />
             </div>
@@ -875,10 +881,11 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
               <tbody>
                 {claims.map((c, i) => {
                   const od = c.outcome_distribution || {};
-                  const total = (od.TRUE_WIN || 0) + (od.RESTART || 0) + (od.LOSE || 0);
+                  const total = (od.TRUE_WIN || 0) + (od.RESTART || 0) + (od.LOSE || 0) + (od.SETTLED || 0);
                   const pWin  = total > 0 ? od.TRUE_WIN / total : 0;
                   const pRest = total > 0 ? od.RESTART / total : 0;
                   const pLose = total > 0 ? od.LOSE / total : 0;
+                  const pSettled = total > 0 ? (od.SETTLED || 0) / total : 0;
                   const isViable = c.economically_viable !== false;
                   const isSelected = selectedClaimId === c.claim_id;
                   const jMeta = JURISDICTION_META[c.jurisdiction] || JURISDICTION_META.domestic;
@@ -921,11 +928,12 @@ export default function ProbabilityOutcomes({ data, stochasticData, claimJurisdi
                             display: 'flex', minWidth: 100,
                           }}>
                             {pWin > 0 && <div style={{ width: `${pWin * 100}%`, background: OUTCOME_COLORS.TRUE_WIN }} title={`Win ${(pWin * 100).toFixed(1)}%`} />}
+                            {pSettled > 0 && <div style={{ width: `${pSettled * 100}%`, background: OUTCOME_COLORS.SETTLED }} title={`Settled ${(pSettled * 100).toFixed(1)}%`} />}
                             {pRest > 0 && <div style={{ width: `${pRest * 100}%`, background: OUTCOME_COLORS.RESTART }} title={`Restart ${(pRest * 100).toFixed(1)}%`} />}
                             {pLose > 0 && <div style={{ width: `${pLose * 100}%`, background: OUTCOME_COLORS.LOSE }} title={`Lose ${(pLose * 100).toFixed(1)}%`} />}
                           </div>
                           <span style={{ fontSize: 10, color: COLORS.textMuted, whiteSpace: 'nowrap' }}>
-                            {(pWin * 100).toFixed(0)}/{(pRest * 100).toFixed(0)}/{(pLose * 100).toFixed(0)}
+                            {(pWin * 100).toFixed(0)}/{pSettled > 0 ? `${(pSettled * 100).toFixed(0)}/` : ''}{(pRest * 100).toFixed(0)}/{(pLose * 100).toFixed(0)}
                           </span>
                         </div>
                       </td>

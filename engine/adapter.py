@@ -99,6 +99,17 @@ _MI_PATCHABLE_ATTRS: list[str] = [
     "CLAIMANT_NAME",
     "RESPONDENT_NAME",
     "PERSPECTIVE",
+    # Settlement parameters
+    "SETTLEMENT_ENABLED",
+    "SETTLEMENT_GLOBAL_HAZARD_RATE",
+    "SETTLEMENT_DISCOUNT_MIN",
+    "SETTLEMENT_DISCOUNT_MAX",
+    "SETTLEMENT_DELAY_MONTHS",
+    "SETTLEMENT_MODE",
+    "SETTLEMENT_BARGAINING_POWER",
+    "SETTLEMENT_RESPONDENT_LEGAL_COST_CR",
+    "SETTLEMENT_STAGE_HAZARD_RATES",
+    "SETTLEMENT_STAGE_DISCOUNT_FACTORS",
 ]
 
 
@@ -423,6 +434,29 @@ def patch_master_inputs_for_claim(
     # ── Known outcomes (for post-arb stage handling) ──
     MI.KNOWN_OUTCOMES = claim.known_outcomes if hasattr(claim, 'known_outcomes') else None
 
+    # ── Settlement parameters ──
+    settlement = claim.settlement
+    MI.SETTLEMENT_ENABLED = settlement.enabled
+    if settlement.enabled:
+        MI.SETTLEMENT_GLOBAL_HAZARD_RATE = settlement.global_hazard_rate
+        MI.SETTLEMENT_DISCOUNT_MIN = settlement.discount_min
+        MI.SETTLEMENT_DISCOUNT_MAX = settlement.discount_max
+        MI.SETTLEMENT_DELAY_MONTHS = settlement.settlement_delay_months
+        MI.SETTLEMENT_MODE = settlement.mode
+        MI.SETTLEMENT_BARGAINING_POWER = settlement.bargaining_power
+        MI.SETTLEMENT_RESPONDENT_LEGAL_COST_CR = settlement.respondent_legal_cost_cr
+
+        # Build per-stage override dicts from stage_overrides list
+        MI.SETTLEMENT_STAGE_HAZARD_RATES = {
+            so.stage_name: so.hazard_rate
+            for so in settlement.stage_overrides
+        }
+        MI.SETTLEMENT_STAGE_DISCOUNT_FACTORS = {
+            so.stage_name: so.discount_factor
+            for so in settlement.stage_overrides
+            if so.discount_factor is not None
+        }
+
 
 def _patch_timeline_durations(
     claim: PlatformClaim,
@@ -550,6 +584,98 @@ def _patch_legal_costs(claim: PlatformClaim) -> None:
             "low": lc.overrun_low,
             "high": lc.overrun_high,
         }
+
+
+# ============================================================================
+# Settlement helpers
+# ============================================================================
+
+SETTLEMENT_ELIGIBLE_STAGES = {
+    "domestic": ["dab", "arbitration", "s34", "s37", "slp"],
+    "indian_domestic": ["dab", "arbitration", "s34", "s37", "slp"],
+    "siac": ["dab", "arbitration", "hc", "coa"],
+    "siac_singapore": ["dab", "arbitration", "hc", "coa"],
+    "hkiac": ["dab", "arbitration", "cfi", "ca", "cfa"],
+    "hkiac_hongkong": ["dab", "arbitration", "cfi", "ca", "cfa"],
+}
+
+
+def compute_settlement_discount_ramp(
+    pipeline_stages: list[str],
+    discount_min: float,
+    discount_max: float,
+    stage_overrides: dict[str, float],
+) -> dict[str, float]:
+    """Compute δ_s for each stage via linear interpolation with per-stage overrides.
+
+    Args:
+        pipeline_stages: Ordered list of stage names for this claim's pipeline.
+        discount_min: δ_min (earliest stage discount).
+        discount_max: δ_max (latest stage discount).
+        stage_overrides: Dict of stage_name → δ_s user overrides (take precedence).
+
+    Returns:
+        Dict of stage_name → δ_s for every stage in the pipeline.
+    """
+    n = len(pipeline_stages)
+    if n == 0:
+        return {}
+    if n == 1:
+        base = (discount_min + discount_max) / 2.0
+        stage = pipeline_stages[0]
+        return {stage: stage_overrides.get(stage, base)}
+
+    ramp = {}
+    for i, stage in enumerate(pipeline_stages):
+        if stage in stage_overrides:
+            ramp[stage] = stage_overrides[stage]
+        else:
+            frac = i / (n - 1)
+            ramp[stage] = discount_min + (discount_max - discount_min) * frac
+    return ramp
+
+
+def get_settlement_params_for_claim(claim_config) -> dict:
+    """Return fully-resolved settlement parameters for a single claim.
+
+    Returns dict with keys:
+        enabled, mode, hazard_rates (dict stage→λ), discount_factors (dict stage→δ),
+        delay_months, bargaining_power, respondent_legal_cost_cr,
+        eligible_stages (ordered list)
+    """
+    sc = claim_config.settlement
+    if not sc.enabled:
+        return {"enabled": False}
+
+    jurisdiction = claim_config.jurisdiction.lower().replace(" ", "_")
+    eligible = SETTLEMENT_ELIGIBLE_STAGES.get(jurisdiction, [])
+
+    # Resolve hazard rates: per-stage override → global default
+    hazard_rates = {}
+    override_map = {so.stage_name: so.hazard_rate for so in sc.stage_overrides}
+    for stage in eligible:
+        hazard_rates[stage] = override_map.get(stage, sc.global_hazard_rate)
+
+    # Resolve discount factors: per-stage override → ramp interpolation
+    override_discounts = {
+        so.stage_name: so.discount_factor
+        for so in sc.stage_overrides
+        if so.discount_factor is not None
+    }
+    discount_factors = compute_settlement_discount_ramp(
+        eligible, sc.discount_min, sc.discount_max, override_discounts
+    )
+
+    return {
+        "enabled": True,
+        "mode": sc.mode,
+        "hazard_rates": hazard_rates,
+        "discount_factors": discount_factors,
+        "delay_months": sc.settlement_delay_months,
+        "bargaining_power": sc.bargaining_power,
+        "respondent_legal_cost_cr": sc.respondent_legal_cost_cr,
+        "eligible_stages": eligible,
+    }
 
 
 # ============================================================================

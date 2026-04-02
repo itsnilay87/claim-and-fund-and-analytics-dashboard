@@ -24,6 +24,7 @@ from .schema import (
     QuantumBand,
     QuantumConfig,
     ScenarioTree,
+    SettlementConfig,
     SimulationConfig,
     StageConfig,
     TimelineConfig,

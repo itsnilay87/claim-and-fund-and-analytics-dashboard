@@ -25,7 +25,7 @@ from typing import Any
 import numpy as np
 
 from . import v2_master_inputs as MI
-from .v2_config import ClaimConfig, SimulationResults
+from .v2_config import ClaimConfig, SimulationResults, SettlementResult
 from .v2_investment_analysis import InvestmentGridResults
 
 
@@ -68,7 +68,7 @@ def _build_claims_section(
         n = len(paths)
 
         # Outcome distribution
-        outcomes = {"TRUE_WIN": 0, "RESTART": 0, "LOSE": 0}
+        outcomes = {"TRUE_WIN": 0, "RESTART": 0, "LOSE": 0, "SETTLED": 0}
         durations = []
         legal_costs = []
         collected_vals = []
@@ -117,6 +117,7 @@ def _build_claims_section(
                 "TRUE_WIN": outcomes.get("TRUE_WIN", 0),
                 "RESTART": outcomes.get("RESTART", 0),
                 "LOSE": outcomes.get("LOSE", 0),
+                "SETTLED": outcomes.get("SETTLED", 0),
             },
             "duration_stats": {
                 "mean": _pct(np.mean(dur_arr)),
@@ -147,6 +148,223 @@ def _build_claims_section(
             },
         })
     return out
+
+
+def _build_settlement_summary(
+    sim: SimulationResults,
+    claims: list[ClaimConfig],
+) -> dict:
+    """Build settlement analytics for the dashboard.
+
+    Returns a dict with settlement config, summary stats, per-stage breakdown,
+    per-claim analysis, settled-vs-judgment comparison, timing histogram,
+    and game-theoretic analytics (when applicable).
+    """
+    total_soc = sum(c.soc_value_cr for c in claims)
+    n_paths = sim.n_paths
+
+    # ── Collect all settled and non-settled paths ──
+    settled_paths: list[tuple[str, Any]] = []  # (claim_id, PathResult)
+    judgment_paths: list[tuple[str, Any]] = []
+
+    for c in claims:
+        cid = c.claim_id
+        for p in sim.results.get(cid, []):
+            if p.settlement is not None and p.settlement.settled:
+                settled_paths.append((cid, p))
+            else:
+                judgment_paths.append((cid, p))
+
+    n_settled = len(settled_paths)
+    n_judgment = len(judgment_paths)
+    settlement_rate = n_settled / (n_settled + n_judgment) if (n_settled + n_judgment) > 0 else 0.0
+
+    # ── Summary ──
+    settled_amounts = [p.settlement.settlement_amount_cr for _, p in settled_paths]
+    mean_settlement_cr = float(np.mean(settled_amounts)) if settled_amounts else 0.0
+    mean_settlement_pct = mean_settlement_cr / total_soc if total_soc > 0 else 0.0
+
+    summary = {
+        "total_paths": n_settled + n_judgment,
+        "settled_paths": n_settled,
+        "settlement_rate": _pct(settlement_rate),
+        "judgment_paths": n_judgment,
+        "mean_settlement_amount_cr": _cr(mean_settlement_cr),
+        "mean_settlement_as_pct_of_soc": _pct(mean_settlement_pct),
+    }
+
+    # ── Per-stage breakdown ──
+    stage_data: dict[str, list] = {}  # stage → list of (amount, discount, timing)
+    for _, p in settled_paths:
+        s = p.settlement
+        stage = s.settlement_stage or "unknown"
+        stage_data.setdefault(stage, []).append({
+            "amount": s.settlement_amount_cr,
+            "discount": s.settlement_discount_used,
+            "timing": s.settlement_timing_months,
+        })
+
+    per_stage = []
+    for stage, entries in sorted(stage_data.items()):
+        count = len(entries)
+        per_stage.append({
+            "stage": stage,
+            "count": count,
+            "pct_of_total": _pct(count / (n_settled + n_judgment)) if (n_settled + n_judgment) > 0 else 0.0,
+            "pct_of_settlements": _pct(count / n_settled) if n_settled > 0 else 0.0,
+            "mean_discount_used": _pct(float(np.mean([e["discount"] for e in entries]))),
+            "mean_amount_cr": _cr(float(np.mean([e["amount"] for e in entries]))),
+            "mean_timing_months": round(float(np.mean([e["timing"] for e in entries])), 1),
+        })
+
+    # ── Per-claim settlement stats ──
+    per_claim: dict[str, dict] = {}
+    for c in claims:
+        cid = c.claim_id
+        claim_settled = [(cid2, p) for cid2, p in settled_paths if cid2 == cid]
+        claim_total = len(sim.results.get(cid, []))
+        if claim_total == 0:
+            continue
+        if claim_settled:
+            amounts = [p.settlement.settlement_amount_cr for _, p in claim_settled]
+            discounts = [p.settlement.settlement_discount_used for _, p in claim_settled]
+            timings = [p.settlement.settlement_timing_months for _, p in claim_settled]
+            per_claim[cid] = {
+                "settlement_rate": _pct(len(claim_settled) / claim_total),
+                "mean_amount_cr": _cr(float(np.mean(amounts))),
+                "mean_discount": _pct(float(np.mean(discounts))),
+                "mean_timing_months": round(float(np.mean(timings)), 1),
+            }
+        else:
+            per_claim[cid] = {
+                "settlement_rate": 0.0,
+                "mean_amount_cr": 0.0,
+                "mean_discount": 0.0,
+                "mean_timing_months": 0.0,
+            }
+
+    # ── Settled vs judgment comparison ──
+    def _group_stats(path_list):
+        if not path_list:
+            return {"mean_moic": 0.0, "mean_irr": 0.0, "mean_duration_months": 0.0, "mean_legal_cost_cr": 0.0}
+        moics = [p.moic for _, p in path_list if p.moic is not None]
+        irrs = [p.irr for _, p in path_list if p.irr is not None]
+        durs = [p.total_duration_months for _, p in path_list]
+        costs = [p.legal_cost_total_cr for _, p in path_list]
+        return {
+            "mean_moic": _pct(float(np.mean(moics))) if moics else 0.0,
+            "mean_irr": _pct(float(np.mean(irrs))) if irrs else 0.0,
+            "mean_duration_months": round(float(np.mean(durs)), 1) if durs else 0.0,
+            "mean_legal_cost_cr": _cr(float(np.mean(costs))) if costs else 0.0,
+        }
+
+    comparison = {
+        "settled_paths": _group_stats(settled_paths),
+        "judgment_paths": _group_stats(judgment_paths),
+    }
+
+    # ── Timing histogram (6-month bins) ──
+    timing_histogram = []
+    if settled_paths:
+        all_timings = [p.settlement.settlement_timing_months for _, p in settled_paths]
+        max_timing = max(all_timings)
+        bin_size = 6
+        for bin_start in range(0, int(max_timing) + bin_size, bin_size):
+            count = sum(1 for t in all_timings if bin_start <= t < bin_start + bin_size)
+            if count > 0:
+                timing_histogram.append({
+                    "month_bin": bin_start + bin_size,
+                    "count": count,
+                })
+
+    # ── Derive settlement mode from path results (MI may be restored to defaults) ──
+    _modes_seen = set()
+    for _, p in settled_paths:
+        if p.settlement and p.settlement.settlement_mode != "none":
+            _modes_seen.add(p.settlement.settlement_mode)
+    settlement_mode = _modes_seen.pop() if len(_modes_seen) == 1 else (
+        MI.SETTLEMENT_MODE if MI.SETTLEMENT_MODE != "user_specified" or not _modes_seen
+        else next(iter(_modes_seen))
+    )
+
+    # ── Game-theoretic analytics ──
+    game_theoretic = None
+    if settlement_mode == "game_theoretic":
+        from .v2_settlement import compute_game_theoretic_discounts, compute_continuation_values
+
+        gt_discounts: dict[str, dict] = {}
+        gt_cont_values: dict[str, dict] = {}
+
+        # Compute for each jurisdiction present in claims
+        jurisdictions_seen = set()
+        for c in claims:
+            jur = c.jurisdiction
+            if jur in jurisdictions_seen:
+                continue
+            jurisdictions_seen.add(jur)
+            eq_cr = sim.expected_quantum_map.get(c.claim_id, c.soc_value_cr * 0.5)
+
+            for arb_won in [True, False, None]:
+                regime_label = {True: "post_award_won", False: "post_award_lost", None: "pre_award"}[arb_won]
+                try:
+                    discounts = compute_game_theoretic_discounts(
+                        jurisdiction=jur,
+                        arb_won=arb_won,
+                        expected_quantum_cr=eq_cr,
+                        soc_value_cr=c.soc_value_cr,
+                        bargaining_power=MI.SETTLEMENT_BARGAINING_POWER,
+                    )
+                    cont_vals = compute_continuation_values(
+                        jurisdiction=jur,
+                        arb_won=arb_won,
+                        expected_quantum_cr=eq_cr,
+                        soc_value_cr=c.soc_value_cr,
+                    )
+                    for stage, delta in discounts.items():
+                        key = f"{jur}_{regime_label}_{stage}"
+                        gt_discounts[key] = _pct(delta)
+                    for stage, vals in cont_vals.items():
+                        key = f"{jur}_{regime_label}_{stage}"
+                        gt_cont_values[key] = {
+                            "v_claimant_cr": _cr(vals["v_claimant"]),
+                            "v_respondent_cr": _cr(vals["v_respondent"]),
+                        }
+                except Exception:
+                    pass  # Skip regimes that don't apply to this jurisdiction
+
+        game_theoretic = {
+            "bargaining_power": MI.SETTLEMENT_BARGAINING_POWER,
+            "per_stage_discounts": gt_discounts,
+            "per_stage_continuation_values": gt_cont_values,
+        }
+
+    # ── Config snapshot ──
+    stage_overrides = []
+    for stage, rate in MI.SETTLEMENT_STAGE_HAZARD_RATES.items():
+        override = {"stage": stage, "hazard_rate": rate}
+        if stage in MI.SETTLEMENT_STAGE_DISCOUNT_FACTORS:
+            override["discount_factor"] = MI.SETTLEMENT_STAGE_DISCOUNT_FACTORS[stage]
+        stage_overrides.append(override)
+
+    config = {
+        "global_hazard_rate": MI.SETTLEMENT_GLOBAL_HAZARD_RATE,
+        "discount_min": MI.SETTLEMENT_DISCOUNT_MIN,
+        "discount_max": MI.SETTLEMENT_DISCOUNT_MAX,
+        "delay_months": MI.SETTLEMENT_DELAY_MONTHS,
+        "stage_overrides": stage_overrides,
+    }
+
+    return {
+        "enabled": True,
+        "mode": settlement_mode,
+        "config": config,
+        "summary": summary,
+        "per_stage": per_stage,
+        "per_claim": per_claim,
+        "comparison": comparison,
+        "timing_histogram": timing_histogram,
+        "game_theoretic": game_theoretic,
+    }
 
 
 def _build_probability_summary() -> dict:
@@ -1459,6 +1677,19 @@ def export_dashboard_json(
             "interest_start_basis": MI.INTEREST_START_BASIS,
         },
     }
+
+    # Add settlement analytics
+    # Check if any path actually has settlement data (MI may have been restored
+    # to defaults by save_and_restore_mi before the exporter runs)
+    _any_settlement = any(
+        p.settlement is not None and p.settlement.settled
+        for cid_paths in sim.results.values()
+        for p in cid_paths
+    )
+    if _any_settlement or getattr(MI, 'SETTLEMENT_ENABLED', False):
+        data["settlement"] = _build_settlement_summary(sim, claims)
+    else:
+        data["settlement"] = {"enabled": False}
 
     # Add stochastic pricing grid if available
     if stochastic_results is not None:

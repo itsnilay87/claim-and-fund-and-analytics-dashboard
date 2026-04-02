@@ -165,6 +165,7 @@ claim-analytics-platform/
 │   │   ├── v2_stochastic_pricing.py ← Stochastic pricing
 │   │   ├── v2_pricing_surface.py  ← Pricing surface
 │   │   ├── v2_probability_sensitivity.py ← Sensitivity analysis
+│   │   ├── v2_settlement.py      ← Settlement hazard process, game-theoretic backward induction
 │   │   ├── v2_json_exporter.py   ← JSON export for dashboard
 │   │   ├── v2_excel_writer.py    ← Excel export
 │   │   ├── v2_comprehensive_excel.py ← Comprehensive Excel report
@@ -259,6 +260,8 @@ All stores persist to localStorage. **Never remove persisted keys** or change ke
 | `claimStore` | `cap_claims` | `{ claims[] }` | Claim CRUD, filtered by workspace |
 | `portfolioStore` | `cap_portfolios` | `{ portfolios[] }` | Portfolio CRUD |
 | `themeStore` | `cap_theme` | `{ theme }` | Dark/light mode |
+
+**Note:** Claim objects in `claimStore` now include a `settlement` sub-object when settlement is enabled. The settlement config follows the `SettlementConfig` schema from `engine/config/schema.py`.
 
 ---
 
@@ -500,6 +503,9 @@ slp_gate_outcome requires s37_outcome,
 slp_merits_outcome requires slp_gate_outcome='admitted', etc.
 The Pydantic model enforces this at parse time.
 
+### 10. Settlement Backward Compatibility
+When settlement.enabled = false (default), the MC engine produces IDENTICAL results to the pre-settlement version. The settlement hazard process is completely bypassed. This is critical — if you modify settlement code, always verify regression by running with settlement disabled.
+
 ---
 
 ## Simulation Data Flow
@@ -522,6 +528,10 @@ Python (engine/run.py)
     ├── adapter.py — translates Platform config → V2 format
     ├── save_and_restore_mi() — patches v2_master_inputs
     ├── v2_monte_carlo.run_simulation() — runs N paths
+    │   ├── _simulate_claim_path() — per path
+    │   │   ├── _attempt_settlement() — hazard check at each stage
+    │   │   │   └── (game_theoretic mode) → v2_settlement.compute_game_theoretic_discounts()
+    │   │   └── Returns PathResult with final_outcome ∈ {TRUE_WIN, LOSE, RESTART, SETTLED}
     ├── v2_json_exporter — writes dashboard_data.json
     ├── v2_stochastic_pricing — writes stochastic_pricing.json
     ├── v2_pricing_surface — writes pricing_surface.json
@@ -618,6 +628,10 @@ npm run dev
 | 12 | File download works | Click download buttons |
 | 13 | Logout works | Click logout, returns to landing |
 | 14 | Theme toggle works | Light/dark mode button |
+| 15 | Settlement toggle works | Enable/disable in claim editor, correct behavior |
+| 16 | Settlement mode switch | User-specified vs game-theoretic modes work |
+| 17 | Settlement results show | Dashboard "Settlement Analysis" tab renders |
+| 18 | Settlement disabled regression | Identical results when settlement is off |
 
 ### Production Verification
 ```bash

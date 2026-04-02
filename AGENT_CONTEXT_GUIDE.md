@@ -77,6 +77,7 @@ No matter what change you're making, **always** attach:
 - Waterfall: `engine/analysis/waterfall_analysis.py`
 - Investment grid: `engine/analysis/investment_grid.py`
 - Risk: `engine/analysis/risk_metrics.py`
+- Settlement: `engine/v2_core/v2_settlement.py`, `engine/v2_core/v2_monte_carlo.py` (settlement draw), `engine/adapter.py` (settlement params)
 
 ### 2. Structure Type Changes (Adding/Modifying Deal Structures)
 > Adding a new structure type or modifying litigation_funding, monetisation_*, comparative
@@ -234,6 +235,22 @@ When modifying how legal stages or known outcomes work:
 - `engine/jurisdictions/indian_domestic.json`
 - `engine/jurisdictions/siac_singapore.json`
 - `engine/jurisdictions/hkiac_hongkong.json`
+
+### 11. Settlement Model Changes
+> Modifying settlement hazard rates, discount factors, game-theoretic computation
+
+| File | Purpose |
+|------|---------|
+| `engine/v2_core/v2_settlement.py` | Game-theoretic backward induction, continuation values |
+| `engine/v2_core/v2_monte_carlo.py` | Settlement hazard draw in MC path simulation |
+| `engine/adapter.py` | Settlement param resolution, eligible stages, discount ramp |
+| `engine/config/schema.py` | SettlementConfig, SettlementStageConfig models |
+| `engine/v2_core/v2_config.py` | SettlementResult dataclass |
+| `engine/v2_core/v2_master_inputs.py` | SETTLEMENT_* constants |
+| `engine/v2_core/v2_json_exporter.py` | Settlement JSON export section |
+| `app/src/components/claim/SettlementEditor.jsx` | Settlement config UI |
+| `app/src/pages/ClaimEditor.jsx` | Settlement tab |
+| `dashboard/src/components/v2/SettlementAnalysis.jsx` | Settlement dashboard (exported as V2SettlementAnalysis) |
 
 ---
 

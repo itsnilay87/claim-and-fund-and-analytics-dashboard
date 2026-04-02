@@ -10,7 +10,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, FileText, Scale, TreePine, Calculator, Clock, Banknote, Settings, Play, Loader2, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Save, FileText, Scale, TreePine, Calculator, Clock, Banknote, Settings, Play, Loader2, ExternalLink, Handshake } from 'lucide-react';
 import { useClaimEditor } from '../hooks/useClaims';
 import { useClaimRun } from '../hooks/useClaimSimulation';
 import { useClaimStore } from '../store/claimStore';
@@ -22,6 +22,7 @@ import ProbabilityTreeEditor from '../components/claim/ProbabilityTreeEditor';
 import TimelineEditor from '../components/claim/TimelineEditor';
 import LegalCostEditor from '../components/claim/LegalCostEditor';
 import InterestEditor from '../components/claim/InterestEditor';
+import SettlementEditor from '../components/claim/SettlementEditor';
 import ClaimSummaryCard from '../components/claim/ClaimSummaryCard';
 import TemplateSelector from '../components/claim/TemplateSelector';
 
@@ -40,6 +41,7 @@ const TABS = [
   { id: 'timeline', label: 'Timeline', icon: Clock },
   { id: 'costs', label: 'Legal Costs', icon: Banknote },
   { id: 'interest', label: 'Interest & Adv.', icon: Settings },
+  { id: 'settlement', label: 'Settlement', icon: Handshake },
 ];
 
 export default function ClaimEditor() {
@@ -313,6 +315,9 @@ export default function ClaimEditor() {
             )}
             {activeTab === 'interest' && (
               <InterestEditor draft={draft} updateField={updateField} />
+            )}
+            {activeTab === 'settlement' && (
+              <SettlementEditor draft={draft} updateField={updateField} />
             )}
           </div>
         </div>

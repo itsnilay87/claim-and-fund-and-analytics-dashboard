@@ -27,6 +27,7 @@ from .v2_config import (
     ChallengeResult,
     ClaimConfig,
     PathResult,
+    SettlementResult,
     SimulationResults,
     QuantumResult,
 )
@@ -43,6 +44,122 @@ from .v2_legal_cost_model import (
 )
 from .v2_cashflow_builder import build_cashflow
 from .v2_metrics import compute_xirr, compute_moic, compute_net_return
+
+
+# ===================================================================
+# Settlement Helpers
+# ===================================================================
+
+def _truncate_legal_burn(monthly_legal_burn: np.ndarray, months: float) -> np.ndarray:
+    """Truncate legal burn array at settlement point.
+
+    Args:
+        monthly_legal_burn: Full legal burn array (one entry per month)
+        months: Settlement month (fractional OK — ceil to int)
+
+    Returns:
+        Truncated copy of legal burn, zeroed after settlement month.
+    """
+    truncated = monthly_legal_burn.copy()
+    cutoff = int(np.ceil(months))
+    if cutoff < len(truncated):
+        truncated[cutoff:] = 0.0
+    return truncated
+
+
+def _attempt_settlement(
+    stage_name: str,
+    elapsed_months: float,
+    arb_won: Optional[bool],
+    quantum_cr: Optional[float],
+    soc_value_cr: float,
+    rng: np.random.Generator,
+) -> Optional[SettlementResult]:
+    """Attempt settlement at a given litigation stage.
+
+    Mathematical specification:
+    1. Look up λ_s for this stage (per-stage override → global default)
+    2. Draw U ~ Uniform(0,1); if U >= λ_s → no settlement, return None
+    3. Determine reference quantum Q_ref based on regime:
+       - Pre-award: Q_ref = SOC × E[q%|win] × P(win)
+       - Post-award (claimant won): Q_ref = quantum_cr (drawn quantum)
+       - Post-award (claimant lost): Q_ref = SOC × E[q%|win] × P(re-arb win) × P(post-challenge)
+    4. Look up δ_s for this stage
+    5. settlement_amount = δ_s × Q_ref
+    6. settlement_timing = elapsed_months + MI.SETTLEMENT_DELAY_MONTHS
+
+    Args:
+        stage_name: Current pipeline stage (e.g., "dab", "s34", "arbitration")
+        elapsed_months: Total months elapsed from start to this stage
+        arb_won: True if claimant won arbitration, False if lost, None if pre-award
+        quantum_cr: Drawn quantum in ₹Cr (None if pre-award)
+        soc_value_cr: Statement of Claim value in ₹Cr
+        rng: NumPy random generator for this path
+
+    Returns:
+        SettlementResult if settlement occurs, None otherwise.
+    """
+    if not MI.SETTLEMENT_ENABLED:
+        return None
+
+    # 1. Get hazard rate for this stage
+    stage_hazards = MI.SETTLEMENT_STAGE_HAZARD_RATES  # dict or empty
+    lambda_s = stage_hazards.get(stage_name, MI.SETTLEMENT_GLOBAL_HAZARD_RATE)
+
+    if lambda_s <= 0.0:
+        return None
+
+    # 2. Bernoulli draw
+    u = rng.random()
+    if u >= lambda_s:
+        return None
+
+    # 3. Determine Q_ref based on regime
+    # QUANTUM_BANDS keys: "low", "high", "probability"
+    is_pre_award = (arb_won is None)
+    if is_pre_award:
+        # Pre-award regime: Q_ref = SOC × E[q%|win] × P(win)
+        eq_given_win = sum(
+            band["probability"] * (band["low"] + band["high"]) / 2.0
+            for band in MI.QUANTUM_BANDS
+        )
+        q_ref = soc_value_cr * eq_given_win * MI.ARB_WIN_PROBABILITY
+    elif arb_won:
+        # Post-award, claimant won: Q_ref = actual drawn quantum
+        q_ref = quantum_cr if quantum_cr is not None else 0.0
+    else:
+        # Post-award, claimant lost: Q_ref = SOC × E[q%|win] × P(re-arb win) × survival
+        eq_given_win = sum(
+            band["probability"] * (band["low"] + band["high"]) / 2.0
+            for band in MI.QUANTUM_BANDS
+        )
+        # Survival probability approximation (refined in game-theoretic mode)
+        post_challenge_survival = 0.50
+        q_ref = soc_value_cr * eq_given_win * MI.RE_ARB_WIN_PROBABILITY * post_challenge_survival
+
+    # 4. Get discount factor for this stage
+    stage_discounts = MI.SETTLEMENT_STAGE_DISCOUNT_FACTORS  # dict or empty
+    if stage_name in stage_discounts:
+        delta_s = stage_discounts[stage_name]
+    else:
+        # Fall back to floor of ramp (ramp pre-computed by adapter)
+        delta_s = MI.SETTLEMENT_DISCOUNT_MIN
+
+    # 5. Compute settlement amount
+    settlement_amount = delta_s * q_ref
+
+    # 6. Compute timing
+    timing = elapsed_months + MI.SETTLEMENT_DELAY_MONTHS
+
+    return SettlementResult(
+        settled=True,
+        settlement_stage=stage_name,
+        settlement_amount_cr=settlement_amount,
+        settlement_discount_used=delta_s,
+        settlement_timing_months=timing,
+        settlement_mode=MI.SETTLEMENT_MODE,
+        reference_quantum_cr=q_ref,
+    )
 
 
 # ===================================================================
@@ -92,6 +209,44 @@ def _simulate_claim_path(
 
     # ── Step 1: Draw pre-arbitration timeline ──
     timeline = draw_pipeline_duration(claim, rng)
+
+    # ── Check A: Pre-award settlement (after timeline, before arb outcome) ──
+    if MI.SETTLEMENT_ENABLED:
+        _elapsed = 0.0
+        for _stage_name, _stage_dur in timeline.stage_durations.items():
+            _elapsed += _stage_dur
+            if _stage_name in ("dab", "arbitration", "re_referral", "arb_remaining"):
+                _settle = _attempt_settlement(
+                    stage_name=_stage_name,
+                    elapsed_months=_elapsed,
+                    arb_won=None,  # pre-award
+                    quantum_cr=None,
+                    soc_value_cr=claim.soc_value_cr,
+                    rng=rng,
+                )
+                if _settle is not None:
+                    _partial_burn = build_monthly_legal_burn(
+                        claim.claim_id, dict(timeline.stage_durations), rng, cost_table
+                    )
+                    _legal_trunc = _truncate_legal_burn(_partial_burn, _elapsed)
+                    return PathResult(
+                        claim_id=claim.claim_id,
+                        path_idx=path_idx,
+                        timeline=timeline,
+                        challenge=ChallengeResult(
+                            scenario="", path_id="SETTLED",
+                            outcome="SETTLED", timeline_months=0.0,
+                        ),
+                        arb_won=False,
+                        quantum=None,
+                        final_outcome="SETTLED",
+                        total_duration_months=_settle.settlement_timing_months,
+                        monthly_legal_burn=_legal_trunc,
+                        legal_cost_total_cr=float(np.sum(_legal_trunc)),
+                        collected_cr=_settle.settlement_amount_cr,
+                        interest_earned_cr=0.0,
+                        settlement=_settle,
+                    )
 
     # ── Step 2: Draw arbitration outcome ──
     ko = getattr(MI, 'KNOWN_OUTCOMES', None)
@@ -157,6 +312,48 @@ def _simulate_claim_path(
             stages_detail=challenge.stages_detail,
         )
 
+    # ── Check B: Post-award settlement (after challenge tree, before outcome processing) ──
+    if MI.SETTLEMENT_ENABLED and challenge.outcome in ("TRUE_WIN", "LOSE"):
+        _elapsed_b = timeline.total_months
+        for _stage_name_b, _stage_dur_b in challenge.stages_detail.items():
+            _elapsed_b += _stage_dur_b
+            _settle_b = _attempt_settlement(
+                stage_name=_stage_name_b,
+                elapsed_months=_elapsed_b,
+                arb_won=arb_won,
+                quantum_cr=quantum.quantum_cr if (quantum is not None and arb_won) else None,
+                soc_value_cr=claim.soc_value_cr,
+                rng=rng,
+            )
+            if _settle_b is not None:
+                _b_stages = dict(timeline.stage_durations)
+                for _sn, _sd in challenge.stages_detail.items():
+                    _b_stages[_sn] = _sd
+                _slp_b = None
+                if claim.jurisdiction == "domestic":
+                    _slp_dur_b = challenge.stages_detail.get("slp", 0.0)
+                    if _slp_dur_b > 0:
+                        _slp_b = (_slp_dur_b >= MI.SLP_ADMITTED_DURATION)
+                _partial_burn_b = build_monthly_legal_burn(
+                    claim.claim_id, _b_stages, rng, cost_table, slp_admitted=_slp_b
+                )
+                _legal_trunc_b = _truncate_legal_burn(_partial_burn_b, _elapsed_b)
+                return PathResult(
+                    claim_id=claim.claim_id,
+                    path_idx=path_idx,
+                    timeline=timeline,
+                    challenge=challenge,
+                    arb_won=arb_won,
+                    quantum=quantum if arb_won else None,
+                    final_outcome="SETTLED",
+                    total_duration_months=_settle_b.settlement_timing_months,
+                    monthly_legal_burn=_legal_trunc_b,
+                    legal_cost_total_cr=float(np.sum(_legal_trunc_b)),
+                    collected_cr=_settle_b.settlement_amount_cr,
+                    interest_earned_cr=0.0,
+                    settlement=_settle_b,
+                )
+
     # Default values
     final_outcome = challenge.outcome
     quantum_received_cr = 0.0
@@ -216,6 +413,50 @@ def _simulate_claim_path(
                 re_arb_q = draw_quantum(claim.soc_value_cr, rng)
                 re_arb_quantum = re_arb_q
 
+                # ── Check C1: Settlement at re-arb stage (claimant won re-arb) ──
+                if MI.SETTLEMENT_ENABLED:
+                    _c1_elapsed = timeline_so_far + re_arb_dur
+                    _settle_c1 = _attempt_settlement(
+                        stage_name="re_arbitration",
+                        elapsed_months=_c1_elapsed,
+                        arb_won=True,
+                        quantum_cr=re_arb_q.quantum_cr,
+                        soc_value_cr=claim.soc_value_cr,
+                        rng=rng,
+                    )
+                    if _settle_c1 is not None:
+                        _c1_stages = dict(timeline.stage_durations)
+                        for _sn, _sd in challenge.stages_detail.items():
+                            _c1_stages[_sn] = _sd
+                        _c1_stages["re_arbitration"] = re_arb_dur
+                        _slp_c1 = None
+                        if claim.jurisdiction == "domestic":
+                            _slp_dur_c1 = challenge.stages_detail.get("slp", 0.0)
+                            if _slp_dur_c1 > 0:
+                                _slp_c1 = (_slp_dur_c1 >= MI.SLP_ADMITTED_DURATION)
+                        _burn_c1 = build_monthly_legal_burn(
+                            claim.claim_id, _c1_stages, rng, cost_table, slp_admitted=_slp_c1
+                        )
+                        _trunc_c1 = _truncate_legal_burn(_burn_c1, _c1_elapsed)
+                        return PathResult(
+                            claim_id=claim.claim_id,
+                            path_idx=path_idx,
+                            timeline=timeline,
+                            challenge=challenge,
+                            arb_won=arb_won,
+                            quantum=quantum if arb_won else None,
+                            final_outcome="SETTLED",
+                            total_duration_months=_settle_c1.settlement_timing_months,
+                            monthly_legal_burn=_trunc_c1,
+                            legal_cost_total_cr=float(np.sum(_trunc_c1)),
+                            collected_cr=_settle_c1.settlement_amount_cr,
+                            interest_earned_cr=0.0,
+                            settlement=_settle_c1,
+                            re_arb_won=re_arb_won_draw,
+                            re_arb_quantum=re_arb_q,
+                            re_arb_duration_months=re_arb_dur,
+                        )
+
                 # ── Post-re-arb court challenge ──
                 # The new award must survive the full Scenario A
                 # challenge tree (same jurisdiction as original claim).
@@ -238,6 +479,55 @@ def _simulate_claim_path(
                     final_outcome = "LOSE"
                     quantum_received_cr = 0.0
                 elif post_challenge.outcome == "TRUE_WIN":
+                    # ── Check C2: Settlement during post-re-arb challenge (TRUE_WIN path) ──
+                    if MI.SETTLEMENT_ENABLED:
+                        _c2_elapsed = timeline_so_far + re_arb_dur
+                        for _sn_c2, _sd_c2 in post_challenge.stages_detail.items():
+                            _c2_elapsed += _sd_c2
+                            _settle_c2 = _attempt_settlement(
+                                stage_name=_sn_c2,
+                                elapsed_months=_c2_elapsed,
+                                arb_won=True,
+                                quantum_cr=re_arb_q.quantum_cr,
+                                soc_value_cr=claim.soc_value_cr,
+                                rng=rng,
+                            )
+                            if _settle_c2 is not None:
+                                _c2_stages = dict(timeline.stage_durations)
+                                for _sn, _sd in challenge.stages_detail.items():
+                                    _c2_stages[_sn] = _sd
+                                _c2_stages["re_arbitration"] = re_arb_dur
+                                for _sn, _sd in post_challenge.stages_detail.items():
+                                    _c2_stages[f"post_rearb_{_sn}"] = _sd
+                                _slp_c2 = None
+                                if claim.jurisdiction == "domestic":
+                                    _slp_dur_c2 = challenge.stages_detail.get("slp", 0.0)
+                                    if _slp_dur_c2 > 0:
+                                        _slp_c2 = (_slp_dur_c2 >= MI.SLP_ADMITTED_DURATION)
+                                _burn_c2 = build_monthly_legal_burn(
+                                    claim.claim_id, _c2_stages, rng, cost_table,
+                                    slp_admitted=_slp_c2,
+                                )
+                                _trunc_c2 = _truncate_legal_burn(_burn_c2, _c2_elapsed)
+                                return PathResult(
+                                    claim_id=claim.claim_id,
+                                    path_idx=path_idx,
+                                    timeline=timeline,
+                                    challenge=challenge,
+                                    arb_won=arb_won,
+                                    quantum=quantum if arb_won else None,
+                                    final_outcome="SETTLED",
+                                    total_duration_months=_settle_c2.settlement_timing_months,
+                                    monthly_legal_burn=_trunc_c2,
+                                    legal_cost_total_cr=float(np.sum(_trunc_c2)),
+                                    collected_cr=_settle_c2.settlement_amount_cr,
+                                    interest_earned_cr=0.0,
+                                    settlement=_settle_c2,
+                                    re_arb_won=re_arb_won_draw,
+                                    re_arb_quantum=re_arb_q,
+                                    re_arb_duration_months=re_arb_dur,
+                                    re_arb_challenge=post_challenge,
+                                )
                     # Re-arb award survived challenge → collect
                     quantum_received_cr = re_arb_q.quantum_cr
                     total_duration = actual_total
@@ -245,6 +535,55 @@ def _simulate_claim_path(
                 else:
                     # Re-arb award did not survive challenge (LOSE or
                     # second RESTART — terminal, no further re-arb)
+                    # ── Check C2b: Settlement during post-re-arb challenge (LOSE path) ──
+                    if MI.SETTLEMENT_ENABLED:
+                        _c2b_elapsed = timeline_so_far + re_arb_dur
+                        for _sn_c2b, _sd_c2b in post_challenge.stages_detail.items():
+                            _c2b_elapsed += _sd_c2b
+                            _settle_c2b = _attempt_settlement(
+                                stage_name=_sn_c2b,
+                                elapsed_months=_c2b_elapsed,
+                                arb_won=True,  # re-arb was won; challenge is ongoing
+                                quantum_cr=re_arb_q.quantum_cr,
+                                soc_value_cr=claim.soc_value_cr,
+                                rng=rng,
+                            )
+                            if _settle_c2b is not None:
+                                _c2b_stages = dict(timeline.stage_durations)
+                                for _sn, _sd in challenge.stages_detail.items():
+                                    _c2b_stages[_sn] = _sd
+                                _c2b_stages["re_arbitration"] = re_arb_dur
+                                for _sn, _sd in post_challenge.stages_detail.items():
+                                    _c2b_stages[f"post_rearb_{_sn}"] = _sd
+                                _slp_c2b = None
+                                if claim.jurisdiction == "domestic":
+                                    _slp_dur_c2b = challenge.stages_detail.get("slp", 0.0)
+                                    if _slp_dur_c2b > 0:
+                                        _slp_c2b = (_slp_dur_c2b >= MI.SLP_ADMITTED_DURATION)
+                                _burn_c2b = build_monthly_legal_burn(
+                                    claim.claim_id, _c2b_stages, rng, cost_table,
+                                    slp_admitted=_slp_c2b,
+                                )
+                                _trunc_c2b = _truncate_legal_burn(_burn_c2b, _c2b_elapsed)
+                                return PathResult(
+                                    claim_id=claim.claim_id,
+                                    path_idx=path_idx,
+                                    timeline=timeline,
+                                    challenge=challenge,
+                                    arb_won=arb_won,
+                                    quantum=quantum if arb_won else None,
+                                    final_outcome="SETTLED",
+                                    total_duration_months=_settle_c2b.settlement_timing_months,
+                                    monthly_legal_burn=_trunc_c2b,
+                                    legal_cost_total_cr=float(np.sum(_trunc_c2b)),
+                                    collected_cr=_settle_c2b.settlement_amount_cr,
+                                    interest_earned_cr=0.0,
+                                    settlement=_settle_c2b,
+                                    re_arb_won=re_arb_won_draw,
+                                    re_arb_quantum=re_arb_q,
+                                    re_arb_duration_months=re_arb_dur,
+                                    re_arb_challenge=post_challenge,
+                                )
                     total_duration = (
                         timeline_so_far + re_arb_dur
                         + post_challenge.timeline_months
@@ -252,7 +591,50 @@ def _simulate_claim_path(
                     final_outcome = "LOSE"
                     quantum_received_cr = 0.0
             else:
-                # Lose re-arb: game over
+                # Lose re-arb
+                # ── Check C1b: Settlement at re-arb stage (claimant lost re-arb) ──
+                if MI.SETTLEMENT_ENABLED:
+                    _c1b_elapsed = timeline_so_far + re_arb_dur
+                    _settle_c1b = _attempt_settlement(
+                        stage_name="re_arbitration",
+                        elapsed_months=_c1b_elapsed,
+                        arb_won=False,
+                        quantum_cr=None,
+                        soc_value_cr=claim.soc_value_cr,
+                        rng=rng,
+                    )
+                    if _settle_c1b is not None:
+                        _c1b_stages = dict(timeline.stage_durations)
+                        for _sn, _sd in challenge.stages_detail.items():
+                            _c1b_stages[_sn] = _sd
+                        _c1b_stages["re_arbitration"] = re_arb_dur
+                        _slp_c1b = None
+                        if claim.jurisdiction == "domestic":
+                            _slp_dur_c1b = challenge.stages_detail.get("slp", 0.0)
+                            if _slp_dur_c1b > 0:
+                                _slp_c1b = (_slp_dur_c1b >= MI.SLP_ADMITTED_DURATION)
+                        _burn_c1b = build_monthly_legal_burn(
+                            claim.claim_id, _c1b_stages, rng, cost_table, slp_admitted=_slp_c1b
+                        )
+                        _trunc_c1b = _truncate_legal_burn(_burn_c1b, _c1b_elapsed)
+                        return PathResult(
+                            claim_id=claim.claim_id,
+                            path_idx=path_idx,
+                            timeline=timeline,
+                            challenge=challenge,
+                            arb_won=arb_won,
+                            quantum=quantum if arb_won else None,
+                            final_outcome="SETTLED",
+                            total_duration_months=_settle_c1b.settlement_timing_months,
+                            monthly_legal_burn=_trunc_c1b,
+                            legal_cost_total_cr=float(np.sum(_trunc_c1b)),
+                            collected_cr=_settle_c1b.settlement_amount_cr,
+                            interest_earned_cr=0.0,
+                            settlement=_settle_c1b,
+                            re_arb_won=False,
+                            re_arb_duration_months=re_arb_dur,
+                        )
+                # game over
                 total_duration = timeline_so_far + re_arb_dur
                 final_outcome = "LOSE"
                 quantum_received_cr = 0.0
@@ -644,6 +1026,29 @@ def print_numerical_audit(sim: SimulationResults) -> bool:
         print(f"  Longest E[τ]:  {longest} ({tau_means[longest]:.1f} mo)")
         print("  Note: SIAC claims tend shorter than domestic due to "
               "fixed 12-month challenge vs 19-54 months")
+
+    # --- Part 5: Settlement summary ---
+    all_paths_flat = [
+        p
+        for cid in sim.claim_ids
+        for p in sim.results[cid]
+    ]
+    if any(pr.settlement is not None and pr.settlement.settled for pr in all_paths_flat):
+        n_settled = sum(
+            1 for pr in all_paths_flat
+            if pr.settlement is not None and pr.settlement.settled
+        )
+        pct = n_settled / len(all_paths_flat) * 100
+        print(f"\n  Settlement: {n_settled}/{len(all_paths_flat)} paths ({pct:.1f}%)")
+
+        from collections import Counter
+        stage_counts: Counter = Counter(
+            pr.settlement.settlement_stage
+            for pr in all_paths_flat
+            if pr.settlement is not None and pr.settlement.settled
+        )
+        for stage, cnt in sorted(stage_counts.items()):
+            print(f"    {stage}: {cnt} ({cnt/len(all_paths_flat)*100:.1f}%)")
 
     print("\n" + "=" * 120)
     status = " ALL AUDIT CHECKS PASSED" if all_pass else " AUDIT WARNINGS (see flags above)"

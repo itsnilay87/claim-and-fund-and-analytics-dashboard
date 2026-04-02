@@ -1222,6 +1222,33 @@ INTEREST_START_BASIS: str = "award_date"
 
 
 # ============================================================================
+# SECTION 10b: SETTLEMENT PARAMETERS
+# ============================================================================
+
+# Settlement master toggle (overridden by adapter per-claim)
+SETTLEMENT_ENABLED = False
+
+# Default hazard rates per stage (P of settlement offer at each stage)
+SETTLEMENT_GLOBAL_HAZARD_RATE = 0.15
+SETTLEMENT_STAGE_HAZARD_RATES: dict[str, float] = {}  # per-stage overrides; empty = use global
+
+# Default discount ramp
+SETTLEMENT_DISCOUNT_MIN = 0.30   # \u03b4 at earliest stage
+SETTLEMENT_DISCOUNT_MAX = 0.85   # \u03b4 at latest stage
+SETTLEMENT_STAGE_DISCOUNT_FACTORS: dict[str, float] = {}  # per-stage overrides; empty = use ramp
+
+# Settlement delay in months (agreement \u2192 cash)
+SETTLEMENT_DELAY_MONTHS = 3.0
+
+# Settlement mode: "user_specified" or "game_theoretic"
+SETTLEMENT_MODE = "user_specified"
+
+# Game-theoretic parameters
+SETTLEMENT_BARGAINING_POWER = 0.5  # \u03b1 in Nash Bargaining (0.5 = symmetric)
+SETTLEMENT_RESPONDENT_LEGAL_COST_CR = None  # None \u2192 estimate as 1.2\u00d7 claimant's costs
+
+
+# ============================================================================
 # SECTION 11: REPORT SETTINGS
 # ============================================================================
 

@@ -47,6 +47,7 @@ import {
   V2LegalCosts,
   V2ReportView,
   V2ProbabilitySensitivity,
+  V2SettlementAnalysis,
 } from './components/v2';
 
 /* ── Tab definitions ── */
@@ -95,13 +96,18 @@ const STRUCTURE_TABS = {
   ],
 };
 
-function getTabsForStructure(structureType, claimMode) {
+function getTabsForStructure(structureType, claimMode, data) {
   if (claimMode) return SINGLE_CLAIM_TABS;
   const extra = STRUCTURE_TABS[structureType] || [];
   // Insert structure-specific tabs before the last two universal tabs (Risk, Export)
   const universal = [...UNIVERSAL_TABS];
   const insertIdx = universal.length - 2;
   universal.splice(insertIdx, 0, ...extra);
+  // Conditionally add Settlement tab when enabled
+  if (data?.settlement?.enabled === true) {
+    const riskIdx = universal.findIndex(t => t.id === 'risk');
+    universal.splice(riskIdx, 0, { id: 'settlement', label: 'Settlement Analysis', icon: '🤝' });
+  }
   return universal;
 }
 
@@ -122,7 +128,7 @@ export default function App() {
   if (loading) return <LoadingScreen />;
   if (error)   return <ErrorScreen message={error} onRetry={retry} />;
 
-  const tabs = getTabsForStructure(structureType, claimMode);
+  const tabs = getTabsForStructure(structureType, claimMode, data);
   const meta = data?.simulation_meta || {};
 
   // Ensure active tab is valid for current structure
@@ -144,6 +150,8 @@ export default function App() {
         return <V2QuantumTimeline data={data} />;
       case 'cashflow':
         return <V2CashflowWaterfall data={data} />;
+      case 'settlement':
+        return <V2SettlementAnalysis data={data} />;
       case 'risk':
         return <RiskAnalytics data={data} />;
       case 'export':

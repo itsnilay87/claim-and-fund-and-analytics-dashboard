@@ -482,7 +482,116 @@ class InterestConfig(BaseModel):
 
 
 # ============================================================================
-# 10. ArbitrationConfig
+# 10. SettlementStageConfig & SettlementConfig
+# ============================================================================
+
+class SettlementStageConfig(BaseModel):
+    """Settlement parameters for a single litigation stage."""
+    stage_name: str = Field(
+        description="Pipeline stage name (must match a stage in the claim's pipeline)."
+    )
+    hazard_rate: float = Field(
+        ge=0.0, le=1.0,
+        description="\u03bb_s: probability of settlement offer at this stage. "
+                    "0.0 = no settlement possible, 1.0 = guaranteed settlement."
+    )
+    discount_factor: Optional[float] = Field(
+        default=None, ge=0.0, le=1.5,
+        description="\u03b4_s: settlement amount as fraction of reference quantum at this stage. "
+                    "None = use ramp interpolation or game-theoretic computation."
+    )
+
+class SettlementConfig(BaseModel):
+    """Settlement configuration for a claim. When enabled, settlement is modeled
+    as a competing exit process: at each pipeline stage, a Bernoulli draw determines
+    whether settlement occurs. If it does, the claim exits with a discounted quantum
+    and truncated legal costs.
+
+    Mathematical foundation:
+    - Hazard process: P(settle at stage s) = \u03bb_s \u00d7 \u220f(j<s)(1 \u2212 \u03bb_j)
+    - Settlement amount: A = \u03b4_s \u00d7 Q_ref(s)
+    - Q_ref depends on regime (pre-award vs post-award)
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Master toggle. When False, settlement is completely disabled "
+                    "and the engine runs the existing three-outcome model unchanged."
+    )
+
+    # \u2500\u2500 Mode selection \u2500\u2500
+    mode: Literal["user_specified", "game_theoretic"] = Field(
+        default="user_specified",
+        description="'user_specified': user provides \u03b4_s per stage or as a ramp. "
+                    "'game_theoretic': \u03b4*_s computed via Nash Bargaining from tree structure. "
+                    "In game_theoretic mode, user still provides \u03bb_s (hazard rates)."
+    )
+
+    # \u2500\u2500 Global parameters (apply when per-stage overrides are absent) \u2500\u2500
+    global_hazard_rate: float = Field(
+        default=0.15, ge=0.0, le=1.0,
+        description="Default \u03bb for all stages unless overridden per-stage."
+    )
+    discount_min: float = Field(
+        default=0.30, ge=0.0, le=1.5,
+        description="\u03b4_min: settlement discount at the earliest stage. "
+                    "Used for linear ramp interpolation."
+    )
+    discount_max: float = Field(
+        default=0.85, ge=0.0, le=1.5,
+        description="\u03b4_max: settlement discount at the latest stage. "
+                    "Used for linear ramp interpolation."
+    )
+    settlement_delay_months: float = Field(
+        default=3.0, ge=0.0, le=24.0,
+        description="Months from settlement agreement to cash receipt."
+    )
+
+    # \u2500\u2500 Per-stage overrides (optional \u2014 takes precedence over globals) \u2500\u2500
+    stage_overrides: list[SettlementStageConfig] = Field(
+        default_factory=list,
+        description="Per-stage settlement parameters. Any stage listed here uses its own "
+                    "hazard_rate and discount_factor instead of the global defaults."
+    )
+
+    # \u2500\u2500 Game-theoretic mode parameters \u2500\u2500
+    bargaining_power: float = Field(
+        default=0.5, ge=0.0, le=1.0,
+        description="\u03b1 in Nash Bargaining: 0.5 = symmetric, >0.5 = claimant has more power. "
+                    "Only used when mode='game_theoretic'."
+    )
+    respondent_legal_cost_cr: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Respondent's estimated remaining legal costs (\u20b9 Crore). "
+                    "Used in game-theoretic mode to compute respondent's settlement incentive. "
+                    "If None, estimated as 1.2\u00d7 claimant's legal costs."
+    )
+
+    @model_validator(mode="after")
+    def _validate_discount_ramp(self) -> "SettlementConfig":
+        """Ensure discount_min <= discount_max for consistent ramp interpolation."""
+        if self.discount_min > self.discount_max:
+            raise ValueError(
+                f"SettlementConfig: discount_min ({self.discount_min}) must be "
+                f"<= discount_max ({self.discount_max})."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_game_theoretic_params(self) -> "SettlementConfig":
+        """Warn if game_theoretic mode but bargaining_power is extreme."""
+        if self.mode == "game_theoretic":
+            if self.bargaining_power < 0.1 or self.bargaining_power > 0.9:
+                import warnings
+                warnings.warn(
+                    f"SettlementConfig: bargaining_power={self.bargaining_power} is extreme. "
+                    f"Values near 0 or 1 produce settlements that one party would reject."
+                )
+        return self
+
+
+# ============================================================================
+# 10a. ArbitrationConfig
 # ============================================================================
 
 class ArbitrationConfig(BaseModel):
@@ -725,6 +834,11 @@ class ClaimConfig(BaseModel):
     interest: InterestConfig = Field(
         default_factory=InterestConfig,
         description="Interest accrual configuration.",
+    )
+    settlement: SettlementConfig = Field(
+        default_factory=SettlementConfig,
+        description="Settlement toggle and parameters. When enabled, settlement is modeled "
+                    "as a competing exit at each pipeline stage."
     )
     no_restart_mode: bool = Field(
         default=False,

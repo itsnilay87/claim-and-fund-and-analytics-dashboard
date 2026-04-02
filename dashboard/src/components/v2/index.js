@@ -13,4 +13,5 @@ export { default as V2LegalCosts } from './LegalCosts';
 export { default as V2ProbabilitySensitivity } from './ProbabilitySensitivity';
 export { default as V2StochasticPricing } from './StochasticPricing';
 export { default as V2ReportCharts } from './ReportCharts';
+export { default as V2SettlementAnalysis } from './SettlementAnalysis';
 export { PricingView as V2PricingView, ReportView as V2ReportView } from './ScenariosAndPricing';

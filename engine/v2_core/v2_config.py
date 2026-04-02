@@ -145,6 +145,22 @@ class ChallengeResult:
 
 
 # ---------------------------------------------------------------------------
+# 5a. SettlementResult — settlement process output
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SettlementResult:
+    """Result of settlement process for a single MC path."""
+    settled: bool                          # Whether settlement occurred
+    settlement_stage: Optional[str] = None  # Stage where settlement happened (e.g., "s34", "arbitration")
+    settlement_amount_cr: float = 0.0      # Amount received via settlement (\u20b9 Crore)
+    settlement_discount_used: float = 0.0  # \u03b4_s that was applied
+    settlement_timing_months: float = 0.0  # Total months from start to settlement payment
+    settlement_mode: str = "none"          # "user_specified", "game_theoretic", or "none"
+    reference_quantum_cr: float = 0.0      # Q_ref used for computing settlement amount
+
+
+# ---------------------------------------------------------------------------
 # 6. PathResult — full per-claim per-path MC result
 # ---------------------------------------------------------------------------
 
@@ -166,7 +182,7 @@ class PathResult:
     quantum: Optional[QuantumResult]
 
     # Final outcome after all stages
-    final_outcome: str          # "TRUE_WIN" | "RESTART" | "LOSE"
+    final_outcome: str          # "TRUE_WIN" | "RESTART" | "LOSE" | "SETTLED"
     total_duration_months: float  # pipeline + challenge + payment delay
 
     # Legal costs and cashflow (populated by MC engine)
@@ -180,6 +196,9 @@ class PathResult:
     net_return_cr: float = 0.0
     irr: Optional[float] = None
     moic: Optional[float] = None
+
+    # Settlement (None when settlement is disabled or path didn't settle)
+    settlement: Optional[SettlementResult] = None
 
     # SLP admission (domestic claims only, None for SIAC or no SLP stage)
     slp_admitted: Optional[bool] = None
