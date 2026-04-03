@@ -57,15 +57,15 @@ export default function SettlementEditor({ draft, updateField }) {
   const stages = getStagesForJurisdiction(jurisdiction);
   const overrides = settlement.stage_overrides || [];
 
-  const getOverride = (stageName) => overrides.find((o) => o.stage === stageName);
+  const getOverride = (stageName) => overrides.find((o) => o.stage_name === stageName);
 
   const updateOverride = (stageName, field, value) => {
     const existing = [...overrides];
-    const idx = existing.findIndex((o) => o.stage === stageName);
+    const idx = existing.findIndex((o) => o.stage_name === stageName);
     if (idx >= 0) {
       existing[idx] = { ...existing[idx], [field]: value };
     } else {
-      existing.push({ stage: stageName, [field]: value });
+      existing.push({ stage_name: stageName, [field]: value });
     }
     update('stage_overrides', existing);
   };
