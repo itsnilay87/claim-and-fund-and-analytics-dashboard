@@ -450,6 +450,7 @@ def patch_master_inputs_for_claim(
         MI.SETTLEMENT_STAGE_HAZARD_RATES = {
             so.stage_name: so.hazard_rate
             for so in settlement.stage_overrides
+            if so.hazard_rate is not None
         }
         MI.SETTLEMENT_STAGE_DISCOUNT_FACTORS = {
             so.stage_name: so.discount_factor

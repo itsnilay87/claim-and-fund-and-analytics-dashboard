@@ -490,10 +490,11 @@ class SettlementStageConfig(BaseModel):
     stage_name: str = Field(
         description="Pipeline stage name (must match a stage in the claim's pipeline)."
     )
-    hazard_rate: float = Field(
-        ge=0.0, le=1.0,
+    hazard_rate: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
         description="\u03bb_s: probability of settlement offer at this stage. "
-                    "0.0 = no settlement possible, 1.0 = guaranteed settlement."
+                    "0.0 = no settlement possible, 1.0 = guaranteed settlement. "
+                    "None = use global_hazard_rate."
     )
     discount_factor: Optional[float] = Field(
         default=None, ge=0.0, le=1.5,
