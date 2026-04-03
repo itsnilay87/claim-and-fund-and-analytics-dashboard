@@ -55,7 +55,11 @@ export default function SettlementEditor({ draft, updateField }) {
   };
 
   const stages = getStagesForJurisdiction(jurisdiction);
-  const overrides = settlement.stage_overrides || [];
+  // Normalize overrides: accept both 'stage' and 'stage_name' for backward compat
+  const overrides = (settlement.stage_overrides || []).map((o) => {
+    if (!o.stage_name && o.stage) return { ...o, stage_name: o.stage, stage: undefined };
+    return o;
+  });
 
   const getOverride = (stageName) => overrides.find((o) => o.stage_name === stageName);
 

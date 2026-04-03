@@ -341,7 +341,7 @@ def _build_settlement_summary(
     # ── Config snapshot ──
     stage_overrides = []
     for stage, rate in MI.SETTLEMENT_STAGE_HAZARD_RATES.items():
-        override = {"stage": stage, "hazard_rate": rate}
+        override = {"stage_name": stage, "hazard_rate": rate}
         if stage in MI.SETTLEMENT_STAGE_DISCOUNT_FACTORS:
             override["discount_factor"] = MI.SETTLEMENT_STAGE_DISCOUNT_FACTORS[stage]
         stage_overrides.append(override)

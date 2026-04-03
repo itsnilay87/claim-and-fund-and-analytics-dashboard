@@ -502,6 +502,14 @@ class SettlementStageConfig(BaseModel):
                     "None = use ramp interpolation or game-theoretic computation."
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_stage_field(cls, data):
+        """Accept both 'stage' and 'stage_name' for backward compatibility."""
+        if isinstance(data, dict) and "stage_name" not in data and "stage" in data:
+            data["stage_name"] = data.pop("stage")
+        return data
+
 class SettlementConfig(BaseModel):
     """Settlement configuration for a claim. When enabled, settlement is modeled
     as a competing exit process: at each pipeline stage, a Bernoulli draw determines
@@ -554,6 +562,30 @@ class SettlementConfig(BaseModel):
         description="Per-stage settlement parameters. Any stage listed here uses its own "
                     "hazard_rate and discount_factor instead of the global defaults."
     )
+
+    @model_validator(mode='after')
+    def _deduplicate_stage_overrides(self):
+        """Merge duplicate stage_name entries (keeps last value for each field)."""
+        if not self.stage_overrides:
+            return self
+        merged: dict[str, dict] = {}
+        for so in self.stage_overrides:
+            name = so.stage_name
+            if name in merged:
+                if so.hazard_rate is not None:
+                    merged[name]['hazard_rate'] = so.hazard_rate
+                if so.discount_factor is not None:
+                    merged[name]['discount_factor'] = so.discount_factor
+            else:
+                merged[name] = {
+                    'stage_name': name,
+                    'hazard_rate': so.hazard_rate,
+                    'discount_factor': so.discount_factor,
+                }
+        self.stage_overrides = [
+            SettlementStageConfig(**v) for v in merged.values()
+        ]
+        return self
 
     # \u2500\u2500 Game-theoretic mode parameters \u2500\u2500
     bargaining_power: float = Field(
