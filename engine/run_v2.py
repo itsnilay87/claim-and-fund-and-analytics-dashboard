@@ -389,13 +389,11 @@ def _postprocess_dashboard_json(
     }
 
     # ── Common: mc_distributions ──
-    all_net_returns = sorted(
-        row.get("mean_net_return_cr", 0.0)
-        for row in ig_dict.values()
-        if row.get("mean_net_return_cr") is not None
-    )
+    # Build histograms from ALL N per-path outcomes (not from the ~99
+    # investment-grid aggregate means which only have one point per combo).
 
     def _histogram(values, n_bins=50):
+        """Build histogram dict from a list of raw values."""
         if not values:
             return {"bins": [], "counts": [], "edges": []}
         lo, hi = min(values), max(values)
@@ -410,12 +408,127 @@ def _postprocess_dashboard_json(
         bins = [round((edges[i] + edges[i + 1]) / 2, 6) for i in range(n_bins)]
         return {"bins": bins, "counts": counts, "edges": edges}
 
-    data["mc_distributions"] = {
-        "moic": _histogram(grid_moics),
-        "irr": _histogram(grid_xirrs),
-        "net_recovery": _histogram(all_net_returns),
-        "n_paths": sim.n_paths,
-    }
+    def _convert_stochastic_hist(raw_hist):
+        """Convert [{edge, count}, ...] format to {bins, counts, edges}."""
+        if not raw_hist or len(raw_hist) < 2:
+            return {"bins": [], "counts": [], "edges": []}
+        edges = [entry["edge"] for entry in raw_hist]
+        counts = [entry["count"] for entry in raw_hist[:-1]]  # last entry is trailing edge
+        bins = [round((edges[i] + edges[i + 1]) / 2, 6) for i in range(len(counts))]
+        return {"bins": bins, "counts": counts, "edges": edges}
+
+    # Strategy: compute per-path MOIC / IRR / net recovery from sim.results
+    # using a reference deal structure (10% upfront, 20% Tata tail).
+    # Investment = upfront + legal cost; Return = fund_share × collected.
+    per_path_built = False
+    try:
+        from engine.v2_core.v2_cashflow_builder import build_cashflow_simple, portfolio_day_fracs
+        from engine.v2_core.v2_metrics import compute_moic, compute_xirr_from_dayfrac
+
+        n = sim.n_paths
+        n_claims = len(sim.claim_ids)
+
+        # Reference deal structure
+        ref_upfront_pct = 0.10   # 10% upfront
+        ref_tata_tail = 0.20     # 20% Tata tail
+        ref_fund_share = 1.0 - ref_tata_tail
+
+        # Gather per-path claim configs
+        claim_map = {}
+        for cid in sim.claim_ids:
+            for row in (data.get("claims") or []):
+                if row.get("claim_id") == cid:
+                    soc_cr = row.get("soc_value_cr", 0.0)
+                    claim_map[cid] = soc_cr
+                    break
+            if cid not in claim_map:
+                # Fallback: get from MI
+                claim_map[cid] = getattr(MI, "SOC_VALUE_CR", 100.0)
+
+        path_moics = []
+        path_irrs = []
+        path_net_recoveries = []
+        path_durations = []
+
+        for path_i in range(n):
+            total_invested = 0.0
+            total_return = 0.0
+            max_dur = 0.0
+
+            for cid in sim.claim_ids:
+                p = sim.results[cid][path_i]
+                soc_cr = claim_map.get(cid, 100.0)
+
+                upfront = ref_upfront_pct * soc_cr
+                upfront = max(upfront, 1e-6)
+                legal_cost = p.legal_cost_total_cr
+                collected = p.collected_cr
+                inflow = ref_fund_share * collected
+
+                total_invested += upfront + legal_cost
+                total_return += inflow
+
+                dur = p.total_duration_months
+                if dur > max_dur:
+                    max_dur = dur
+
+            moic = total_return / total_invested if total_invested > 0 else 0.0
+            net_rec = total_return - total_invested
+
+            # Approximate IRR from MOIC and duration
+            years = max_dur / 12.0
+            if years > 0 and moic > 0:
+                irr = moic ** (1.0 / years) - 1.0
+            elif total_invested > 0 and total_return <= 0:
+                irr = -1.0
+            else:
+                irr = 0.0
+
+            path_moics.append(moic)
+            path_irrs.append(irr)
+            path_net_recoveries.append(net_rec)
+            path_durations.append(max_dur)
+
+        data["mc_distributions"] = {
+            "moic": _histogram(path_moics),
+            "irr": _histogram(path_irrs),
+            "net_recovery": _histogram(path_net_recoveries),
+            "duration": _histogram(path_durations),
+            "n_paths": n,
+        }
+        per_path_built = True
+        print(f"  mc_distributions: built from {n} per-path outcomes")
+    except Exception as exc:
+        print(f"  Warning: per-path mc_distributions failed ({exc}), using fallback")
+        per_path_built = False
+
+    if not per_path_built:
+        # Try stochastic grid histograms (pre-binned from all MC paths)
+        stoch_grid = (data.get("stochastic_pricing") or {}).get("grid", {})
+        ref_combo_key = "10_20" if "10_20" in stoch_grid else next(iter(stoch_grid), None)
+        ref_combo = stoch_grid.get(ref_combo_key) if ref_combo_key else None
+
+        if ref_combo and ref_combo.get("moic_hist"):
+            data["mc_distributions"] = {
+                "moic": _convert_stochastic_hist(ref_combo["moic_hist"]),
+                "irr": _convert_stochastic_hist(ref_combo.get("irr_hist", [])),
+                "net_recovery": _convert_stochastic_hist(ref_combo.get("net_recovery_hist", [])),
+                "duration": _convert_stochastic_hist(ref_combo.get("duration_hist", [])),
+                "n_paths": sim.n_paths,
+            }
+        else:
+            # Last fallback: investment-grid aggregate means
+            all_net_returns = sorted(
+                row.get("mean_net_return_cr", 0.0)
+                for row in ig_dict.values()
+                if row.get("mean_net_return_cr") is not None
+            )
+            data["mc_distributions"] = {
+                "moic": _histogram(grid_moics),
+                "irr": _histogram(grid_xirrs),
+                "net_recovery": _histogram(all_net_returns),
+                "n_paths": sim.n_paths,
+            }
 
     # ── Structure-specific extra fields (sensitivity, jcurve, etc.) ──
     extra = handler.get_extra_dashboard_fields(sim, waterfall_grid_results)
