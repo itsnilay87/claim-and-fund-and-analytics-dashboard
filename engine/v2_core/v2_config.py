@@ -35,6 +35,14 @@ class ClaimConfig:
     name: str = ""          # Human-readable claim name
     dab_commencement_date: str = ""  # ISO date (YYYY-MM-DD) of DAB commencement for interest calc
 
+    # Post-arb stages that legitimately have an empty pipeline
+    _POST_ARB_GATES = {
+        "arb_award_done", "challenge_pending", "enforcement",
+        "s34_pending", "s34_decided", "s37_pending", "s37_decided", "slp_pending",
+        "hc_challenge_pending", "hc_decided", "coa_pending", "coa_decided",
+        "cfi_challenge_pending", "cfi_decided", "ca_pending", "ca_decided", "cfa_pending",
+    }
+
     def validate(self) -> None:
         """Raise ValueError if any invariant is violated."""
         if self.soc_value_cr <= 0:
@@ -50,7 +58,7 @@ class ClaimConfig:
                 f"{self.claim_id}: jurisdiction must be 'domestic', 'siac', "
                 f"or 'hkiac_hongkong', got '{self.jurisdiction}'"
             )
-        if not self.pipeline:
+        if not self.pipeline and self.current_gate not in self._POST_ARB_GATES:
             raise ValueError(f"{self.claim_id}: pipeline must not be empty")
 
     def __repr__(self) -> str:
