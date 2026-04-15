@@ -6,6 +6,7 @@
 import React, { useState, useCallback } from 'react';
 import { COLORS, FONT, useUISettings } from '../theme';
 import { Card, SectionTitle, KPI } from './Shared';
+import { authFetch } from '../data/dashboardData';
 
 function DownloadButton({ icon, label, sub, onClick, disabled, color }) {
   const { ui } = useUISettings();
@@ -56,8 +57,17 @@ export default function ExportPanel({ data }) {
   const downloadCSV = useCallback(() => {
     const claims = data?.claims || [];
     if (claims.length === 0) return;
-    const headers = ['claim_id', 'name', 'jurisdiction', 'claim_type', 'soc_value_cr', 'win_rate', 'mean_quantum_cr', 'mean_duration_months', 'mean_collected_cr', 'mean_legal_costs_cr'];
-    const rows = claims.map(c => headers.map(h => c[h] ?? '').join(','));
+    const headers = ['claim_id', 'name', 'jurisdiction', 'archetype', 'soc_value_cr', 'win_rate',
+      'mean_quantum', 'mean_duration', 'mean_collected', 'mean_legal_cost',
+      'current_gate', 'tpl_share'];
+    const rows = claims.map(c => headers.map(h => {
+      const v = c[h] ?? '';
+      // Escape CSV values that contain commas or quotes
+      if (typeof v === 'string' && (v.includes(',') || v.includes('"'))) {
+        return `"${v.replace(/"/g, '""')}"`;
+      }
+      return v;
+    }).join(','));
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -71,22 +81,69 @@ export default function ExportPanel({ data }) {
     setLastAction('CSV downloaded');
   }, [data, meta]);
 
-  const downloadExcel = useCallback(() => {
-    // If loaded via API (runId present), fetch Excel from server
+  const downloadExcel = useCallback(async () => {
     const params = new URLSearchParams(window.location.search);
     const runId = params.get('runId');
     const apiBase = params.get('apiBase') || import.meta.env.VITE_API_BASE || '';
-    if (runId) {
-      const url = `${apiBase}/api/results/${encodeURIComponent(runId)}/dashboard_report.xlsx`;
+    if (!runId) {
+      setLastAction('Excel export requires a server run (use runId mode)');
+      return;
+    }
+    try {
+      setLastAction('Downloading Excel…');
+      // Try multiple known Excel filenames in order of preference
+      const filenames = ['Investment_Analysis_Report.xlsx', 'TATA_V2_Valuation_Model.xlsx', 'Chart_Data.xlsx'];
+      let blob = null;
+      let usedName = filenames[0];
+      for (const fname of filenames) {
+        const url = `${apiBase}/api/results/${encodeURIComponent(runId)}/${fname}`;
+        const res = await authFetch(url, apiBase);
+        if (res.ok) {
+          blob = await res.blob();
+          usedName = fname;
+          break;
+        }
+      }
+      if (!blob) throw new Error('No Excel file found for this run');
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = `dashboard_report_${meta.structure_type || 'export'}.xlsx`;
+      a.href = blobUrl;
+      a.download = usedName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setLastAction('Excel download started');
-    } else {
-      setLastAction('Excel export requires a server run (use runId mode)');
+      URL.revokeObjectURL(blobUrl);
+      setLastAction('Excel downloaded');
+    } catch (err) {
+      setLastAction('Excel download failed: ' + err.message);
+    }
+  }, [meta]);
+
+  const downloadPDF = useCallback(async () => {
+    const params = new URLSearchParams(window.location.search);
+    const runId = params.get('runId');
+    const apiBase = params.get('apiBase') || import.meta.env.VITE_API_BASE || '';
+    if (!runId) {
+      setLastAction('PDF export requires a server run (use runId mode)');
+      return;
+    }
+    try {
+      setLastAction('Downloading PDF…');
+      const url = `${apiBase}/api/results/${encodeURIComponent(runId)}/TATA_V2_Investment_Analysis.pdf`;
+      const res = await authFetch(url, apiBase);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = 'TATA_V2_Investment_Analysis.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      setLastAction('PDF downloaded');
+    } catch (err) {
+      setLastAction('PDF download failed: ' + err.message);
     }
   }, [meta]);
 
@@ -146,8 +203,9 @@ export default function ExportPanel({ data }) {
           <DownloadButton
             icon="📄"
             label="PDF Report"
-            sub="Not yet available"
-            disabled
+            sub={hasRunId ? "Investment analysis report" : "Requires server run"}
+            onClick={downloadPDF}
+            disabled={!hasRunId}
             color={COLORS.accent5}
           />
         </div>

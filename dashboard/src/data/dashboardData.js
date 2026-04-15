@@ -22,41 +22,63 @@ let _accessToken = null;
 let _tokenPromise = null;
 
 /**
- * Get a valid access token by calling the refresh endpoint.
+ * Refresh the access token by calling the refresh endpoint.
  * The HttpOnly refresh-token cookie is sent automatically (same origin).
- * Result is cached for the session; returns null if not authenticated.
+ */
+async function _refreshAccessToken(apiBase = '') {
+  try {
+    const res = await fetch(`${apiBase}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    _accessToken = data.accessToken || null;
+    return _accessToken;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get a valid access token, refreshing if needed.
+ * Result is cached until a 401 triggers clearAccessToken().
  */
 async function getAccessToken(apiBase = '') {
   if (_accessToken) return _accessToken;
   if (_tokenPromise) return _tokenPromise;
-
-  _tokenPromise = (async () => {
-    try {
-      const res = await fetch(`${apiBase}/api/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      _accessToken = data.accessToken || null;
-      return _accessToken;
-    } catch {
-      return null;
-    } finally {
-      _tokenPromise = null;
-    }
-  })();
-
-  return _tokenPromise;
+  _tokenPromise = _refreshAccessToken(apiBase);
+  const token = await _tokenPromise;
+  _tokenPromise = null;
+  return token;
 }
 
-/** Authenticated fetch: attaches Bearer token + credentials */
-async function authFetch(url, apiBase = '') {
+/** Clear cached token so next authFetch triggers a refresh. */
+export function clearAccessToken() {
+  _accessToken = null;
+  _tokenPromise = null;
+}
+
+/** Authenticated fetch: attaches Bearer token + credentials.
+ *  Automatically retries once on 401 by refreshing the token. */
+export async function authFetch(url, apiBase = '') {
   const token = await getAccessToken(apiBase);
   const headers = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  return fetch(url, { headers, credentials: 'include' });
+  const res = await fetch(url, { headers, credentials: 'include' });
+  if (res.status === 401 && token) {
+    // Token may have expired — refresh and retry once
+    clearAccessToken();
+    const newToken = await getAccessToken(apiBase);
+    if (newToken) {
+      return fetch(url, {
+        headers: { 'Authorization': `Bearer ${newToken}` },
+        credentials: 'include',
+      });
+    }
+  }
+  return res;
 }
 
 /** Portfolio mode definitions */
