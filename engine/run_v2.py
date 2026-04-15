@@ -560,6 +560,10 @@ def _run_analysis_and_export(
         export_stochastic_grid,
         run_stochastic_grid,
     )
+    from engine.v2_core.v2_pricing_surface import (
+        run_pricing_surface,
+        export_pricing_surface,
+    )
     from engine.v2_core.v2_probability_sensitivity import run_probability_sensitivity
     from engine.v2_core.v2_json_exporter import export_dashboard_json
     from engine.v2_core.v2_excel_writer import generate_excel_report
@@ -653,6 +657,23 @@ def _run_analysis_and_export(
             stochastic_json = None
     else:
         print("\n  Skipping stochastic pricing grid (not applicable for " + structure_type + ")")
+
+    # ── Pricing surface ──
+    if handler.should_run_stochastic():
+        try:
+            print("\nComputing pricing surface...")
+            t_surf = time.time()
+            surface_data = run_pricing_surface(
+                sim=sim, claims=v2_claims, pricing_basis=pricing_basis, ctx=ctx,
+            )
+            elapsed_surf = time.time() - t_surf
+            print(f"  Pricing surface completed in {elapsed_surf:.1f}s")
+
+            surface_path = os.path.join(output_dir, "pricing_surface.json")
+            export_pricing_surface(surface_data, surface_path)
+            result["pricing_surface"] = surface_data
+        except Exception as exc:
+            print(f"  Warning: pricing surface failed: {exc}")
 
     # ── Probability sensitivity ──
     prob_sensitivity = None

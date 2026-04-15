@@ -171,7 +171,7 @@ export default function App() {
       case 'pricing_grid':
         return <V2PricingView stochasticData={stochasticData} />;
       case 'pricing_surface':
-        return <V2PricingSurface data={data} />;
+        return <V2PricingSurface data={pricingSurfaceData} />;
       case 'per_claim_analysis':
         return <V2PerClaimAnalysis data={data} />;
       case 'legal_costs':
