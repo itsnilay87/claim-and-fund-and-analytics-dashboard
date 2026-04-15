@@ -41,18 +41,36 @@ export default function ExportPanel({ data }) {
   const meta = data?.simulation_meta || {};
   const [lastAction, setLastAction] = useState(null);
 
+  /**
+   * Trigger a file download that works reliably even inside an iframe.
+   * Uses the parent document (same-origin) so the browser's download
+   * manager handles it at the top level.
+   */
+  const triggerDownload = useCallback((blob, filename) => {
+    const blobUrl = URL.createObjectURL(blob);
+    // Prefer parent document when inside an iframe (same-origin)
+    let targetDoc = document;
+    try {
+      if (window.parent !== window && window.parent.document) {
+        targetDoc = window.parent.document;
+      }
+    } catch { /* cross-origin — fall back to current document */ }
+    const a = targetDoc.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    a.style.display = 'none';
+    targetDoc.body.appendChild(a);
+    a.click();
+    targetDoc.body.removeChild(a);
+    // Delay revocation so the browser has time to start the download
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+  }, []);
+
   const downloadJSON = useCallback(() => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `dashboard_data_${meta.structure_type || 'export'}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    triggerDownload(blob, `dashboard_data_${meta.structure_type || 'export'}.json`);
     setLastAction('JSON downloaded');
-  }, [data, meta]);
+  }, [data, meta, triggerDownload]);
 
   const downloadCSV = useCallback(() => {
     const claims = data?.claims || [];
@@ -70,16 +88,9 @@ export default function ExportPanel({ data }) {
     }).join(','));
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `claims_summary_${meta.structure_type || 'export'}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    triggerDownload(blob, `claims_summary_${meta.structure_type || 'export'}.csv`);
     setLastAction('CSV downloaded');
-  }, [data, meta]);
+  }, [data, meta, triggerDownload]);
 
   const downloadExcel = useCallback(async () => {
     const params = new URLSearchParams(window.location.search);
@@ -105,19 +116,12 @@ export default function ExportPanel({ data }) {
         }
       }
       if (!blob) throw new Error('No Excel file found for this run');
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = usedName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
+      triggerDownload(blob, usedName);
       setLastAction('Excel downloaded');
     } catch (err) {
       setLastAction('Excel download failed: ' + err.message);
     }
-  }, [meta]);
+  }, [meta, triggerDownload]);
 
   const downloadPDF = useCallback(async () => {
     const params = new URLSearchParams(window.location.search);
@@ -133,19 +137,12 @@ export default function ExportPanel({ data }) {
       const res = await authFetch(url, apiBase);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = 'TATA_V2_Investment_Analysis.pdf';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
+      triggerDownload(blob, 'TATA_V2_Investment_Analysis.pdf');
       setLastAction('PDF downloaded');
     } catch (err) {
       setLastAction('PDF download failed: ' + err.message);
     }
-  }, [meta]);
+  }, [meta, triggerDownload]);
 
   const triggerSave = useCallback(() => {
     // Dispatch custom event for parent app integration
