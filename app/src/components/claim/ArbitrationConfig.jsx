@@ -39,8 +39,8 @@ export default function ArbitrationConfig({ draft, updateField }) {
           label="P(Win at Arbitration)"
           value={arbWin}
           onChange={(v) => updateField('arbitration.win_probability', v)}
-          min={0.01}
-          max={0.99}
+          min={0}
+          max={1}
           step={0.01}
           showPct
           help="Probability that the tribunal rules in claimant's favor. Default: 70%"
@@ -49,8 +49,8 @@ export default function ArbitrationConfig({ draft, updateField }) {
           label="P(Win at Re-Arbitration)"
           value={reArbWin}
           onChange={(v) => updateField('arbitration.re_arb_win_probability', v)}
-          min={0.01}
-          max={0.99}
+          min={0}
+          max={1}
           step={0.01}
           showPct
           help="Probability of winning re-arbitration after a RESTART outcome. Default: 70%"
