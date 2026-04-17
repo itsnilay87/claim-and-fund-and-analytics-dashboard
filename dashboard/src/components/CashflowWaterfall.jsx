@@ -9,7 +9,7 @@
  *   5. Net recovery distribution
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, Legend,
@@ -18,6 +18,7 @@ import {
 import { COLORS, FONT, useUISettings, fmtCr, fmtPct, fmtMo } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip, DataTable } from './Shared';
 import JCurveFanChart from './JCurveFanChart';
+import { buildClaimNameMap, getClaimDisplayName } from '../utils/claimNames';
 
 const fmt = (v, dec = 2) => `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec })} Cr`;
 const pct = (v, dec = 1) => `${(Number(v || 0) * 100).toFixed(dec)}%`;
@@ -80,6 +81,7 @@ export default function CashflowWaterfall({ data, structureType }) {
 
   const summary = cf?.portfolio_summary;
   const perClaim = cf?.per_claim || [];
+  const claimNameMap = useMemo(() => buildClaimNameMap(data?.claims), [data?.claims]);
   const timeline = cf?.annual_timeline || [];
   const dist = cf?.distribution;
 
@@ -265,7 +267,7 @@ export default function CashflowWaterfall({ data, structureType }) {
             headers={['Claim', 'Jurisdiction', 'SOC', 'E[Q]', 'P(Win)', 'E[Collected]', 'E[Legal]', 'E[Net]', 'E[Dur]']}
             rows={[
               ...perClaim.map(c => [
-                c.claim_id,
+                claimNameMap[c.claim_id] || getClaimDisplayName(c),
                 <span style={{
                   padding: '2px 8px', borderRadius: 4, fontSize: 10,
                   background: (c.jurisdiction || '').includes('domestic') ? '#1e3a5f' : '#3b1f5e',

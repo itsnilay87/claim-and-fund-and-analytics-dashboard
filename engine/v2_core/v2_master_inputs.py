@@ -1126,6 +1126,7 @@ LEGAL_COSTS: dict = {
         "hk_cfi": {"low": 3.0, "high": 5.0},           # ₹3-5Cr total for Hong Kong CFI stage
         "hk_ca": {"low": 2.5, "high": 4.0},            # ₹2.5-4Cr total for Hong Kong CA stage
         "hk_cfa": {"low": 2.0, "high": 3.5},           # ₹2-3.5Cr total for Hong Kong CFA stage
+        "enforcement": {"low": 0.50, "high": 1.0},      # ₹50L-₹1Cr for enforcement/collection during payment delay
     },
 }
 """

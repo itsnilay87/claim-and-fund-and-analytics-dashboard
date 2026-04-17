@@ -17,6 +17,7 @@ Each path gets its own RNG: seed = base_seed + path_idx.
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, date
 from typing import Optional
 
@@ -730,6 +731,19 @@ def _simulate_claim_path(
             # Prefix with "post_rearb_" to avoid collision with first challenge
             all_stage_durations[f"post_rearb_{stage_name}"] = stage_dur
 
+    # Add enforcement/payment delay period as a costed stage
+    # (legal costs continue during enforcement/collection until payment receipt)
+    # Use ceiled stage months to match how build_monthly_legal_costs() allocates
+    # months — each stage gets ceil(dur) months, so we compute the gap between
+    # the ceiled stage sum and the payment month to avoid off-by-one spillover.
+    ceiled_stage_months = sum(
+        max(int(math.ceil(d)), 1) for d in all_stage_durations.values() if d > 0
+    )
+    payment_month = int(math.ceil(total_duration))
+    enforcement_months = payment_month - ceiled_stage_months
+    if enforcement_months > 0:
+        all_stage_durations["enforcement"] = float(enforcement_months)
+
     # Extract SLP admission status for legal cost model
     # (domestic claims only — SIAC claims don't have SLP stage)
     slp_admitted_flag = None
@@ -741,9 +755,13 @@ def _simulate_claim_path(
             # SLP dismissed if duration == SLP_DISMISSED_DURATION (4 months)
             slp_admitted_flag = (slp_dur >= MI.SLP_ADMITTED_DURATION)
 
+    # Compute minimum array length to cover full path duration (including payment_delay)
+    min_burn_len = int(math.ceil(total_duration)) + 1
+
     monthly_burn = build_monthly_legal_burn(
         claim.claim_id, all_stage_durations, rng, cost_table,
         slp_admitted=slp_admitted_flag,
+        min_length=min_burn_len,
     )
     legal_cost_total = float(np.sum(monthly_burn))
 

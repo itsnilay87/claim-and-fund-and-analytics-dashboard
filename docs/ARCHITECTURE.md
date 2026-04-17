@@ -22,6 +22,7 @@
 12. [Port Assignments](#12-port-assignments)
 13. [localStorage Schema](#13-localstorage-schema)
 14. [Known Limitations](#14-known-limitations)
+15. [IRR Methodology](#15-irr-methodology)
 
 ---
 
@@ -712,6 +713,28 @@ The platform is designed for eventual migration to a proper database. localStora
 - **Grid resolution**: Limited by combinatorial explosion — 10×10 = 100 cells × N paths each
 - **Browser storage**: `localStorage` limited to ~5–10 MB depending on browser
 - **Python subprocess**: Each simulation run spawns a new Python process (no persistent worker pool)
+
+---
+
+## 15. IRR Methodology
+
+### Expected Cashflow IRR (Primary Metric)
+
+The platform computes E[IRR] using the expected cashflow method:
+
+1. For each Monte Carlo path, build the full dated cashflow stream for the portfolio
+2. Aggregate cashflows across all paths at each date point to compute the expected (mean) cashflow
+3. Compute XIRR on the resulting expected cashflow stream
+
+This approach is preferred over averaging per-path IRRs because:
+
+- IRR is a non-linear function, so arithmetic mean of IRRs is not equal to IRR of mean cashflows
+- Total-loss paths (IRR = -100%) can dominate arithmetic averages and distort E[IRR]
+- Expected-cashflow IRR is consistent with E[MOIC] and better reflects investor expected return
+
+### Per-Path IRR Distribution (Secondary Metric)
+
+The system still computes per-path IRRs for distribution analytics (histograms, percentiles, VaR/CVaR, hurdle probability), but these are secondary diagnostics and are not used as the primary E[IRR] KPI.
 
 ---
 

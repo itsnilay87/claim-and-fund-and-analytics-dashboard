@@ -11,6 +11,11 @@
 export const isUUID = (s) =>
   typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(s);
 
+const titleize = (value) =>
+  String(value)
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
 /**
  * Get a human-readable display name for a claim.
  *
@@ -26,25 +31,51 @@ export const isUUID = (s) =>
 export const getClaimDisplayName = (claim) => {
   if (!claim) return 'N/A';
 
-  // Check name field first
-  if (claim.name && !isUUID(claim.name)) {
-    return claim.name;
+  const candidates = [
+    claim.name,
+    claim.claim_name,
+    claim.display_name,
+    claim.label,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string') {
+      const trimmed = candidate.trim();
+      if (trimmed && !isUUID(trimmed)) return trimmed;
+    }
   }
 
-  // Check claim_id (sometimes used for display)
-  if (claim.claim_id && !isUUID(claim.claim_id)) {
-    return claim.claim_id;
+  const idCandidates = [claim.claim_id, claim.id, claim.cid];
+  for (const candidate of idCandidates) {
+    if (typeof candidate === 'string') {
+      const trimmed = candidate.trim();
+      if (trimmed && !isUUID(trimmed)) return trimmed;
+    }
   }
 
-  // Fallback to archetype formatted as title case
-  if (claim.archetype) {
-    return claim.archetype
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+  if (typeof claim.archetype === 'string' && claim.archetype.trim()) {
+    return titleize(claim.archetype.trim());
   }
 
-  // Last resort
+  if (typeof claim.claim_type === 'string' && claim.claim_type.trim()) {
+    return titleize(claim.claim_type.trim());
+  }
+
   return 'N/A';
+};
+
+/**
+ * Build a lookup map from claim_id -> display name.
+ */
+export const buildClaimNameMap = (claims) => {
+  const map = {};
+  (claims || []).forEach((claim) => {
+    const id = claim?.claim_id || claim?.id;
+    if (id) {
+      map[id] = getClaimDisplayName(claim);
+    }
+  });
+  return map;
 };
 
 /**

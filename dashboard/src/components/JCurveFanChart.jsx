@@ -26,6 +26,7 @@ export default function JCurveFanChart({
   data,
   height = 340,
   compact = false,
+  scenarioKey = null,
   upfrontPct = 0.10,
   tataTailPct = 0.20,
   showControls = false,
@@ -37,9 +38,28 @@ export default function JCurveFanChart({
   const [selectedUpfront, setSelectedUpfront] = useState(upfrontPct);
   const [selectedTail, setSelectedTail] = useState(tataTailPct);
 
+  const parseScenarioCombo = useCallback((key) => {
+    if (!key || typeof key !== 'string') return null;
+    const m = key.match(/^up(\d+)_tail(\d+)$/i);
+    if (!m) return null;
+    return {
+      upfront: Number(m[1]) / 100,
+      tail: Number(m[2]) / 100,
+    };
+  }, []);
+
   // Sync with props
   useEffect(() => { setSelectedUpfront(upfrontPct); }, [upfrontPct]);
   useEffect(() => { setSelectedTail(tataTailPct); }, [tataTailPct]);
+
+  useEffect(() => {
+    const preferredKey = scenarioKey || data?.jcurve_data?.default_key;
+    const parsed = parseScenarioCombo(preferredKey);
+    if (parsed) {
+      setSelectedUpfront(parsed.upfront);
+      setSelectedTail(parsed.tail);
+    }
+  }, [scenarioKey, data?.jcurve_data?.default_key, parseScenarioCombo]);
 
   // ResizeObserver for reactivity
   const resizeRef = useCallback(node => {
@@ -56,7 +76,7 @@ export default function JCurveFanChart({
   }, []);
 
   // Resolve scenario key and timeline data
-  const { timelineData, scenarioKey, availableUpfronts, availableTails } = useMemo(() => {
+  const { timelineData, availableUpfronts, availableTails } = useMemo(() => {
     const jc = data?.jcurve_data;
     if (!jc || !jc.scenarios) {
       return { timelineData: null, scenarioKey: null, availableUpfronts: [], availableTails: [] };
@@ -65,19 +85,36 @@ export default function JCurveFanChart({
     const upInt = Math.round(selectedUpfront * 100);
     const tailInt = Math.round(selectedTail * 100);
     const key = `up${upInt}_tail${tailInt}`;
-    // Fall back to default_key (e.g. "litigation_funding") or first available scenario
-    const timeline = jc.scenarios[key]
-      || (jc.default_key && jc.scenarios[jc.default_key])
+    const explicitKey = scenarioKey || jc.default_key;
+    const resolvedKey = jc.scenarios[key]
+      ? key
+      : (explicitKey && jc.scenarios[explicitKey])
+        ? explicitKey
+        : Object.keys(jc.scenarios)[0];
+
+    const timeline = jc.scenarios[resolvedKey]
       || jc.scenarios[Object.keys(jc.scenarios)[0]]
       || null;
 
+    const combos = Array.isArray(jc.available_combos) ? jc.available_combos : [];
+    const comboParsed = combos
+      .map(parseScenarioCombo)
+      .filter(Boolean);
+
+    const availableUpfronts = (jc.upfront_pcts?.length ? jc.upfront_pcts : comboParsed.map((c) => c.upfront))
+      .filter((v, i, arr) => arr.indexOf(v) === i)
+      .sort((a, b) => a - b);
+
+    const availableTails = (jc.tata_tail_pcts?.length ? jc.tata_tail_pcts : comboParsed.map((c) => c.tail))
+      .filter((v, i, arr) => arr.indexOf(v) === i)
+      .sort((a, b) => a - b);
+
     return {
       timelineData: timeline,
-      scenarioKey: key,
-      availableUpfronts: jc.upfront_pcts || [],
-      availableTails: jc.tata_tail_pcts || [],
+      availableUpfronts,
+      availableTails,
     };
-  }, [data, selectedUpfront, selectedTail]);
+  }, [data, scenarioKey, selectedUpfront, selectedTail, parseScenarioCombo]);
 
   // Handle dropdown changes
   const handleUpfrontChange = (e) => {

@@ -1231,7 +1231,11 @@ class GridCellMetrics(BaseModel):
     )
     mean_xirr: float = Field(
         default=0.0,
-        description="Mean annualised XIRR across all MC paths.",
+        description="Mean annualised XIRR across all MC paths (arithmetic average of per-path IRRs).",
+    )
+    expected_xirr: float = Field(
+        default=0.0,
+        description="IRR of the expected (mean) cashflow stream across all MC paths. Industry-standard approach.",
     )
     p_loss: float = Field(
         default=0.0, ge=0.0, le=1.0,

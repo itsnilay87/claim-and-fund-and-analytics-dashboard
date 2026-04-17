@@ -538,6 +538,7 @@ interface GridCell {
   mean_moic: number;
   median_moic: number;
   mean_xirr: number;
+  expected_xirr: number;      // primary E[IRR]: XIRR of expected cashflow stream
   p_loss: number;             // probability MOIC < 1.0
   p_hurdle: number;           // probability XIRR > discount_rate
   var_1: number;              // 1% VaR (MOIC)
@@ -646,6 +647,17 @@ interface SensitivityData {
 | `cashflow_analysis` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `risk` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `sensitivity` | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+### 2.13 Portfolio Fix Contract Notes (2026-04-16)
+
+The following fields are now required by the dashboard integration contract for portfolio runs:
+
+- `risk.concentration.jurisdiction_breakdown` is always present as an object
+- `risk.concentration.type_breakdown` is always present as an object
+- per-claim sections include `name` for human-readable display (no UUID-only fallback)
+- every `investment_grid` cell includes `expected_xirr` in addition to `mean_xirr`
+- `jcurve_data.default_key` reflects the user-selected upfront/tail combination
+- `mc_distributions` reflects user-selected upfront/tail parameters and no longer uses hardcoded `10/20`
 
 ---
 

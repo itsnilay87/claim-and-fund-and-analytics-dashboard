@@ -1095,5 +1095,9 @@ def merge_portfolio_results(
         jurisdiction_mix[jur] = jurisdiction_mix.get(jur, 0) + 1
     sim.jurisdiction_mix = jurisdiction_mix
     sim.portfolio_soc_cr = sum(c.soc_value_cr for c in claims)
+    sim.claim_name_map = {
+        claim.id: (claim.name or claim.id)
+        for claim in claims
+    }
 
     return sim

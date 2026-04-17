@@ -284,6 +284,8 @@ def _build_quantum_summary(
         win_quanta = [r.quantum_cr for r in paths if r.outcome == "TRUE_WIN" and r.quantum_cr > 0]
         eq_cr = float(np.mean(win_quanta)) if win_quanta else c.soc_value_cr * eq_pct
         per_claim[c.id] = {
+            "claim_id": c.id,
+            "name": c.name,
             "soc_cr": _cr(c.soc_value_cr),
             "eq_cr": _cr(eq_cr),
             "eq_pct": _pct(c.quantum.expected_quantum_pct),
@@ -306,6 +308,8 @@ def _build_timeline_summary(
         paths = all_path_results.get(c.id, [])
         durs = np.array([r.timeline_months for r in paths]) if paths else np.array([0.0])
         per_claim[c.id] = {
+            "claim_id": c.id,
+            "name": c.name,
             "mean": _pct(float(np.mean(durs))),
             "median": _pct(float(np.median(durs))),
             "p5": _pct(float(np.percentile(durs, 5))),
@@ -329,6 +333,8 @@ def _build_legal_cost_summary(
         mean_lc = float(np.mean(costs))
         total_mean += mean_lc
         per_claim[c.id] = {
+            "claim_id": c.id,
+            "name": c.name,
             "mean_total_cr": _cr(mean_lc),
             "median_total_cr": _cr(float(np.median(costs))),
             "p5": _cr(float(np.percentile(costs, 5))),
@@ -347,18 +353,23 @@ def _build_grid_section(
     """Flatten grid results for JSON."""
     out = {}
     for key, cell in grid_results.items():
+        per_claim = {}
+        for cid, claim_data in cell.per_claim.items():
+            payload = {k: _safe(v) for k, v in claim_data.items()}
+            payload.setdefault("claim_id", cid)
+            payload.setdefault("name", cid)
+            per_claim[cid] = payload
+
         out[key] = {
             "mean_moic": _pct(cell.mean_moic),
             "median_moic": _pct(cell.median_moic),
             "mean_xirr": _pct(cell.mean_xirr),
+            "expected_xirr": _pct(getattr(cell, "expected_xirr", cell.mean_xirr)),
             "p_loss": _pct(cell.p_loss),
             "p_hurdle": _pct(cell.p_hurdle),
             "var_1": _pct(cell.var_1),
             "cvar_1": _pct(cell.cvar_1),
-            "per_claim": {
-                cid: {k: _safe(v) for k, v in claim_data.items()}
-                for cid, claim_data in cell.per_claim.items()
-            },
+            "per_claim": per_claim,
         }
     return out
 
@@ -452,6 +463,7 @@ def _build_cashflow_analysis(
 
         per_claim.append({
             "claim_id": c.id,
+            "name": c.name,
             "soc_cr": _cr(c.soc_value_cr),
             "jurisdiction": c.jurisdiction,
             "eq_cr": _cr(eq_cr),
@@ -535,14 +547,61 @@ def _build_jcurve_data(
     claims: list[ClaimConfig],
     all_path_results: dict[str, list[PathResult]],
     simulation_config: SimulationConfig,
+    portfolio_config: Any | None = None,
 ) -> dict:
     """Compute monthly cumulative portfolio cashflow percentile bands."""
-    max_months = 96
+    max_from_claims = max(
+        int(getattr(getattr(c, "timeline", None), "max_horizon_months", 0) or 0)
+        for c in claims
+    )
+    max_from_paths = 0
+    for paths in all_path_results.values():
+        for p in paths:
+            max_from_paths = max(max_from_paths, int(getattr(p, "timeline_months", 0) or 0))
+
+    max_months = max(max_from_claims, max_from_paths)
+    if max_months <= 0:
+        max_months = 96
+
     n_paths = len(all_path_results.get(claims[0].id, []))
     start_date = simulation_config.start_date
 
+    cfg = portfolio_config.model_dump() if hasattr(portfolio_config, "model_dump") else (portfolio_config or {})
+    params = ((cfg.get("structure") or {}).get("params") or {}) if isinstance(cfg, dict) else {}
+
+    def _num(v, fallback):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return fallback
+
+    user_upfront = _num(params.get("upfront_pct"), 0.10)
+    user_tail = _num(params.get("tail_pct"), 0.20)
+    upfront_range = params.get("upfront_range") or {}
+    tail_range = params.get("tail_range") or {}
+    if isinstance(upfront_range, dict):
+        user_upfront = _num(upfront_range.get("min"), user_upfront)
+    if isinstance(tail_range, dict):
+        user_tail = _num(tail_range.get("min"), user_tail)
+
+    user_upfront = max(0.0, min(1.0, user_upfront))
+    user_tail = max(0.0, min(1.0, user_tail))
+
+    legal_upfront_split = _num(
+        params.get("legal_cost_upfront_split", params.get("legal_cost_t0_split", 0.30)),
+        0.30,
+    )
+    legal_upfront_split = max(0.0, min(1.0, legal_upfront_split))
+    legal_burn_split = 1.0 - legal_upfront_split
+
     upfront_pcts = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
     tail_pcts = [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40]
+    if user_upfront not in upfront_pcts:
+        upfront_pcts.append(user_upfront)
+        upfront_pcts = sorted(set(upfront_pcts))
+    if user_tail not in tail_pcts:
+        tail_pcts.append(user_tail)
+        tail_pcts = sorted(set(tail_pcts))
 
     scenarios: dict[str, list[dict]] = {}
 
@@ -569,11 +628,13 @@ def _build_jcurve_data(
                     ret = fund_share * pr.collected_cr if pr.outcome == "TRUE_WIN" else 0.0
 
                     # Month 0: outflow
-                    portfolio_cumul[path_i, 0] -= upfront_cr + (pr.legal_costs_cr * 0.30 / max(len(claims), 1))
+                    portfolio_cumul[path_i, 0] -= upfront_cr + (
+                        pr.legal_costs_cr * legal_upfront_split / max(len(claims), 1)
+                    )
 
                     # Months 1..dur-1: legal burn
                     for m in range(1, min(dur, max_months)):
-                        portfolio_cumul[path_i, m] -= legal_per_m * 0.70 / max(len(claims), 1)
+                        portfolio_cumul[path_i, m] -= legal_per_m * legal_burn_split / max(len(claims), 1)
 
                     # Month dur: return
                     if dur < max_months:
@@ -609,7 +670,7 @@ def _build_jcurve_data(
     return {
         "scenarios": scenarios,
         "available_combos": available,
-        "default_key": "up10_tail20",
+        "default_key": f"up{int(round(user_upfront*100))}_tail{int(round(user_tail*100))}",
         "max_months": max_months,
     }
 
@@ -679,8 +740,28 @@ def export_dashboard_json(
     cashflow_analysis = _build_cashflow_analysis(claims, all_path_results, simulation_config)
 
     print("  Building J-curve data...")
-    jcurve = _build_jcurve_data(claims, all_path_results, simulation_config)
+    jcurve = _build_jcurve_data(
+        claims,
+        all_path_results,
+        simulation_config,
+        portfolio_config=portfolio_config,
+    )
     print(f"  J-curve: {len(jcurve['scenarios'])} scenario combos computed")
+
+    # Normalize risk payload to a stable schema for dashboard consumers.
+    risk_payload = risk_metrics or {}
+    concentration = (risk_payload.get("concentration") or {}) if isinstance(risk_payload, dict) else {}
+    normalized_concentration = {
+        "herfindahl_by_jurisdiction": _pct(concentration.get("herfindahl_by_jurisdiction", 0.0)),
+        "herfindahl_by_type": _pct(concentration.get("herfindahl_by_type", 0.0)),
+        "jurisdiction_breakdown": concentration.get("jurisdiction_breakdown", {}) or {},
+        "type_breakdown": concentration.get("type_breakdown", {}) or {},
+    }
+    if "mean_p_loss" in concentration:
+        normalized_concentration["mean_p_loss"] = _pct(concentration.get("mean_p_loss", 0.0))
+
+    normalized_risk = dict(risk_payload) if isinstance(risk_payload, dict) else {}
+    normalized_risk["concentration"] = normalized_concentration
 
     # Determine grid key name based on structure type
     grid_key = "investment_grid" if "monetisation" in structure_type else "waterfall_grid"
@@ -709,7 +790,7 @@ def export_dashboard_json(
         "timeline_summary": timeline_summary,
         "legal_cost_summary": legal_cost_summary,
         "sensitivity": sensitivity_results,
-        "risk": risk_metrics,
+        "risk": normalized_risk,
     }
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)

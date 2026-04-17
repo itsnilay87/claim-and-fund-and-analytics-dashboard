@@ -8,7 +8,7 @@
  *   Per-claim duration range chart, stage breakdown, portfolio duration.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ComposedChart, Line,
@@ -16,7 +16,7 @@ import {
 } from 'recharts';
 import { COLORS, FONT, CHART_COLORS, useUISettings, fmtCr, fmtPct, fmtMo } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip, DataTable } from './Shared';
-import { getClaimDisplayName } from '../utils/claimNames';
+import { getClaimDisplayName, buildClaimNameMap, truncateClaimName } from '../utils/claimNames';
 
 const NODATA = <span style={{ color: COLORS.textMuted }}>Data not available</span>;
 
@@ -25,45 +25,46 @@ export default function QuantumTimeline({ data }) {
   const qs = data?.quantum_summary;
   const ts = data?.timeline_summary;
   const claims = data?.claims || [];
+  const claimNameMap = useMemo(() => buildClaimNameMap(claims), [claims]);
   const riskDuration = data?.risk?.duration_distribution;
 
   if (!qs && !ts) return <Card>{NODATA}</Card>;
 
   const totalSOC = claims.reduce((s, c) => s + (c.soc_value_cr || 0), 0);
 
-  /* ── Quantum band data ── */
-  const bandData = (qs?.bands || []).map(b => ({
+  const bandData = (qs?.bands || []).map((b) => ({
     band: `${(b.low * 100).toFixed(0)}–${(b.high * 100).toFixed(0)}%`,
     probability: b.probability,
     midpoint: b.midpoint,
   }));
 
-  /* ── Per-claim quantum table ── */
   const perClaimQ = qs?.per_claim || {};
-  const claimQuantumRows = claims.map(c => {
+  const claimQuantumRows = claims.map((c) => {
     const q = perClaimQ[c.claim_id] || {};
+    const displayName = claimNameMap[c.claim_id] || getClaimDisplayName(c);
     return {
       id: c.claim_id,
-      name: getClaimDisplayName(c),
+      name: displayName,
       soc: c.soc_value_cr || 0,
       eq: q.eq_cr || c.mean_quantum_cr || 0,
       eqPct: q.eq_pct || (c.mean_quantum_cr && c.soc_value_cr > 0 ? c.mean_quantum_cr / c.soc_value_cr : 0),
     };
   });
 
-  const claimQuantumBarData = claimQuantumRows.map(r => ({
-    claim: r.id.replace('TP-', ''),
+  const claimQuantumBarData = claimQuantumRows.map((r) => ({
+    claim: truncateClaimName(r.name, 18),
     soc: r.soc,
     eq: r.eq,
   }));
 
-  /* ── Timeline data per claim ── */
   const perClaimT = ts?.per_claim || {};
-  const timelineData = claims.map(c => {
+  const timelineData = claims.map((c) => {
     const t = perClaimT[c.claim_id] || c.duration_stats || {};
+    const displayName = claimNameMap[c.claim_id] || getClaimDisplayName(c);
     return {
-      claim: c.claim_id.replace('TP-', ''),
+      claim: truncateClaimName(displayName, 18),
       fullId: c.claim_id,
+      name: displayName,
       mean: t.mean || 0,
       median: t.median || 0,
       p5: t.p5 || 0,
@@ -74,14 +75,11 @@ export default function QuantumTimeline({ data }) {
     };
   });
 
-  /* ── Portfolio duration ── */
   const portfolioDuration = riskDuration?.portfolio || {};
-  const maxClaimDuration = Math.max(...timelineData.map(d => d.p95), 0);
+  const maxClaimDuration = Math.max(...timelineData.map((d) => d.p95), 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: ui.space.xl }}>
-
-      {/* KPI Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: ui.space.md }}>
         <KPI label="E[Q|Win] % SOC" value={fmtPct(qs?.expected_quantum_pct || 0)} color={COLORS.accent1} />
         <KPI label="Total SOC" value={fmtCr(totalSOC)} color={COLORS.accent6} />
@@ -92,9 +90,6 @@ export default function QuantumTimeline({ data }) {
         )}
       </div>
 
-      {/* ═══ SECTION 1: QUANTUM DISTRIBUTION ═══ */}
-
-      {/* Quantum Bands */}
       {bandData.length > 0 && (
         <Card>
           <SectionTitle number="1" title="Quantum Band Distribution"
@@ -103,7 +98,7 @@ export default function QuantumTimeline({ data }) {
             <BarChart data={bandData} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
               <XAxis dataKey="band" tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} />
-              <YAxis tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} tickFormatter={v => fmtPct(v)} />
+              <YAxis tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} tickFormatter={(v) => fmtPct(v)} />
               <Tooltip cursor={{ fill: 'rgba(6,182,212,0.06)' }} content={<CustomTooltip />} />
               <Bar dataKey="probability" name="Probability" radius={[6, 6, 0, 0]} barSize={48}>
                 {bandData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i]} />)}
@@ -113,7 +108,6 @@ export default function QuantumTimeline({ data }) {
         </Card>
       )}
 
-      {/* Per-claim quantum: SOC vs E[Q] */}
       {claimQuantumBarData.length > 0 && (
         <Card>
           <SectionTitle number="2" title="Per-Claim Quantum: SOC vs E[Q|Win]"
@@ -122,7 +116,7 @@ export default function QuantumTimeline({ data }) {
             <BarChart data={claimQuantumBarData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
               <XAxis dataKey="claim" tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} />
-              <YAxis tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} tickFormatter={v => '₹' + v.toFixed(0)} />
+              <YAxis tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} tickFormatter={(v) => '₹' + v.toFixed(0)} />
               <Tooltip cursor={{ fill: 'rgba(6,182,212,0.06)' }} content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: ui.sizes.sm, color: COLORS.textMuted }} />
               <Bar dataKey="soc" name="SOC (₹ Cr)" fill={COLORS.accent1} radius={[3, 3, 0, 0]} barSize={20} />
@@ -132,14 +126,13 @@ export default function QuantumTimeline({ data }) {
         </Card>
       )}
 
-      {/* Per-claim quantum table */}
       <Card>
         <SectionTitle number="3" title="Quantum Summary Table"
           subtitle="Per-claim SOC, expected quantum, and quantum as percentage of SOC." />
         <DataTable
           headers={['Claim', 'SOC (₹ Cr)', 'E[Q|Win] (₹ Cr)', 'E[Q] % of SOC']}
-          rows={claimQuantumRows.map(r => [
-            r.id,
+          rows={claimQuantumRows.map((r) => [
+            r.name,
             fmtCr(r.soc),
             fmtCr(r.eq),
             fmtPct(r.eqPct),
@@ -147,9 +140,6 @@ export default function QuantumTimeline({ data }) {
         />
       </Card>
 
-      {/* ═══ SECTION 2: TIMELINE ANALYSIS ═══ */}
-
-      {/* Duration range chart */}
       {timelineData.length > 0 && (
         <Card>
           <SectionTitle number="4" title="Timeline Distribution by Claim"
@@ -157,14 +147,14 @@ export default function QuantumTimeline({ data }) {
           <ResponsiveContainer width="100%" height={Math.max(300, timelineData.length * 60 + 80)}>
             <ComposedChart data={timelineData} layout="vertical" margin={{ top: 10, right: 30, left: 80, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
-              <XAxis type="number" tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} tickFormatter={v => v + 'm'} domain={[0, 'auto']} />
-              <YAxis dataKey="claim" type="category" tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} width={70} />
+              <XAxis type="number" tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} tickFormatter={(v) => v + 'm'} domain={[0, 'auto']} />
+              <YAxis dataKey="claim" type="category" tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} width={120} />
               <Tooltip cursor={{ fill: 'rgba(6,182,212,0.06)' }} content={({ active, payload }) => {
                 if (!active || !payload?.[0]) return null;
                 const d = payload[0].payload;
                 return (
                   <div style={{ background: '#1F2937', border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, padding: '10px 14px', fontFamily: FONT }}>
-                    <div style={{ color: COLORS.textBright, fontSize: ui.sizes.sm, fontWeight: 700 }}>{d.fullId} ({d.jurisdiction})</div>
+                    <div style={{ color: COLORS.textBright, fontSize: ui.sizes.sm, fontWeight: 700 }}>{d.name} ({d.jurisdiction})</div>
                     <div style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, marginTop: 4 }}>
                       Mean: {fmtMo(d.mean)} | Median: {fmtMo(d.median)}
                     </div>
@@ -184,14 +174,13 @@ export default function QuantumTimeline({ data }) {
         </Card>
       )}
 
-      {/* Portfolio Duration Percentiles */}
       {portfolioDuration.p50 != null && (
         <Card>
           <SectionTitle number="5" title="Portfolio Duration (Last Claim Resolved)"
             subtitle="Percentile distribution of when the entire portfolio resolves." />
           <DataTable
             headers={['Percentile', 'Duration (months)']}
-            rows={['p5', 'p10', 'p25', 'p50', 'p75', 'p90', 'p95'].filter(k => portfolioDuration[k] != null).map(k => [
+            rows={['p5', 'p10', 'p25', 'p50', 'p75', 'p90', 'p95'].filter((k) => portfolioDuration[k] != null).map((k) => [
               k.toUpperCase(),
               fmtMo(portfolioDuration[k]),
             ])}
@@ -199,14 +188,13 @@ export default function QuantumTimeline({ data }) {
         </Card>
       )}
 
-      {/* Per-Claim Duration Table */}
       <Card>
         <SectionTitle number="6" title="Per-Claim Duration Statistics"
           subtitle="Duration in months across MC simulation paths." />
         <DataTable
           headers={['Claim', 'Jurisdiction', 'Mean', 'Median', 'P5', 'P25', 'P75', 'P95']}
-          rows={timelineData.map(d => [
-            d.fullId,
+          rows={timelineData.map((d) => [
+            d.name,
             <span style={{
               padding: '2px 8px', borderRadius: 4, fontSize: 10,
               background: d.jurisdiction.includes('domestic') ? '#1e3a5f' : '#3b1f5e',

@@ -62,6 +62,8 @@ _STAGE_KEY_MAP: dict[str, str] = {
     "post_rearb_hk_cfi": "hk_cfi",
     "post_rearb_hk_ca":  "hk_ca",
     "post_rearb_hk_cfa": "hk_cfa",
+    # Enforcement / payment delay — legal costs during collection period
+    "enforcement":     "enforcement",
 }
 """Mapping from stage names used in pipeline/challenge to LEGAL_COSTS keys."""
 
@@ -234,6 +236,7 @@ def build_monthly_legal_costs(
     stage_durations: dict[str, float],
     slp_admitted: Optional[bool] = None,
     rng: Optional[np.random.Generator] = None,
+    min_length: Optional[int] = None,
 ) -> Tuple[np.ndarray, float]:
     """Build monthly legal cost vector for a claim path.
 
@@ -250,6 +253,11 @@ def build_monthly_legal_costs(
     rng : np.random.Generator, optional
         If provided, applies stochastic overrun to each stage.
         If None, uses deterministic base costs.
+    min_length : int, optional
+        Minimum length of the returned array. If the path includes a
+        payment delay or other tail duration not in stage_durations,
+        pass total_duration_months + 1 here to ensure the array is
+        long enough.
 
     Returns
     -------
@@ -262,12 +270,16 @@ def build_monthly_legal_costs(
     # One-time costs at month 0
     onetime = get_onetime_costs()
 
-    # Compute total timeline
+    # Compute total timeline from stage durations
     total_months = sum(
         dur for stage, dur in stage_durations.items()
         if stage != "challenge_tree" or dur > 0
     )
     T = max(int(np.ceil(total_months)), 2)
+
+    # Extend to min_length if specified (for payment_delay tail)
+    if min_length is not None and min_length > T + 1:
+        T = min_length - 1
 
     # Array: month 0 = one-time, months 1..T = duration-based burns
     monthly = np.zeros(T + 1)
@@ -392,17 +404,20 @@ def build_monthly_legal_burn(
     rng: np.random.Generator,
     cost_table: dict | None = None,
     slp_admitted: Optional[bool] = None,
+    min_length: Optional[int] = None,
 ) -> np.ndarray:
     """Backward-compatible wrapper around build_monthly_legal_costs.
 
     Returns just the monthly array (not the total).
     Added slp_admitted parameter for new model.
+    Added min_length parameter to ensure array covers full path duration.
     """
     monthly, _ = build_monthly_legal_costs(
         claim_id=claim_id,
         stage_durations=stage_durations,
         slp_admitted=slp_admitted,
         rng=rng,
+        min_length=min_length,
     )
     return monthly
 

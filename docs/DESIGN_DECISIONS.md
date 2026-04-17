@@ -356,3 +356,29 @@ Two well-calibrated jurisdictions demonstrate the platform's multi-jurisdiction 
 2. **SIAC Singapore**: Contrasting 2-level tree (HC → COA) with 8 terminal paths and no restart support (setting aside under Singapore IAA is final). Demonstrates jurisdiction-specific behaviour.
 
 These two templates serve as reference implementations for the JSON format. Adding ICC Paris, LCIA London, HKIAC Hong Kong, or ICSID follows the same pattern (see `docs/JURISDICTION_GUIDE.md`). The `JurisdictionRegistry` auto-discovers all `.json` files in the templates directory — zero code changes required for new jurisdictions.
+
+---
+
+## 15. 2026-04-16: Expected Cashflow IRR Methodology
+
+### Decision
+
+Replaced arithmetic mean of per-path IRRs with expected-cashflow IRR as the primary E[IRR] metric.
+
+### Context
+
+The original implementation averaged per-path IRRs across Monte Carlo paths. With high loss-probability portfolios, many paths can produce IRR = -100%, which disproportionately drags the arithmetic mean and can create a mismatch versus E[MOIC].
+
+### Rationale
+
+IRR is a non-linear function of cashflows. In general, the mean of non-linear transforms is not equal to the transform of means. The selected approach computes:
+
+1. expected (mean) cashflow at each date across all Monte Carlo paths
+2. XIRR on this single expected cashflow stream
+
+This produces a portfolio-level E[IRR] that is internally consistent with E[MOIC] and less sensitive to boundary effects from total-loss paths.
+
+### Impact
+
+- `expected_xirr` is the primary KPI metric for E[IRR]
+- `mean_xirr` is retained for backward compatibility and per-path distribution diagnostics
