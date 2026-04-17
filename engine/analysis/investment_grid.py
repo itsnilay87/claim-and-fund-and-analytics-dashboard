@@ -134,6 +134,10 @@ def _compute_grid_cell(
     claim_moics: dict[str, list[float]] = {c.id: [] for c in claims}
     claim_xirrs: dict[str, list[float]] = {c.id: [] for c in claims}
 
+    # Collect per-path merged cashflows for expected-cashflow IRR
+    all_dates_set: set = set()
+    path_cf_dicts: list[dict] = []
+
     for path_i in range(n_paths):
         portfolio_invested = 0.0
         portfolio_return = 0.0
@@ -175,8 +179,26 @@ def _compute_grid_cell(
         if path_claim_cfs:
             port_dates, port_cfs = merge_dated_cashflows(path_claim_cfs)
             path_xirrs[path_i] = compute_xirr(port_dates, port_cfs) if len(port_dates) >= 2 else -1.0
+            # Store for expected-cashflow IRR computation
+            cf_dict = {}
+            for d, cf in zip(port_dates, port_cfs):
+                cf_dict[d] = cf_dict.get(d, 0.0) + cf
+                all_dates_set.add(d)
+            path_cf_dicts.append(cf_dict)
         else:
             path_xirrs[path_i] = -1.0
+            path_cf_dicts.append({})
+
+    # Expected-cashflow IRR: IRR of the mean cashflow stream across all paths
+    expected_xirr_val = 0.0
+    if all_dates_set and path_cf_dicts:
+        sorted_dates = sorted(all_dates_set)
+        expected_cfs = []
+        for d in sorted_dates:
+            total = sum(pcf.get(d, 0.0) for pcf in path_cf_dicts)
+            expected_cfs.append(total / n_paths)
+        if len(sorted_dates) >= 2:
+            expected_xirr_val = compute_xirr(sorted_dates, expected_cfs)
 
     # Aggregate
     per_claim: dict[str, dict] = {}
@@ -195,6 +217,7 @@ def _compute_grid_cell(
         mean_moic=float(np.mean(path_moics)),
         median_moic=float(np.median(path_moics)),
         mean_xirr=float(np.mean(path_xirrs)),
+        expected_xirr=expected_xirr_val,
         p_loss=float(np.mean(path_moics < 1.0)),
         p_hurdle=float(np.mean(path_xirrs > 0.30)),
         var_1=float(compute_var(path_moics, 0.01)),

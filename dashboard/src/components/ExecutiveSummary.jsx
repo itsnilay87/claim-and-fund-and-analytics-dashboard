@@ -20,6 +20,11 @@ import JCurveFanChart from './JCurveFanChart';
 import DistributionExplorer from './DistributionExplorer';
 import KPIRow from './kpis';
 
+const prettyKey = (value) =>
+  String(value || 'Unknown')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+
 /* ═══════════════════════════════════════════════════════════
  *  Main component
  * ═══════════════════════════════════════════════════════════ */
@@ -40,21 +45,53 @@ export default function ExecutiveSummary({ data, structureType }) {
 
   // Jurisdiction bar data
   const jurisdictionData = useMemo(() => {
-    const jb = risk.concentration?.jurisdiction_breakdown || {};
-    return Object.entries(jb).map(([k, v]) => ({
-      name: k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-      weight: +(v * 100).toFixed(1),
+    const jb = risk?.concentration?.jurisdiction_breakdown || {};
+    if (Object.keys(jb).length > 0) {
+      return Object.entries(jb).map(([k, v]) => ({
+        name: prettyKey(k),
+        weight: +(Number(v || 0) * 100).toFixed(1),
+      }));
+    }
+
+    const totalSOC = claims.reduce((sum, claim) => sum + Number(claim?.soc_value_cr || 0), 0);
+    if (totalSOC <= 0) return [];
+
+    const jurSums = {};
+    claims.forEach((claim) => {
+      const key = String(claim?.jurisdiction || 'unknown').trim() || 'unknown';
+      jurSums[key] = (jurSums[key] || 0) + Number(claim?.soc_value_cr || 0);
+    });
+
+    return Object.entries(jurSums).map(([k, v]) => ({
+      name: prettyKey(k),
+      weight: +((v / totalSOC) * 100).toFixed(1),
     }));
-  }, [risk]);
+  }, [risk, claims]);
 
   // Claim type bar data
   const typeData = useMemo(() => {
-    const tb = risk.concentration?.type_breakdown || {};
-    return Object.entries(tb).map(([k, v]) => ({
-      name: k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-      weight: +(v * 100).toFixed(1),
+    const tb = risk?.concentration?.type_breakdown || {};
+    if (Object.keys(tb).length > 0) {
+      return Object.entries(tb).map(([k, v]) => ({
+        name: prettyKey(k),
+        weight: +(Number(v || 0) * 100).toFixed(1),
+      }));
+    }
+
+    const totalSOC = claims.reduce((sum, claim) => sum + Number(claim?.soc_value_cr || 0), 0);
+    if (totalSOC <= 0) return [];
+
+    const typeSums = {};
+    claims.forEach((claim) => {
+      const key = String(claim?.claim_type || 'unclassified').trim() || 'unclassified';
+      typeSums[key] = (typeSums[key] || 0) + Number(claim?.soc_value_cr || 0);
+    });
+
+    return Object.entries(typeSums).map(([k, v]) => ({
+      name: prettyKey(k),
+      weight: +((v / totalSOC) * 100).toFixed(1),
     }));
-  }, [risk]);
+  }, [risk, claims]);
 
   // J-curve default scenario key
   const jcDefault = data?.jcurve_data?.default_key || null;
@@ -105,7 +142,9 @@ export default function ExecutiveSummary({ data, structureType }) {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div style={{ color: COLORS.textMuted, padding: 40, textAlign: 'center' }}>No jurisdiction data</div>
+            <div style={{ color: COLORS.textMuted, padding: 40, textAlign: 'center' }}>
+              Jurisdiction data unavailable. Ensure claims include a jurisdiction and SOC value.
+            </div>
           )}
         </Card>
 
@@ -123,7 +162,9 @@ export default function ExecutiveSummary({ data, structureType }) {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div style={{ color: COLORS.textMuted, padding: 40, textAlign: 'center' }}>No type data</div>
+            <div style={{ color: COLORS.textMuted, padding: 40, textAlign: 'center' }}>
+              Claim type data unavailable. Ensure claims include claim_type and SOC value.
+            </div>
           )}
         </Card>
       </div>

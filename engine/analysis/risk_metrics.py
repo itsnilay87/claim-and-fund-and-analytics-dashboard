@@ -14,6 +14,7 @@ All monetary values in ₹ Crore.
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 import numpy as np
@@ -38,6 +39,9 @@ from engine.simulation.metrics import (
 )
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 def _percentiles(arr: np.ndarray) -> dict[str, float]:
     """Compute standard distribution percentiles."""
     if len(arr) == 0:
@@ -46,6 +50,88 @@ def _percentiles(arr: np.ndarray) -> dict[str, float]:
         f"p{p}": round(float(np.percentile(arr, p)), 4)
         for p in [1, 5, 10, 25, 50, 75, 90, 95, 99]
     }
+
+
+# ===================================================================
+# Expected Cashflow IRR (Industry-Standard Approach)
+# ===================================================================
+
+def compute_expected_cashflow_irr(
+    claims: list[ClaimConfig],
+    all_path_results: dict[str, list[PathResult]],
+    portfolio_structure: PortfolioStructure,
+    reference_upfront: float = 0.10,
+    reference_tail: float = 0.20,
+    start_date: str = "2026-04-30",
+) -> float:
+    """Compute IRR of the expected (mean) portfolio cashflow across all MC paths.
+
+    Instead of averaging per-path IRRs (which is mathematically incorrect because
+    IRR is a non-linear function and -100% loss paths dominate the arithmetic mean),
+    this function:
+    1. For each MC path, builds the full dated cashflow for the portfolio
+    2. Merges all path cashflows into a date-aligned matrix
+    3. Computes the arithmetic mean cashflow at each date
+    4. Computes XIRR on the resulting expected cashflow stream
+
+    This is the industry-standard approach for expected IRR in litigation finance
+    and produces results consistent with E[MOIC].
+    """
+    from datetime import datetime as _dt
+
+    first_cid = claims[0].id
+    n_paths = len(all_path_results.get(first_cid, []))
+    if n_paths == 0:
+        return 0.0
+
+    stype = portfolio_structure.type
+
+    # Collect per-path merged cashflows as {date: cashflow} dicts
+    all_dates_set: set[_dt] = set()
+    path_cf_dicts: list[dict[_dt, float]] = []
+
+    for path_i in range(n_paths):
+        path_cfs: list[tuple[list, list]] = []
+
+        for claim in claims:
+            results = all_path_results.get(claim.id, [])
+            if path_i >= len(results):
+                continue
+            pr = results[path_i]
+
+            dates, cfs, _, _ = _build_path_cashflow(
+                claim, pr, stype, portfolio_structure,
+                reference_upfront, reference_tail, start_date,
+            )
+            path_cfs.append((dates, cfs))
+
+        if path_cfs:
+            merged_dates, merged_cfs = merge_dated_cashflows(path_cfs)
+        else:
+            merged_dates, merged_cfs = [], []
+
+        cf_dict: dict[_dt, float] = {}
+        for d, cf in zip(merged_dates, merged_cfs):
+            cf_dict[d] = cf_dict.get(d, 0.0) + cf
+            all_dates_set.add(d)
+
+        path_cf_dicts.append(cf_dict)
+
+    if not all_dates_set:
+        return 0.0
+
+    # Build date-aligned matrix and compute column means
+    sorted_dates = sorted(all_dates_set)
+    expected_cfs: list[float] = []
+
+    for d in sorted_dates:
+        total = sum(pcf.get(d, 0.0) for pcf in path_cf_dicts)
+        expected_cfs.append(total / n_paths)
+
+    if len(sorted_dates) < 2:
+        return 0.0
+
+    return compute_xirr(sorted_dates, expected_cfs)
 
 
 # ===================================================================
@@ -116,6 +202,12 @@ def compute_portfolio_risk(
     # ── IRR distribution ──
     irr_dist = _percentiles(path_xirrs)
 
+    # ── Expected Cashflow IRR (industry-standard) ──
+    expected_xirr = compute_expected_cashflow_irr(
+        claims, all_path_results, portfolio_structure,
+        reference_upfront, reference_tail, start_date,
+    )
+
     # ── Duration distributions ──
     duration_per_claim: dict[str, dict] = {}
     all_durations: list[float] = []
@@ -148,6 +240,7 @@ def compute_portfolio_risk(
     return {
         "moic_distribution": moic_dist,
         "irr_distribution": irr_dist,
+        "expected_xirr": round(expected_xirr, 4),
         "duration_distribution": duration_distribution,
         "capital_at_risk_timeline": car_timeline,
         "concentration": concentration,
@@ -273,18 +366,37 @@ def _compute_concentration(claims: list[ClaimConfig]) -> dict:
     """Compute portfolio concentration metrics."""
     total_soc = sum(c.soc_value_cr for c in claims)
     if total_soc <= 0:
-        return {"herfindahl_by_jurisdiction": 0.0, "herfindahl_by_type": 0.0}
+        return {
+            "herfindahl_by_jurisdiction": 0.0,
+            "herfindahl_by_type": 0.0,
+            "jurisdiction_breakdown": {},
+            "type_breakdown": {},
+        }
 
     # Herfindahl by jurisdiction
     jur_sums: dict[str, float] = {}
     for c in claims:
-        jur_sums[c.jurisdiction] = jur_sums.get(c.jurisdiction, 0.0) + c.soc_value_cr
+        jurisdiction = (c.jurisdiction or "").strip()
+        if not jurisdiction:
+            jurisdiction = "unknown"
+            LOGGER.warning(
+                "Claim %s missing jurisdiction; defaulting to 'unknown' for concentration",
+                c.id,
+            )
+        jur_sums[jurisdiction] = jur_sums.get(jurisdiction, 0.0) + c.soc_value_cr
     hhi_jur = sum((v / total_soc) ** 2 for v in jur_sums.values())
 
     # Herfindahl by claim type
     type_sums: dict[str, float] = {}
     for c in claims:
-        type_sums[c.claim_type] = type_sums.get(c.claim_type, 0.0) + c.soc_value_cr
+        claim_type = (c.claim_type or "").strip()
+        if not claim_type:
+            claim_type = "unclassified"
+            LOGGER.warning(
+                "Claim %s missing claim_type; defaulting to 'unclassified' for concentration",
+                c.id,
+            )
+        type_sums[claim_type] = type_sums.get(claim_type, 0.0) + c.soc_value_cr
     hhi_type = sum((v / total_soc) ** 2 for v in type_sums.values())
 
     return {

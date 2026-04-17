@@ -331,6 +331,7 @@ Aggregated metrics for one cell of an investment parameter grid.
 | `mean_moic` | `float` |
 | `median_moic` | `float` |
 | `mean_xirr` | `float` |
+| `expected_xirr` | `float` |
 | `p_loss` | `float` |
 | `p_hurdle` | `float` |
 | `var_1` | `float` |

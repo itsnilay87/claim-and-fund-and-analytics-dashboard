@@ -17,7 +17,7 @@ import {
 } from 'recharts';
 import { COLORS, FONT, CHART_COLORS, useUISettings, fmtCr, fmtPct, fmtMOIC, BAR_CURSOR } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip, DataTable, Badge } from './Shared';
-import { getClaimDisplayName, truncateClaimName } from '../utils/claimNames';
+import { getClaimDisplayName, truncateClaimName, buildClaimNameMap } from '../utils/claimNames';
 
 /* ── helpers ── */
 const safeDivide = (a, b) => b > 0.001 ? a / b : 0;
@@ -50,6 +50,7 @@ export default function PerClaimContribution({ data, structureType }) {
   const refKey = ig['10_20'] ? '10_20' : Object.keys(ig)[0] || '';
   const refGrid = ig[refKey] || {};
   const perClaimGrid = refGrid.per_claim || {};
+  const claimNameMap = useMemo(() => buildClaimNameMap(claims), [claims]);
 
   // Enrich claims with computed values
   const enriched = useMemo(() => {
@@ -58,12 +59,13 @@ export default function PerClaimContribution({ data, structureType }) {
       const pcg = perClaimGrid[c.claim_id] || {};
       const capitalWeight = safeDivide(c.soc_value_cr, totalSOC);
       const eMoic = pcg.mean_moic || 0;
-      const eIrr = pcg.mean_xirr || 0;
+      const eIrr = pcg.expected_xirr ?? pcg.mean_xirr ?? 0;
       const pLoss = pcg.p_loss ?? (1 - (c.win_rate || 0));
       const eCollected = cf.e_collected_cr || c.mean_collected_cr || 0;
       const returnWeight = safeDivide(eCollected, ca.portfolio_summary?.total_e_collected_cr || 1);
       return {
         ...c,
+        name: claimNameMap[c.claim_id] || getClaimDisplayName(c),
         cf,
         capitalWeight,
         returnWeight,
@@ -102,7 +104,7 @@ export default function PerClaimContribution({ data, structureType }) {
    * Section 2 — MOIC horizontal bar chart
    * ═══════════════════════════════════════════════════════════ */
   const moicBarData = enriched.map(c => ({
-    name: truncateClaimName(c, 20),
+    name: truncateClaimName(c.name || c, 20),
     moic: c.eMoic,
     fill: c.eMoic >= 1.0 ? '#34D399' : COLORS.accent5,
   }));
@@ -138,13 +140,13 @@ export default function PerClaimContribution({ data, structureType }) {
    * Section 4 — Capital Allocation
    * ═══════════════════════════════════════════════════════════ */
   const capitalPieData = enriched.map((c, i) => ({
-    name: getClaimDisplayName(c),
+    name: c.name,
     value: c.soc_value_cr,
     fill: c.color,
   }));
 
   const stackBarData = enriched.map(c => ({
-    name: truncateClaimName(c, 15),
+    name: truncateClaimName(c.name || c, 15),
     investment: c.soc_value_cr * (refKey ? parseFloat(refKey.split('_')[0]) / 100 : 0.10),
     expected_return: Math.max(0, c.eCollected),
   }));
@@ -268,6 +270,7 @@ export default function PerClaimContribution({ data, structureType }) {
             <BarChart
               data={enriched.map(c => ({
                 name: truncateClaimName(c, 20),
+                
                 breakeven: c.cf.breakeven_pct != null ? c.cf.breakeven_pct * 100 : (c.pLoss < 0.5 ? (1 / (c.eMoic || 1)) * 100 : null),
                 pLoss: (c.pLoss || 0) * 100,
               }))}

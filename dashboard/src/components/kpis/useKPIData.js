@@ -22,7 +22,8 @@ export default function useKPIData(data) {
   const totalNet = ps.total_e_net_cr || 0;
 
   const eMoic = ref.mean_moic || moicDist.p50 || 0;
-  const eIrr = ref.mean_xirr || irrDist.p50 || 0;
+  const eIrr = ref.expected_xirr ?? ref.mean_xirr ?? irrDist.p50 ?? 0;
+  const irrLabel = ref.expected_xirr != null ? 'E[IRR]' : 'Mean IRR';
   const pLoss = ref.p_loss ?? 0;
   const pHurdle = ref.p_hurdle ?? 0;
 
@@ -32,6 +33,6 @@ export default function useKPIData(data) {
   return {
     ui, meta, ig, ca, risk, moicDist, irrDist,
     refKey, ref, totalSOC, totalCollected, totalLegal, totalNet,
-    eMoic, eIrr, pLoss, pHurdle, favorColor,
+    eMoic, eIrr, irrLabel, pLoss, pHurdle, favorColor,
   };
 }

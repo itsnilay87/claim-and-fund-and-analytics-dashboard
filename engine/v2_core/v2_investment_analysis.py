@@ -46,6 +46,7 @@ class GridCellMetrics:
     # Portfolio-level aggregated metrics
     mean_xirr: float = 0.0
     median_xirr: float = 0.0
+    expected_xirr: float = 0.0   # IRR of the expected (mean) cashflow stream
     mean_moic: float = 0.0
     median_moic: float = 0.0
     std_moic: float = 0.0
@@ -193,6 +194,10 @@ def _compute_grid_cell(
     claim_xirrs: dict[str, list[float]] = {cid: [] for cid in sim.claim_ids}
     claim_net_returns: dict[str, list[float]] = {cid: [] for cid in sim.claim_ids}
 
+    # Collect per-path merged cashflows for expected-cashflow IRR
+    all_dates_set: set = set()
+    path_cf_dicts: list[dict] = []
+
     for path_i in range(n):
         portfolio_invested = 0.0
         portfolio_return = 0.0
@@ -245,6 +250,13 @@ def _compute_grid_cell(
         port_dates, port_cfs = merge_dated_cashflows(path_claim_cfs)
         path_xirrs[path_i] = compute_xirr(port_dates, port_cfs) if len(port_dates) >= 2 else -1.0
 
+        # Store for expected-cashflow IRR computation
+        cf_dict = {}
+        for d, cf in zip(port_dates, port_cfs):
+            cf_dict[d] = cf_dict.get(d, 0.0) + cf
+            all_dates_set.add(d)
+        path_cf_dicts.append(cf_dict)
+
     # Aggregate portfolio metrics
     cell.mean_moic = float(np.mean(path_moics))
     cell.median_moic = float(np.median(path_moics))
@@ -255,6 +267,21 @@ def _compute_grid_cell(
     # Portfolio-level XIRR stats (true merged cashflow XIRR, not per-claim average)
     cell.mean_xirr = float(np.mean(path_xirrs))
     cell.median_xirr = float(np.median(path_xirrs))
+
+    # Expected-cashflow IRR: IRR of the mean cashflow stream across all paths
+    if all_dates_set and path_cf_dicts:
+        sorted_dates = sorted(all_dates_set)
+        expected_cfs = []
+        for d in sorted_dates:
+            total = sum(pcf.get(d, 0.0) for pcf in path_cf_dicts)
+            expected_cfs.append(total / n)
+        if len(sorted_dates) >= 2:
+            cell.expected_xirr = compute_xirr(sorted_dates, expected_cfs)
+        else:
+            cell.expected_xirr = 0.0
+    else:
+        cell.expected_xirr = 0.0
+
     cell.p_irr_gt_30 = float(np.mean(path_xirrs > 0.30))
     cell.p_irr_gt_25 = float(np.mean(path_xirrs > 0.25))
 
@@ -281,8 +308,11 @@ def _compute_grid_cell(
             claim_cfg.soc_value_cr * award_share_pct if claim_cfg else 0.0
         )
         economically_viable = max_possible_return > mean_legal
+        claim_name = getattr(claim_cfg, "name", "") if claim_cfg else ""
 
         cell.per_claim[cid] = {
+            "claim_id": cid,
+            "name": claim_name or cid,
             "E[MOIC]": float(np.mean(moic_arr)),
             "median_MOIC": float(np.median(moic_arr)),
             "E[XIRR]": float(np.mean(xirr_arr)),

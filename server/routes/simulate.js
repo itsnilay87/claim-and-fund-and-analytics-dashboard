@@ -18,6 +18,9 @@ const path = require('path');
 
 const JURISDICTIONS_DIR = path.resolve(__dirname, '..', '..', 'engine', 'jurisdictions');
 
+const DEFAULT_UPFRONT_RANGE = { min: 0.05, max: 0.30, step: 0.05 };
+const DEFAULT_TAIL_RANGE = { min: 0.10, max: 0.40, step: 0.05 };
+
 // Rate limiter for simulation endpoints — 10 per minute per IP
 const simulateLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -32,7 +35,16 @@ const simulateLimiter = rateLimit({
  * Fills in challenge_tree, timeline, legal_costs, etc. when missing/empty.
  */
 function enrichClaimConfig(claim) {
-  const jurisdiction = claim.jurisdiction || 'indian_domestic';
+  const claimId = claim.id || 'unknown';
+
+  if (!claim.jurisdiction || typeof claim.jurisdiction !== 'string' || claim.jurisdiction.trim() === '') {
+    console.warn(`[enrichClaimConfig] Claim ${claimId} missing jurisdiction, defaulting to "indian_domestic"`);
+    claim.jurisdiction = 'indian_domestic';
+  } else {
+    claim.jurisdiction = claim.jurisdiction.trim();
+  }
+
+  const jurisdiction = claim.jurisdiction;
 
   // Load full jurisdiction template
   const templatePath = path.join(JURISDICTIONS_DIR, `${jurisdiction}.json`);
@@ -86,7 +98,12 @@ function enrichClaimConfig(claim) {
   }
 
   // Ensure required scalar fields have defaults
-  if (!claim.claim_type) claim.claim_type = 'prolongation';
+  if (!claim.claim_type || typeof claim.claim_type !== 'string' || claim.claim_type.trim() === '') {
+    console.warn(`[enrichClaimConfig] Claim ${claimId} missing claim_type, defaulting to "prolongation"`);
+    claim.claim_type = 'prolongation';
+  } else {
+    claim.claim_type = claim.claim_type.trim();
+  }
   if (!claim.currency) claim.currency = 'INR';
   if (claim.claimant_share_pct == null) claim.claimant_share_pct = 1.0;
   if (!claim.perspective) claim.perspective = 'claimant';
@@ -114,18 +131,58 @@ function enrichClaimConfig(claim) {
     }
   }
 
-  // Backfill empty name — use archetype or short-form ID
-  if (!claim.name || claim.name === '') {
-    if (claim.claim_type) {
-      claim.name = claim.claim_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    } else if (claim.id) {
-      claim.name = `Claim ${claim.id.slice(0, 8)}`;
-    } else {
-      claim.name = 'Unnamed Claim';
-    }
+  if (!claim.name || typeof claim.name !== 'string' || claim.name.trim() === '') {
+    const fromArchetype = typeof claim.archetype === 'string' && claim.archetype.trim() !== ''
+      ? claim.archetype.trim()
+      : null;
+    const fromClaimant = typeof claim.claimant === 'string' && claim.claimant.trim() !== ''
+      ? claim.claimant.trim()
+      : null;
+    const shortId = typeof claim.id === 'string' && claim.id.trim() !== ''
+      ? claim.id.trim().slice(0, 8)
+      : 'unknown';
+    claim.name = fromArchetype || fromClaimant || `Claim-${shortId}`;
+    console.warn(`[enrichClaimConfig] Claim ${claimId} missing name, using: "${claim.name}"`);
+  } else {
+    claim.name = claim.name.trim();
+  }
+
+  const socValue = Number(claim.soc_value_cr);
+  if (!Number.isFinite(socValue) || socValue <= 0) {
+    console.error(`[enrichClaimConfig] Claim ${claimId} has invalid SOC: ${claim.soc_value_cr}`);
   }
 
   return claim;
+}
+
+function validateAndEnrichPortfolioStructure(portfolioConfig) {
+  const safePortfolioConfig = portfolioConfig || {};
+  const existingStructure = safePortfolioConfig.structure || {};
+  const structType = existingStructure.type || 'monetisation_upfront_tail';
+  const structParams = { ...(existingStructure.params || {}) };
+
+  if (structType === 'monetisation_upfront_tail') {
+    if (!structParams.upfront_range && structParams.upfront_pct == null) {
+      console.warn('[simulate/portfolio] Missing upfront_range/upfront_pct, using defaults');
+      structParams.upfront_range = { ...DEFAULT_UPFRONT_RANGE };
+    }
+    if (!structParams.tail_range && structParams.tail_pct == null) {
+      console.warn('[simulate/portfolio] Missing tail_range/tail_pct, using defaults');
+      structParams.tail_range = { ...DEFAULT_TAIL_RANGE };
+    }
+  }
+
+  safePortfolioConfig.structure = {
+    ...existingStructure,
+    type: structType,
+    params: structParams,
+  };
+
+  return {
+    portfolioConfig: safePortfolioConfig,
+    structType,
+    structParams,
+  };
 }
 
 /**
@@ -252,19 +309,32 @@ router.post('/portfolio', authenticateToken, simulateLimiter, async (req, res) =
     // Enrich each claim with jurisdiction defaults (challenge_tree, timeline, etc.)
     const enrichedClaims = claims.map(c => enrichClaimConfig({ ...c }));
 
+    const {
+      portfolioConfig: validatedPortfolioConfig,
+      structType,
+      structParams,
+    } = validateAndEnrichPortfolioStructure({ ...(portfolio_config || {}) });
+
+    const claimIds = claims.map(c => c?.id).filter(Boolean).join(', ') || 'none';
+    console.log(`[simulate/portfolio] Starting portfolio analysis:\n  name: ${validatedPortfolioConfig?.name || 'unnamed'}\n  structure: ${structType}\n  claims: ${claims.length}\n  claim_ids: ${claimIds}\n  upfront: ${JSON.stringify(structParams.upfront_range || structParams.upfront_pct || null)}\n  tail: ${JSON.stringify(structParams.tail_range || structParams.tail_pct || null)}`);
+
     // Build full config for engine
     const defaults = getDefaults();
-    const simConfig = portfolio_config.simulation
-      ? mergeConfig(portfolio_config.simulation, defaults.simulation)
+    const simConfig = validatedPortfolioConfig.simulation
+      ? mergeConfig(validatedPortfolioConfig.simulation, defaults.simulation)
       : defaults.simulation;
 
     // Ensure structure_type is passed through to the engine config
-    const structureType = portfolio_config.structure?.type || 'monetisation_upfront_tail';
+    const structureType = structType;
 
     const config = {
-      ...portfolio_config,
+      ...validatedPortfolioConfig,
       simulation: simConfig,
-      structure: { type: structureType, ...(portfolio_config.structure || {}) },
+      structure: {
+        ...(validatedPortfolioConfig.structure || {}),
+        type: structureType,
+        params: structParams,
+      },
       claims: enrichedClaims,
     };
 
@@ -423,3 +493,7 @@ router.post('/', authenticateToken, simulateLimiter, async (req, res) => {
 });
 
 module.exports = router;
+module.exports._private = {
+  enrichClaimConfig,
+  validateAndEnrichPortfolioStructure,
+};

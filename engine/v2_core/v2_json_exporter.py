@@ -103,6 +103,7 @@ def _build_claims_section(
             "claim_id": cid,
             "name": getattr(c, 'name', '') or c.archetype.replace('_', ' ').title() or f"Claim {i+1}",
             "archetype": c.archetype,
+            "claim_type": c.archetype,
             "soc_value_cr": _cr(c.soc_value_cr),
             "jurisdiction": c.jurisdiction,
             "current_gate": c.current_gate,
@@ -876,6 +877,7 @@ def _build_investment_grid(
                 "median_moic": _pct(cell.median_moic),
                 "std_moic": _pct(cell.std_moic),
                 "mean_xirr": _pct(cell.mean_xirr),
+                "expected_xirr": _pct(getattr(cell, "expected_xirr", cell.mean_xirr)),
                 "median_xirr": _pct(cell.median_xirr),
                 "mean_net_return_cr": _cr(cell.mean_net_return_cr),
                 "p_loss": _pct(cell.p_loss),
@@ -1303,6 +1305,7 @@ def _build_scenario_comparison(
 def _build_jcurve_data(
     sim: SimulationResults,
     claims: list[ClaimConfig],
+    portfolio_config: Any | None = None,
 ) -> dict:
     """Compute monthly cumulative portfolio cashflow percentile bands.
 
@@ -1318,19 +1321,59 @@ def _build_jcurve_data(
     """
     from .v2_cashflow_builder import build_cashflow_simple
 
-    MAX_MONTHS = MI.MAX_TIMELINE_MONTHS  # 96
+    max_from_claims = max(
+        int(getattr(getattr(c, "timeline", None), "max_horizon_months", 0) or 0)
+        for c in claims
+    )
+
+    max_from_paths = 0
+    for cid in sim.claim_ids:
+        for p in sim.results.get(cid, []):
+            max_from_paths = max(max_from_paths, int(getattr(p, "total_duration_months", 0) or 0))
+
+    max_months = max(max_from_claims, max_from_paths)
+    if max_months <= 0:
+        max_months = MI.MAX_TIMELINE_MONTHS  # default fallback
+
     n_paths = sim.n_paths
+
+    cfg = portfolio_config.model_dump() if hasattr(portfolio_config, "model_dump") else (portfolio_config or {})
+    params = ((cfg.get("structure") or {}).get("params") or {}) if isinstance(cfg, dict) else {}
+
+    def _num(v, fallback):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return fallback
+
+    user_upfront = _num(params.get("upfront_pct"), 0.10)
+    user_tail = _num(params.get("tail_pct"), 0.20)
+    upfront_range = params.get("upfront_range") or {}
+    tail_range = params.get("tail_range") or {}
+    if isinstance(upfront_range, dict):
+        user_upfront = _num(upfront_range.get("min"), user_upfront)
+    if isinstance(tail_range, dict):
+        user_tail = _num(tail_range.get("min"), user_tail)
+
+    user_upfront = max(0.0, min(1.0, user_upfront))
+    user_tail = max(0.0, min(1.0, user_tail))
 
     # Pre-compute scenarios: key combos for dashboard
     upfront_pcts = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
     tata_tail_pcts = [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40]
+    if user_upfront not in upfront_pcts:
+        upfront_pcts.append(user_upfront)
+        upfront_pcts = sorted(set(upfront_pcts))
+    if user_tail not in tata_tail_pcts:
+        tata_tail_pcts.append(user_tail)
+        tata_tail_pcts = sorted(set(tata_tail_pcts))
 
     scenarios = {}
     for up_pct in upfront_pcts:
         for tail_pct in tata_tail_pcts:
             key = f"up{int(up_pct*100)}_tail{int(tail_pct*100)}"
-            # Portfolio cumulative cashflow: shape (n_paths, MAX_MONTHS)
-            portfolio_cumul = np.zeros((n_paths, MAX_MONTHS))
+            # Portfolio cumulative cashflow: shape (n_paths, max_months)
+            portfolio_cumul = np.zeros((n_paths, max_months))
 
             for cid in sim.claim_ids:
                 claim_cfg = next(c for c in claims if c.claim_id == cid)
@@ -1354,8 +1397,8 @@ def _build_jcurve_data(
                         expected_quantum_cr=sim.expected_quantum_map.get(cid),
                     )
 
-                    # Pad to MAX_MONTHS and add to portfolio
-                    cf_len = min(len(cf_arr), MAX_MONTHS)
+                    # Pad to max_months and add to portfolio
+                    cf_len = min(len(cf_arr), max_months)
                     portfolio_cumul[path_idx, :cf_len] += cf_arr[:cf_len]
 
             # Compute cumulative sum per path
@@ -1365,9 +1408,9 @@ def _build_jcurve_data(
             # Compute percentile bands at each month
             timeline = []
             # Sample every month for first 2 years, then quarterly
-            months_to_sample = list(range(0, min(24, MAX_MONTHS)))
-            months_to_sample += list(range(24, MAX_MONTHS, 3))
-            months_to_sample = sorted(set(m for m in months_to_sample if m < MAX_MONTHS))
+            months_to_sample = list(range(0, min(24, max_months)))
+            months_to_sample += list(range(24, max_months, 3))
+            months_to_sample = sorted(set(m for m in months_to_sample if m < max_months))
 
             for m in months_to_sample:
                 col = portfolio_cumul[:, m]
@@ -1406,8 +1449,8 @@ def _build_jcurve_data(
         "available_combos": available,
         "upfront_pcts": upfront_pcts,
         "tata_tail_pcts": tata_tail_pcts,
-        "default_key": "up10_tail20",
-        "max_months": MAX_MONTHS,
+        "default_key": f"up{int(round(user_upfront*100))}_tail{int(round(user_tail*100))}",
+        "max_months": max_months,
     }
 
 
@@ -1589,8 +1632,10 @@ def export_dashboard_json(
     sim: SimulationResults,
     claims: list[ClaimConfig],
     grid: InvestmentGridResults,
+    portfolio_config: Any | None = None,
     stochastic_results: dict | None = None,
     prob_sensitivity: dict | None = None,
+    correlation_sensitivity: dict | None = None,
     output_dir: str | None = None,
     ctx=None,
 ) -> str:
@@ -1626,7 +1671,7 @@ def export_dashboard_json(
                 key_scenarios.append((up_pct, aw_pct, basis))
 
     print("  Building J-curve percentile data...")
-    jcurve_data = _build_jcurve_data(sim, claims)
+    jcurve_data = _build_jcurve_data(sim, claims, portfolio_config=portfolio_config)
     print(f"  J-curve: {len(jcurve_data['scenarios'])} scenario combos computed")
 
     data = {
@@ -1698,6 +1743,10 @@ def export_dashboard_json(
     # Add probability sensitivity analysis if available
     if prob_sensitivity is not None:
         data["probability_sensitivity"] = prob_sensitivity
+
+    # Add correlation sensitivity if available
+    if correlation_sensitivity is not None:
+        data["correlation_sensitivity"] = correlation_sensitivity
 
     out_path = os.path.join(output_dir, "dashboard_data.json")
     with open(out_path, "w", encoding="utf-8") as f:

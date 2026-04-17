@@ -16,6 +16,7 @@ import {
 import { COLORS, FONT, CHART_COLORS, useUISettings, fmtPct } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip, DataTable } from './Shared';
 import D3ProbabilityTree from './D3ProbabilityTree';
+import { buildClaimNameMap, getClaimDisplayName, truncateClaimName } from '../utils/claimNames';
 
 const OUTCOME_COLORS = { TRUE_WIN: '#10B981', RESTART: '#F59E0B', LOSE: '#EF4444' };
 const OUTCOME_LABELS = { TRUE_WIN: 'Win', RESTART: 'Restart', LOSE: 'Lose' };
@@ -75,6 +76,7 @@ export default function ProbabilityOutcomes({ data }) {
   const { ui } = useUISettings();
   const prob = data?.probability_summary;
   const claims = data?.claims || [];
+  const claimNameMap = useMemo(() => buildClaimNameMap(claims), [claims]);
   const claimIds = claims.map(c => c.claim_id);
 
   const [selectedClaim, setSelectedClaim] = useState(claimIds[0] || '');
@@ -101,7 +103,7 @@ export default function ProbabilityOutcomes({ data }) {
     const c = prob[cid]?.aggregate || {};
     const claim = claims.find(cl => cl.claim_id === cid) || {};
     return [
-      cid,
+      claimNameMap[cid] || getClaimDisplayName({ claim_id: cid, ...claim }),
       claim.jurisdiction || '—',
       fmtPct(c.p_true_win || 0),
       fmtPct(c.p_restart || 0),
@@ -114,7 +116,7 @@ export default function ProbabilityOutcomes({ data }) {
   const outcomeBarData = claimIds.map(cid => {
     const c = prob[cid]?.aggregate || {};
     return {
-      claim: cid.replace('TP-', ''),
+      claim: truncateClaimName(claimNameMap[cid] || cid.replace('TP-', ''), 18),
       TRUE_WIN: +(c.p_true_win * 100 || 0).toFixed(1),
       RESTART: +(c.p_restart * 100 || 0).toFixed(1),
       LOSE: +(c.p_lose * 100 || 0).toFixed(1),
@@ -214,7 +216,7 @@ export default function ProbabilityOutcomes({ data }) {
               }}
             >
               {claimIds.map(cid => (
-                <option key={cid} value={cid}>{cid} — {(claims.find(c => c.claim_id === cid) || {}).name || ''}</option>
+                <option key={cid} value={cid}>{claimNameMap[cid] || cid}</option>
               ))}
             </select>
           </div>
@@ -244,7 +246,7 @@ export default function ProbabilityOutcomes({ data }) {
       {terminalPaths.length > 0 && (
         <Card>
           <SectionTitle number="4" title="Terminal Path Details"
-            subtitle={`${terminalPaths.length} terminal paths for ${selectedClaim} (${selectedScenario === 'scenario_a' ? 'Arb Won' : 'Arb Lost'})`} />
+            subtitle={`${terminalPaths.length} terminal paths for ${claimNameMap[selectedClaim] || selectedClaim} (${selectedScenario === 'scenario_a' ? 'Arb Won' : 'Arb Lost'})`} />
           <DataTable
             headers={['Path', 'Probability', 'Outcome']}
             rows={terminalPaths.map(tp => [

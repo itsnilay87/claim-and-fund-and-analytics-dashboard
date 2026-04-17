@@ -53,6 +53,49 @@ from engine.v2_core.v2_config import (
 )
 
 
+def _extract_upfront_tail_from_config(portfolio_config) -> tuple[float, float]:
+    """Extract selected upfront/tail percentages with safe defaults.
+
+    Supports both dict-based configs and Pydantic models.
+    """
+    default_upfront = 0.10
+    default_tail = 0.20
+
+    if portfolio_config is None:
+        return default_upfront, default_tail
+
+    if isinstance(portfolio_config, dict):
+        cfg = portfolio_config
+    elif hasattr(portfolio_config, "model_dump"):
+        cfg = portfolio_config.model_dump()
+    else:
+        cfg = {}
+
+    structure = cfg.get("structure") or {}
+    params = structure.get("params") or {}
+
+    def _num(v, fallback):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return fallback
+
+    upfront = _num(params.get("upfront_pct"), default_upfront)
+    tail = _num(params.get("tail_pct"), default_tail)
+
+    upfront_range = params.get("upfront_range") or {}
+    tail_range = params.get("tail_range") or {}
+    if isinstance(upfront_range, dict):
+        upfront = _num(upfront_range.get("min"), upfront)
+    if isinstance(tail_range, dict):
+        tail = _num(tail_range.get("min"), tail)
+
+    # Keep values in sensible bounds to avoid impossible deal configs.
+    upfront = max(0.0, min(1.0, upfront))
+    tail = max(0.0, min(1.0, tail))
+    return upfront, tail
+
+
 # _v2_paths_to_platform moved to engine.structures.litigation_funding
 
 
@@ -321,6 +364,7 @@ def _postprocess_dashboard_json(
     pricing_basis: str = "soc",
     structure_type: str = "monetisation_upfront_tail",
     waterfall_grid_results: dict | None = None,
+    portfolio_config: dict | PortfolioConfig | None = None,
 ) -> None:
     """Enrich exported dashboard_data.json with platform-compatible fields.
 
@@ -336,14 +380,26 @@ def _postprocess_dashboard_json(
     with open(dash_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
+    claims_section = data.get("claims") or []
+    claim_name_map = {
+        row.get("claim_id"): (row.get("name") or row.get("claim_id") or "Unknown Claim")
+        for row in claims_section
+        if row.get("claim_id")
+    }
+
     # ── Structure-specific postprocessing (returns ig_dict) ──
     handler = get_handler(structure_type)
     ig_dict = handler.postprocess_dashboard(
         data, sim, grid, waterfall_grid_results, pricing_basis, output_dir,
     )
 
+    user_upfront_pct, user_tail_pct = _extract_upfront_tail_from_config(portfolio_config)
+    user_up = round(user_upfront_pct * 100)
+    user_tail = round(user_tail_pct * 100)
+    user_ref_key = f"{user_up}_{user_tail}"
+
     # ── Common: risk section ──
-    ref_key = "10_20" if "10_20" in ig_dict else next(iter(ig_dict), None)
+    ref_key = user_ref_key if user_ref_key in ig_dict else next(iter(ig_dict), None)
     ref = ig_dict.get(ref_key, {}) if ref_key else {}
 
     grid_moics = sorted(
@@ -357,6 +413,12 @@ def _postprocess_dashboard_json(
         if row.get("mean_xirr") is not None
     )
 
+    grid_expected_xirrs = sorted(
+        row.get("expected_xirr", 0.0)
+        for row in ig_dict.values()
+        if row.get("expected_xirr") is not None
+    )
+
     def _percentile(arr, p):
         if not arr:
             return 0.0
@@ -366,7 +428,46 @@ def _postprocess_dashboard_json(
         frac = k - lo
         return arr[lo] + frac * (arr[hi] - arr[lo])
 
-    data["risk"] = {
+    existing_risk = data.get("risk", {}) or {}
+    existing_concentration = existing_risk.get("concentration", {}) or {}
+
+    if not existing_concentration.get("jurisdiction_breakdown") or not existing_concentration.get("type_breakdown"):
+        total_soc = sum(float(row.get("soc_value_cr", 0.0) or 0.0) for row in claims_section)
+        if total_soc > 0:
+            jur_sums = {}
+            type_sums = {}
+            for row in claims_section:
+                soc = float(row.get("soc_value_cr", 0.0) or 0.0)
+                jurisdiction = (row.get("jurisdiction") or "").strip() or "unknown"
+                claim_type = (row.get("claim_type") or row.get("archetype") or "").strip() or "unclassified"
+                jur_sums[jurisdiction] = jur_sums.get(jurisdiction, 0.0) + soc
+                type_sums[claim_type] = type_sums.get(claim_type, 0.0) + soc
+
+            existing_concentration = {
+                **existing_concentration,
+                "jurisdiction_breakdown": {
+                    k: round(v / total_soc, 4) for k, v in jur_sums.items()
+                },
+                "type_breakdown": {
+                    k: round(v / total_soc, 4) for k, v in type_sums.items()
+                },
+                "herfindahl_by_jurisdiction": round(
+                    sum((v / total_soc) ** 2 for v in jur_sums.values()), 4,
+                ),
+                "herfindahl_by_type": round(
+                    sum((v / total_soc) ** 2 for v in type_sums.values()), 4,
+                ),
+            }
+
+    if existing_concentration.get("jurisdiction_breakdown") and existing_concentration.get("herfindahl_by_jurisdiction") is None:
+        existing_concentration["herfindahl_by_jurisdiction"] = round(
+            sum(float(v) * float(v) for v in existing_concentration.get("jurisdiction_breakdown", {}).values()), 4,
+        )
+    if existing_concentration.get("type_breakdown") and existing_concentration.get("herfindahl_by_type") is None:
+        existing_concentration["herfindahl_by_type"] = round(
+            sum(float(v) * float(v) for v in existing_concentration.get("type_breakdown", {}).values()), 4,
+        )
+    new_risk = {
         "moic_distribution": {
             "p5": round(_percentile(grid_moics, 0.05), 4),
             "p25": round(_percentile(grid_moics, 0.25), 4),
@@ -381,12 +482,82 @@ def _postprocess_dashboard_json(
             "p50": round(_percentile(grid_xirrs, 0.50), 4),
             "p75": round(_percentile(grid_xirrs, 0.75), 4),
             "p95": round(_percentile(grid_xirrs, 0.95), 4),
-            "mean": round(ref.get("mean_xirr", 0.0), 4),
+            "mean": round(ref.get("expected_xirr", ref.get("mean_xirr", 0.0)), 4),
+            "mean_of_paths": round(ref.get("mean_xirr", 0.0), 4),
         },
         "concentration": {
+            **existing_concentration,
             "mean_p_loss": round(ref.get("p_loss", 0.0), 4),
         },
     }
+    data["risk"] = {**existing_risk, **new_risk}
+
+    # ── Common: per-claim name propagation ──
+    def _with_name(claim_id: str, payload: dict) -> dict:
+        out = dict(payload)
+        if not out.get("claim_id"):
+            out["claim_id"] = claim_id
+        if not out.get("name"):
+            out["name"] = claim_name_map.get(claim_id, claim_id)
+        return out
+
+    investment_grid = data.get("investment_grid") or {}
+    per_claim_grid = data.get("per_claim_grid") or {}
+
+    contributions_by_key = {}
+    if isinstance(per_claim_grid, dict):
+        for cid, entries in per_claim_grid.items():
+            if not isinstance(entries, list):
+                continue
+            for metrics in entries:
+                if not isinstance(metrics, dict):
+                    continue
+                metrics.setdefault("claim_id", cid)
+                metrics.setdefault("name", claim_name_map.get(cid, cid))
+                up = round((metrics.get("upfront_pct", 0.0) or 0.0) * 100)
+                tail = round((metrics.get("tata_tail_pct", 0.0) or 0.0) * 100)
+                key = f"{up}_{tail}"
+                contributions_by_key.setdefault(key, []).append(metrics)
+
+    if isinstance(investment_grid, dict):
+        for row in investment_grid.values():
+            per_claim = row.get("per_claim")
+            if isinstance(per_claim, dict):
+                per_claim_contrib = []
+                for cid, metrics in per_claim.items():
+                    if isinstance(metrics, dict):
+                        enriched = _with_name(cid, metrics)
+                        per_claim[cid] = enriched
+                        per_claim_contrib.append(enriched)
+                row["per_claim_contributions"] = per_claim_contrib
+
+        for key, row in investment_grid.items():
+            if isinstance(row, dict) and not row.get("per_claim_contributions"):
+                row["per_claim_contributions"] = contributions_by_key.get(key, [])
+
+    cashflow_analysis = data.get("cashflow_analysis") or {}
+    per_claim_rows = cashflow_analysis.get("per_claim")
+    if isinstance(per_claim_rows, list):
+        for row in per_claim_rows:
+            if isinstance(row, dict):
+                cid = row.get("claim_id") or row.get("id") or row.get("cid")
+                if cid and not row.get("name"):
+                    row["name"] = claim_name_map.get(cid, cid)
+
+    per_claim_breakdowns = data.get("per_claim_breakdowns")
+    if isinstance(per_claim_breakdowns, list):
+        for row in per_claim_breakdowns:
+            if isinstance(row, dict):
+                cid = row.get("claim_id") or row.get("id") or row.get("cid")
+                if cid and not row.get("name"):
+                    row["name"] = claim_name_map.get(cid, cid)
+    elif isinstance(per_claim_breakdowns, dict):
+        for cid, row in per_claim_breakdowns.items():
+            if isinstance(row, dict):
+                if not row.get("claim_id"):
+                    row["claim_id"] = cid
+                if not row.get("name"):
+                    row["name"] = claim_name_map.get(cid, cid)
 
     # ── Common: mc_distributions ──
     # Build histograms from ALL N per-path outcomes (not from the ~99
@@ -418,7 +589,7 @@ def _postprocess_dashboard_json(
         return {"bins": bins, "counts": counts, "edges": edges}
 
     # Strategy: compute per-path MOIC / IRR / net recovery from sim.results
-    # using a reference deal structure (10% upfront, 20% Tata tail).
+    # using the user-selected reference deal structure.
     # Investment = upfront + legal cost; Return = fund_share × collected.
     per_path_built = False
     try:
@@ -428,9 +599,9 @@ def _postprocess_dashboard_json(
         n = sim.n_paths
         n_claims = len(sim.claim_ids)
 
-        # Reference deal structure
-        ref_upfront_pct = 0.10   # 10% upfront
-        ref_tata_tail = 0.20     # 20% Tata tail
+        # Reference deal structure (from user config, with safe defaults)
+        ref_upfront_pct = user_upfront_pct
+        ref_tata_tail = user_tail_pct
         ref_fund_share = 1.0 - ref_tata_tail
 
         # Gather per-path claim configs
@@ -495,6 +666,7 @@ def _postprocess_dashboard_json(
             "net_recovery": _histogram(path_net_recoveries),
             "duration": _histogram(path_durations),
             "n_paths": n,
+            "expected_irr": round(ref.get("expected_xirr", ref.get("mean_xirr", 0.0)), 4),
         }
         per_path_built = True
         print(f"  mc_distributions: built from {n} per-path outcomes")
@@ -505,7 +677,7 @@ def _postprocess_dashboard_json(
     if not per_path_built:
         # Try stochastic grid histograms (pre-binned from all MC paths)
         stoch_grid = (data.get("stochastic_pricing") or {}).get("grid", {})
-        ref_combo_key = "10_20" if "10_20" in stoch_grid else next(iter(stoch_grid), None)
+        ref_combo_key = user_ref_key if user_ref_key in stoch_grid else next(iter(stoch_grid), None)
         ref_combo = stoch_grid.get(ref_combo_key) if ref_combo_key else None
 
         if ref_combo and ref_combo.get("moic_hist"):
@@ -689,12 +861,33 @@ def _run_analysis_and_export(
     else:
         print("  Skipping probability sensitivity (not applicable for " + structure_type + ")")
 
+    # ── Correlation sensitivity ──
+    correlation_sensitivity = None
+    if handler.should_run_prob_sensitivity():
+        try:
+            print("\nRunning correlation sensitivity analysis...")
+            from engine.v2_core.v2_correlation_sensitivity import run_correlation_sensitivity
+            t_corr = time.time()
+            correlation_sensitivity = run_correlation_sensitivity(
+                sim, v2_claims, grid, pricing_basis=pricing_basis, ctx=ctx,
+            )
+            elapsed_corr = time.time() - t_corr
+            print(f"  Correlation sensitivity completed in {elapsed_corr:.1f}s")
+            result["correlation_sensitivity"] = correlation_sensitivity
+        except Exception as exc:
+            print(f"  Warning: correlation sensitivity failed: {exc}")
+            import traceback; traceback.print_exc()
+    else:
+        print("  Skipping correlation sensitivity (not applicable for " + structure_type + ")")
+
     # ── Dashboard JSON ──
     try:
         export_dashboard_json(
             sim, v2_claims, grid,
+            portfolio_config=portfolio_config,
             stochastic_results=stochastic_json,
             prob_sensitivity=prob_sensitivity,
+            correlation_sensitivity=correlation_sensitivity,
             output_dir=output_dir, ctx=ctx,
         )
         print(f"  Dashboard JSON exported to {output_dir}/dashboard_data.json")
@@ -704,6 +897,7 @@ def _run_analysis_and_export(
             sim, grid, output_dir, pricing_basis,
             structure_type=structure_type,
             waterfall_grid_results=waterfall_grid_results,
+            portfolio_config=portfolio_config,
         )
 
     except Exception as exc:

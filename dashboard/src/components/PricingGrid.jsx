@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import { COLORS, FONT, useUISettings, fmtPct, fmtMOIC, moicColor, irrColor, lossColor } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip } from './Shared';
+import { buildClaimNameMap, getClaimDisplayName } from '../utils/claimNames';
 
 /* ── Colour helpers ── */
 function moicCellColor(v) {
@@ -46,6 +47,8 @@ export default function PricingGrid({ data }) {
   const grid = data?.investment_grid || {};
   const meta = data?.simulation_meta || {};
   const beData = data?.breakeven_data || [];
+  const claims = data?.claims || [];
+  const claimNameMap = useMemo(() => buildClaimNameMap(claims), [claims]);
   const [selectedCell, setSelectedCell] = useState(null);
   const [heatmapType, setHeatmapType] = useState('moic'); // moic | irr | ploss
 
@@ -84,7 +87,7 @@ export default function PricingGrid({ data }) {
 
   const getValue = (cell) => {
     if (heatmapType === 'moic') return cell.mean_moic;
-    if (heatmapType === 'irr') return cell.mean_xirr;
+    if (heatmapType === 'irr') return cell.expected_xirr ?? cell.mean_xirr;
     return cell.p_loss;
   };
 
@@ -99,7 +102,7 @@ export default function PricingGrid({ data }) {
         <KPI label="Grid Size" value={`${upfronts.length}×${tails.length}`} sub={`${gridKeys.length} cells`} color={COLORS.accent6} />
         <KPI label="MC Paths" value={(meta.n_paths || 0).toLocaleString()} color={COLORS.accent2} />
         <KPI label="Best E[MOIC]" value={fmtMOIC(bestCell.mean_moic)} sub={`${bestUp}% up / ${bestTail}% tail`} color={COLORS.accent4} />
-        <KPI label="Best E[IRR]" value={fmtPct(bestCell.mean_xirr)} color={COLORS.accent1} />
+        <KPI label="Best E[IRR]" value={fmtPct(bestCell.expected_xirr ?? bestCell.mean_xirr)} color={COLORS.accent1} />
         <KPI label="Best P(Loss)" value={fmtPct(bestCell.p_loss)} sub="lowest" color={COLORS.accent5} />
       </div>
 
@@ -202,7 +205,7 @@ export default function PricingGrid({ data }) {
             {[
               { label: 'E[MOIC]', value: fmtMOIC(activeCell.mean_moic), color: moicColor(activeCell.mean_moic) },
               { label: 'Median MOIC', value: fmtMOIC(activeCell.median_moic), color: COLORS.accent1 },
-              { label: 'E[IRR]', value: fmtPct(activeCell.mean_xirr), color: irrColor(activeCell.mean_xirr) },
+              { label: 'E[IRR]', value: fmtPct(activeCell.expected_xirr ?? activeCell.mean_xirr), color: irrColor(activeCell.expected_xirr ?? activeCell.mean_xirr) },
               { label: 'P(Loss)', value: fmtPct(activeCell.p_loss), color: lossColor(activeCell.p_loss) },
               { label: 'P(IRR>30%)', value: fmtPct(activeCell.p_hurdle), color: COLORS.accent4 },
               { label: 'VaR (1%)', value: fmtMOIC(activeCell.var_1), color: COLORS.accent5 },
@@ -239,10 +242,10 @@ export default function PricingGrid({ data }) {
                   <tbody>
                     {Object.entries(activeCell.per_claim).map(([claimId, cl], i) => (
                       <tr key={claimId} style={{ background: i % 2 === 0 ? '#0F121980' : 'transparent' }}>
-                        <td style={{ padding: '10px 12px', color: COLORS.textBright, fontSize: ui.sizes.sm, fontWeight: 700 }}>{claimId}</td>
+                        <td style={{ padding: '10px 12px', color: COLORS.textBright, fontSize: ui.sizes.sm, fontWeight: 700 }}>{claimNameMap[claimId] || getClaimDisplayName({ claim_id: claimId, ...cl })}</td>
                         <td style={{ padding: '10px 12px', color: moicColor(cl.mean_moic), fontSize: ui.sizes.sm, fontWeight: 600, textAlign: 'right' }}>{fmtMOIC(cl.mean_moic)}</td>
                         <td style={{ padding: '10px 12px', color: COLORS.text, fontSize: ui.sizes.sm, textAlign: 'right' }}>{fmtMOIC(cl.median_moic)}</td>
-                        <td style={{ padding: '10px 12px', color: irrColor(cl.mean_xirr), fontSize: ui.sizes.sm, fontWeight: 600, textAlign: 'right' }}>{fmtPct(cl.mean_xirr)}</td>
+                        <td style={{ padding: '10px 12px', color: irrColor(cl.expected_xirr ?? cl.mean_xirr), fontSize: ui.sizes.sm, fontWeight: 600, textAlign: 'right' }}>{fmtPct(cl.expected_xirr ?? cl.mean_xirr)}</td>
                         <td style={{ padding: '10px 12px', color: lossColor(cl.p_loss), fontSize: ui.sizes.sm, fontWeight: 600, textAlign: 'right' }}>{fmtPct(cl.p_loss)}</td>
                         <td style={{ padding: '10px 12px', color: COLORS.accent4, fontSize: ui.sizes.sm, fontWeight: 600, textAlign: 'right' }}>{fmtPct(cl.p_hurdle)}</td>
                       </tr>
