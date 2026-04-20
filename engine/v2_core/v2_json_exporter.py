@@ -43,12 +43,16 @@ def _safe(v: Any) -> Any:
 
 
 def _pct(v: float) -> float:
-    """Round to 4 decimal places."""
+    """Round to 6 decimal places, treating None as 0."""
+    if v is None:
+        return 0.0
     return round(float(v), 6)
 
 
 def _cr(v: float) -> float:
-    """Round currency to 2dp."""
+    """Round currency to 2dp, treating None as 0."""
+    if v is None:
+        return 0.0
     return round(float(v), 2)
 
 
@@ -62,7 +66,7 @@ def _build_claims_section(
 ) -> list[dict]:
     """Per-claim config + MC stats."""
     out = []
-    for c in claims:
+    for i, c in enumerate(claims):
         cid = c.claim_id
         paths = sim.results.get(cid, [])
         n = len(paths)
@@ -869,6 +873,7 @@ def _build_investment_grid(
             cell = grid.cells.get(key)
             if cell is None:
                 continue
+            _exp = cell.expected_xirr
             rows.append({
                 "upfront_pct": up_pct,
                 "tata_tail_pct": round(1.0 - aw_pct, 2),
@@ -877,7 +882,7 @@ def _build_investment_grid(
                 "median_moic": _pct(cell.median_moic),
                 "std_moic": _pct(cell.std_moic),
                 "mean_xirr": _pct(cell.mean_xirr),
-                "expected_xirr": _pct(getattr(cell, "expected_xirr", cell.mean_xirr)),
+                "expected_xirr": _pct(_exp if _exp is not None else cell.mean_xirr),
                 "median_xirr": _pct(cell.median_xirr),
                 "mean_net_return_cr": _cr(cell.mean_net_return_cr),
                 "p_loss": _pct(cell.p_loss),

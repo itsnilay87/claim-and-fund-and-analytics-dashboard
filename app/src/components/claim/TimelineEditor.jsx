@@ -82,13 +82,13 @@ export default function TimelineEditor({ draft, updateField }) {
     if (isDomestic) {
       const s34Mid = ((court.s34?.low ?? 9) + (court.s34?.high ?? 18)) / 2;
       const s37Mid = ((court.s37?.low ?? 6) + (court.s37?.high ?? 12)) / 2;
-      courtEst = s34Mid + s37Mid + (court.slp_dismissed ?? 4);
+      courtEst = s34Mid + s37Mid + (Number(court.slp_dismissed) || 4);
     } else if (isSiac) {
-      courtEst = (court.siac_hc ?? 6) + (court.siac_coa ?? 6);
+      courtEst = (Number(court.siac_hc) || 6) + (Number(court.siac_coa) || 6);
     } else if (isHkiac) {
       const cfiMid = ((court.hk_cfi?.low ?? 6) + (court.hk_cfi?.high ?? 12)) / 2;
       const caMid = ((court.hk_ca?.low ?? 6) + (court.hk_ca?.high ?? 9)) / 2;
-      courtEst = cfiMid + caMid + (court.hk_cfa_refused ?? 2);
+      courtEst = cfiMid + caMid + (Number(court.hk_cfa_refused) || 2);
     }
     total += courtEst + paymentDelay;
     return { totalDuration: total, stageWidths: widths };
@@ -138,7 +138,7 @@ export default function TimelineEditor({ draft, updateField }) {
                   className="h-full flex items-center justify-center text-[9px] font-bold text-white/60 bg-purple-600/60"
                   style={{
                     width: totalDuration > 0
-                      ? ((((court.s34?.low??9)+(court.s34?.high??18))/2 + ((court.s37?.low??6)+(court.s37?.high??12))/2 + (court.slp_dismissed??4)) / totalDuration * 100) + '%'
+                      ? ((((court.s34?.low??9)+(court.s34?.high??18))/2 + ((court.s37?.low??6)+(court.s37?.high??12))/2 + (Number(court.slp_dismissed) || 4)) / totalDuration * 100) + '%'
                       : '0%',
                   }}
                 >
@@ -150,7 +150,7 @@ export default function TimelineEditor({ draft, updateField }) {
                   className="h-full flex items-center justify-center text-[9px] font-bold text-white/60 bg-purple-600/60"
                   style={{
                     width: totalDuration > 0
-                      ? (((court.siac_hc??6)+(court.siac_coa??6)) / totalDuration * 100) + '%'
+                      ? (((Number(court.siac_hc)||6)+(Number(court.siac_coa)||6)) / totalDuration * 100) + '%'
                       : '0%',
                   }}
                 >
@@ -162,7 +162,7 @@ export default function TimelineEditor({ draft, updateField }) {
                   className="h-full flex items-center justify-center text-[9px] font-bold text-white/60 bg-purple-600/60"
                   style={{
                     width: totalDuration > 0
-                      ? ((((court.hk_cfi?.low??6)+(court.hk_cfi?.high??12))/2 + ((court.hk_ca?.low??6)+(court.hk_ca?.high??9))/2 + (court.hk_cfa_refused??2)) / totalDuration * 100) + '%'
+                      ? ((((court.hk_cfi?.low??6)+(court.hk_cfi?.high??12))/2 + ((court.hk_ca?.low??6)+(court.hk_ca?.high??9))/2 + (Number(court.hk_cfa_refused)||2)) / totalDuration * 100) + '%'
                       : '0%',
                   }}
                 >

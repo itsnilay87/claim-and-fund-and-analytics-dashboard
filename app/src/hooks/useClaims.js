@@ -204,6 +204,25 @@ export function useClaimEditor(wsId, claimId) {
         eDuration += ((s.duration_low || 0) + (s.duration_high || 0)) / 2;
       }
     }
+
+    // Add court durations (post-award challenge stages)
+    const court = draft.timeline?.court_durations || {};
+    const jurisdiction = draft.jurisdiction || '';
+    const isDomestic = jurisdiction.includes('domestic') || !jurisdiction;
+    const isSiac = jurisdiction.includes('siac');
+    const isHkiac = jurisdiction.includes('hkiac');
+    if (isDomestic) {
+      const s34Mid = ((court.s34?.low ?? 9) + (court.s34?.high ?? 18)) / 2;
+      const s37Mid = ((court.s37?.low ?? 6) + (court.s37?.high ?? 12)) / 2;
+      eDuration += s34Mid + s37Mid + (Number(court.slp_dismissed) || 4);
+    } else if (isSiac) {
+      eDuration += (Number(court.siac_hc) || 6) + (Number(court.siac_coa) || 6);
+    } else if (isHkiac) {
+      const cfiMid = ((court.hk_cfi?.low ?? 6) + (court.hk_cfi?.high ?? 12)) / 2;
+      const caMid = ((court.hk_ca?.low ?? 6) + (court.hk_ca?.high ?? 9)) / 2;
+      eDuration += cfiMid + caMid + (Number(court.hk_cfa_refused) || 2);
+    }
+
     eDuration += (draft.timeline?.payment_delay_months || 0);
 
     // E[Legal Costs]

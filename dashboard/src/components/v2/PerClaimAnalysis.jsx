@@ -10,6 +10,7 @@ import {
 } from 'recharts';
 import { COLORS, FONT, CHART_COLORS, SIZES, SPACE, useUISettings, fmtCr, fmtPct, fmtMOIC, fmtMo, moicColor, BAR_CURSOR } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip, Badge } from './Shared';
+import { getClaimDisplayName } from '../../utils/claimNames';
 
 export default function PerClaimAnalysis({ data }) {
   const { ui } = useUISettings();
@@ -68,14 +69,14 @@ export default function PerClaimAnalysis({ data }) {
             background: selectedClaim === c.claim_id ? COLORS.gradient1 : COLORS.card,
             transition: 'all 0.2s ease',
           }}>
-            {c.claim_id}
+            {getClaimDisplayName(c)}
           </button>
         ))}
       </div>
 
       {/* Claim detail card - enhanced with more KPIs */}
       <Card>
-        <SectionTitle title={claim.claim_id} subtitle={`${claim.archetype.replace('_', ' ')} | ${claim.jurisdiction.toUpperCase()} | Pipeline: ${claim.pipeline.join(' → ')}`} />
+        <SectionTitle title={getClaimDisplayName(claim)} subtitle={`${claim.archetype.replace('_', ' ')} | ${claim.jurisdiction.toUpperCase()} | Pipeline: ${claim.pipeline.join(' → ')}`} />
         {/* Viability warning */}
         {!isViable && (
           <div style={{
@@ -130,7 +131,7 @@ export default function PerClaimAnalysis({ data }) {
 
       {/* Per-Claim Recovery Funnel */}
       <Card>
-        <SectionTitle title={`${claim.claim_id} Recovery Funnel — SOC to Net`}
+        <SectionTitle title={`${getClaimDisplayName(claim)} Recovery Funnel — SOC to Net`}
           subtitle={`E[Principal] = E[Q|Win] × Win Rate = ${fmtCr(claim.expected_quantum_cr)} × ${fmtPct(claim.win_rate)} = ${fmtCr(principal)}`} />
         
         {/* Visual flow */}

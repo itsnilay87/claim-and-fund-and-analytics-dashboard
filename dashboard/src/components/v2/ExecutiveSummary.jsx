@@ -15,6 +15,7 @@ import { COLORS, FONT, CHART_COLORS, useUISettings, fmtCr, fmtPct, fmtMOIC, BAR_
 import { Card, SectionTitle, KPI, CustomTooltip, Badge } from './Shared';
 import JCurveFanChart from './JCurveFanChart';
 import DistributionExplorer from './DistributionExplorer';
+import { getClaimDisplayName } from '../../utils/claimNames';
 
 export default function ExecutiveSummary({ data, stochasticData }) {
   const { ui } = useUISettings();
@@ -64,7 +65,7 @@ export default function ExecutiveSummary({ data, stochasticData }) {
 
   // Claim SOC pie data
   const pieData = claims.map((c, i) => ({
-    name: c.claim_id.replace('TP-', ''),
+    name: getClaimDisplayName(c),
     value: c.soc_value_cr,
     fill: CHART_COLORS[i % CHART_COLORS.length],
   }));
@@ -89,7 +90,7 @@ export default function ExecutiveSummary({ data, stochasticData }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
               {claims.map((c, i) => (
                 <div key={i} style={{ background: '#111827', padding: '6px 10px', borderRadius: 6, fontSize: ui.sizes.xs }}>
-                  <span style={{ color: COLORS.textBright, fontWeight: 600 }}>{c.claim_id}:</span>{' '}
+                  <span style={{ color: COLORS.textBright, fontWeight: 600 }}>{getClaimDisplayName(c)}:</span>{' '}
                   <span style={{ color: COLORS.accent4 }}>{fmtCr(c.expected_quantum_cr)}</span>{' × '}
                   <span style={{ color: COLORS.accent2 }}>{fmtPct(c.win_rate)}</span>{' = '}
                   <span style={{ color: COLORS.accent3, fontWeight: 700 }}>{fmtCr((c.expected_quantum_cr || 0) * (c.win_rate || 0))}</span>
@@ -186,7 +187,7 @@ export default function ExecutiveSummary({ data, stochasticData }) {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <span style={{ color: COLORS.textBright, fontSize: 14, fontWeight: 700 }}>
-                    {c.claim_id}
+                    {getClaimDisplayName(c)}
                     {!isViable && <span style={{ color: '#EF4444', fontSize: ui.sizes.xs, marginLeft: 6 }}>⚠️ UNVIABLE</span>}
                   </span>
                   <Badge
@@ -371,8 +372,8 @@ export default function ExecutiveSummary({ data, stochasticData }) {
               Math.abs(e.tata_tail_pct - ccTail / 100) < 0.001
             );
             return {
-              claim: c.claim_id.replace('TP-', ''),
-              fullName: c.claim_id,
+              claim: getClaimDisplayName(c),
+              fullName: getClaimDisplayName(c),
               moic: match ? match.mean_moic : 0,
               irr: match ? (match.conditional_xirr_win || 0) * 100 : 0,
               pLoss: match ? match.p_loss : 0,

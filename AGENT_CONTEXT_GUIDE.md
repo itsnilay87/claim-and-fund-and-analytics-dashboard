@@ -252,6 +252,22 @@ When modifying how legal stages or known outcomes work:
 | `app/src/pages/ClaimEditor.jsx` | Settlement tab |
 | `dashboard/src/components/v2/SettlementAnalysis.jsx` | Settlement dashboard (exported as V2SettlementAnalysis) |
 
+### 12. BG Cashflow / Per-Claim Cashflow Changes
+> Modifying the 75% Bank Guarantee deposit model or per-claim monthly cashflow visualization
+
+| File | Purpose |
+|------|---------|
+| `engine/v2_core/v2_master_inputs.py` (Section 18) | BG_ENABLED, BG_DEPOSIT_FRACTION, BG_DELAY_MONTHS constants |
+| `engine/v2_core/v2_config.py` | PathResult BG fields (bg_enabled, bg_amount_cr, etc.) |
+| `engine/v2_core/v2_monte_carlo.py` | Step 5a — BG deposit/release/clawback logic per MC path |
+| `engine/v2_core/v2_cashflow_builder.py` | `build_monthly_cashflow_with_bg()` — BG-aware cashflow vector |
+| `engine/export/json_exporter.py` | `_build_per_claim_cashflows()` — per-claim cashflow + BG summary export |
+| `server/config/defaults.json` | `bank_guarantee` section (bg_enabled, bg_deposit_fraction, bg_delay_months) |
+| `server/config/config-schema.json` | AJV schema for bank_guarantee validation |
+| `app/src/components/simulation/SimulationTab.jsx` | BG toggle + delay/fraction inputs in simulation config |
+| `app/src/components/simulation/PerClaimCashflowTab.jsx` | Per-Claim Cashflow results tab (fan charts, BG events) |
+| `app/src/pages/SimulationResults.jsx` | Tab registration (claim_cashflow) |
+
 ---
 
 ## Prompt Template for AI Agent

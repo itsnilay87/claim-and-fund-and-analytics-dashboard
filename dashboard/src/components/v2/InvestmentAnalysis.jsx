@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { COLORS, FONT, SIZES, SPACE, useUISettings, fmtCr, fmtPct, fmtMOIC, moicColor, irrColor, lossColor, varColor, BAR_CURSOR } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip } from './Shared';
+import { getClaimDisplayName } from '../../utils/claimNames';
 
 export default function InvestmentAnalysis({ data }) {
   const { ui } = useUISettings();
@@ -281,7 +282,7 @@ export default function InvestmentAnalysis({ data }) {
                   const principal = (claimMeta.expected_quantum_cr || 0) * (c.win_rate || 0);
                   return (
                     <tr key={i} style={{ background: i % 2 === 0 ? '#0F121980' : 'transparent' }}>
-                      <td style={{ padding: '10px 12px', color: COLORS.textBright, fontSize: ui.sizes.sm, fontWeight: 700 }}>{c.claim_id}</td>
+                      <td style={{ padding: '10px 12px', color: COLORS.textBright, fontSize: ui.sizes.sm, fontWeight: 700 }}>{getClaimDisplayName(claimMeta || c)}</td>
                       <td style={{ padding: '10px 12px', color: COLORS.textMuted, fontSize: ui.sizes.sm }}>
                         <span style={{
                           display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: ui.sizes.xs, fontWeight: 600,

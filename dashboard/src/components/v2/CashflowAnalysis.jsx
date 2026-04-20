@@ -9,6 +9,7 @@
 import React, { useState } from 'react';
 import { COLORS, FONT, CHART_COLORS, fmtCr, fmtPct, fmtMOIC, fmtMo, getVerdictStyle, BAR_CURSOR } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip } from './Shared';
+import { getClaimDisplayName } from '../../utils/claimNames';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend, Cell, ComposedChart, Area,
@@ -102,7 +103,7 @@ function PerClaimTable({ perClaim }) {
         <tbody>
           {perClaim.map((c, i) => (
             <tr key={c.claim_id} style={{ background: i % 2 === 0 ? 'transparent' : '#0d1321' }}>
-              <td style={TD_LEFT}>{c.claim_id}</td>
+              <td style={TD_LEFT}>{getClaimDisplayName(c)}</td>
               <td style={TD_STYLE}>{fmt(c.soc_cr, 1)}</td>
               <td style={{ ...TD_STYLE, textAlign: 'center', textTransform: 'uppercase', fontSize: 10 }}>
                 <span style={{
@@ -417,7 +418,7 @@ function PerClaimBarChart({ perClaim }) {
   if (!perClaim || perClaim.length === 0) return null;
 
   const chartData = perClaim.map(c => ({
-    name: c.claim_id,
+    name: getClaimDisplayName(c),
     soc: c.soc_cr,
     eq: c.eq_cr,
     collected: c.e_collected_cr,

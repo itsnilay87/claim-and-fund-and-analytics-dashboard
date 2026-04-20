@@ -233,7 +233,7 @@ export default function ClaimResults() {
         className={`w-full border-0 rounded-lg ${fullscreen ? '' : 'mt-2'}`}
         style={{ height: fullscreen ? 'calc(100vh - 52px)' : 'calc(100vh - 180px)' }}
         title="Simulation Dashboard"
-        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
       />
     </div>
   );

@@ -16,6 +16,7 @@ import {
 import { COLORS, FONT, SIZES, useUISettings, fmtCr, fmtPct, fmtMOIC, fmtMo, BAR_CURSOR } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip } from './Shared';
 import JCurveFanChart from './JCurveFanChart';
+import { getClaimDisplayName } from '../../utils/claimNames';
 
 /* ── local formatters (kept from CashflowAnalysis) ── */
 const fmt  = (v, dec = 2) => `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec })} Cr`;
@@ -362,7 +363,7 @@ export default function CashflowWaterfall({ data }) {
               <tbody>
                 {perClaim.map((c, i) => (
                   <tr key={c.claim_id} style={{ background: i % 2 === 0 ? 'transparent' : '#0d1321' }}>
-                    <td style={TD_LEFT}>{c.claim_id}</td>
+                    <td style={TD_LEFT}>{getClaimDisplayName(c)}</td>
                     <td style={TD_STYLE}>{fmt(c.soc_cr, 1)}</td>
                     <td style={{ ...TD_STYLE, textAlign: 'center' }}>
                       <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10,

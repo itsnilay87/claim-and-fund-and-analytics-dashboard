@@ -20,6 +20,7 @@ import {
 } from 'recharts';
 import { COLORS, FONT, SIZES, SPACE, useUISettings, fmtPct, fmtMOIC } from '../theme';
 import { Card, SectionTitle, KPI, Divider } from './Shared';
+import { getClaimDisplayName } from '../../utils/claimNames';
 
 
 /* ═══════════════════════════════════════════════════════════
@@ -155,6 +156,12 @@ export default function ProbabilitySensitivity({ data }) {
     () => buildPerClaimTable(results, dealKey, data?.claims),
     [results, dealKey, data?.claims]
   );
+
+  const claimNameMap = useMemo(() => {
+    const map = {};
+    (data?.claims || []).forEach(c => { map[c.claim_id] = getClaimDisplayName(c); });
+    return map;
+  }, [data?.claims]);
 
   // Category-specific curve for the selected single category
   const singleCurve = useMemo(() => {
@@ -456,7 +463,7 @@ export default function ProbabilitySensitivity({ data }) {
             <tbody>
               {perClaimData.map((row, i) => (
                 <tr key={row.claim_id} style={{ borderBottom: `1px solid ${COLORS.cardBorder}20` }}>
-                  <td style={{ ...tdStyle, fontWeight: 700, color: COLORS.accent1 }}>{row.claim_id}</td>
+                  <td style={{ ...tdStyle, fontWeight: 700, color: COLORS.accent1 }}>{claimNameMap[row.claim_id] || row.claim_id}</td>
                   <td style={{ ...tdStyle, color: moicColor(row.pess_moic) }}>{row.pess_moic?.toFixed(2)}x</td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>{row.base_moic?.toFixed(2)}x</td>
                   <td style={{ ...tdStyle, color: moicColor(row.opt_moic) }}>{row.opt_moic?.toFixed(2)}x</td>

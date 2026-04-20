@@ -414,9 +414,8 @@ def _postprocess_dashboard_json(
     )
 
     grid_expected_xirrs = sorted(
-        row.get("expected_xirr", 0.0)
+        row.get("expected_xirr") or row.get("mean_xirr", 0.0)
         for row in ig_dict.values()
-        if row.get("expected_xirr") is not None
     )
 
     def _percentile(arr, p):
@@ -901,7 +900,9 @@ def _run_analysis_and_export(
         )
 
     except Exception as exc:
-        print(f"  Warning: dashboard JSON export failed: {exc}")
+        import traceback
+        print(f"  *** ERROR: dashboard JSON export failed: {exc}")
+        traceback.print_exc()
 
     # ── Chart Data Excel ──
     try:

@@ -8,6 +8,7 @@
 |----------|---------|
 | **[DEPLOYMENT_WORKFLOW.md](./DEPLOYMENT_WORKFLOW.md)** | How to deploy code changes to production (CI/CD pipeline, server info, debugging) |
 | **[AGENT_DEVELOPMENT_PLAYBOOK.md](./AGENT_DEVELOPMENT_PLAYBOOK.md)** | How to fix bugs and add features safely — full codebase map, data flows, gotchas |
+| **[METHODOLOGY.md](./METHODOLOGY.md)** | Correlation sensitivity math — Gaussian copula, GH quadrature, portfolio metrics |
 | [deploy/README.md](./deploy/README.md) | Docker build, manual deploy, HTTPS setup, troubleshooting |
 
 ## Quick Start (Development)
@@ -69,6 +70,7 @@ Built using Claude Opus 4.6 agent prompts.
 
 - **Settlement Modeling**: Per-claim settlement toggle with two modes — user-specified discount ramp ($\delta_{\min}$ to $\delta_{\max}$) or game-theoretic Nash Bargaining backward induction. Settlement introduces a competing exit process with stage-specific hazard rates, pre/post-award quantum regimes, and legal cost truncation.
 - **Known Outcomes**: Claims at post-arbitration stages record known legal results (`known_outcomes`). The MC engine forces decided outcomes and uses TruncatedNormal distributions for known quantum amounts, eliminating modeling errors for decided awards.
+- **Correlation Sensitivity**: One-factor Gaussian copula (Vasicek model) sweeps inter-claim correlation $\rho \in [0,1]$, computing $\Pr(\text{loss})$, $\mathbb{E}[\text{MOIC}]$, VaR/CVaR, and a 2D $(\rho, \delta)$ heatmap via Gauss-Hermite quadrature. See [METHODOLOGY.md](./METHODOLOGY.md).
 - **Jurisdiction-specific legal stages**: Indian Domestic (S.34/S.37/SLP), SIAC Singapore (HC/COA), HKIAC Hong Kong (CFI/CA/CFA) with full post-award stage support.
 - **Multi-structure portfolio analysis**: Litigation funding, monetisation (full purchase, upfront+tail, staged), and comparative views.
 
