@@ -70,15 +70,37 @@ ssh -i "$SSH_KEY" "root@${SERVER}" << 'REMOTE_EOF'
     echo "  ✓ deploy/.env already exists"
   fi
 
-  # ── 4. Stop old single-container setup if running ──
+  # ── 4. Backup database before any destructive operations ──
+  BACKUP_DIR="$REMOTE_DIR/backups"
+  mkdir -p "$BACKUP_DIR"
+  DB_CONTAINER=$(docker compose --env-file deploy/.env -f deploy/docker-compose.yml ps -q db 2>/dev/null || true)
+  if [ -n "$DB_CONTAINER" ]; then
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    BACKUP_FILE="$BACKUP_DIR/pg_backup_${TIMESTAMP}.sql.gz"
+    echo "▸ Backing up PostgreSQL database..."
+    if docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec -T db \
+        pg_dump -U cap_user -d claim_analytics --no-owner --clean 2>/dev/null | gzip > "$BACKUP_FILE"; then
+      BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+      echo "  ✓ Backup saved: $BACKUP_FILE ($BACKUP_SIZE)"
+      # Keep only the last 10 backups to save disk space
+      ls -t "$BACKUP_DIR"/pg_backup_*.sql.gz 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
+    else
+      echo "  ⚠ Backup failed (DB may not be running yet — first deploy?)"
+      rm -f "$BACKUP_FILE"
+    fi
+  else
+    echo "  ⚠ No existing DB container found — skipping backup (first deploy?)"
+  fi
+
+  # ── 5. Stop old single-container setup if running ──
   docker stop claim-analytics 2>/dev/null && docker rm claim-analytics 2>/dev/null && echo "  ✓ Old container stopped" || true
 
-  # ── 5. Build and start with docker-compose ──
+  # ── 6. Build and start with docker-compose ──
   echo "▸ Building and starting services (web + PostgreSQL)..."
   cd "$REMOTE_DIR"
   docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
 
-  # ── 6. Wait for DB healthy ──
+  # ── 7. Wait for DB healthy ──
   echo "▸ Waiting for PostgreSQL to be ready..."
   for i in $(seq 1 30); do
     if docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec -T db pg_isready -U cap_user -d claim_analytics &>/dev/null; then
@@ -88,11 +110,11 @@ ssh -i "$SSH_KEY" "root@${SERVER}" << 'REMOTE_EOF'
     sleep 2
   done
 
-  # ── 7. Run database migrations ──
+  # ── 8. Run database migrations ──
   echo "▸ Running database migrations..."
   docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec -T web node server/db/migrate.js
 
-  # ── 8. Verify ──
+  # ── 9. Verify ──
   echo ""
   echo "▸ Verifying health..."
   sleep 3
