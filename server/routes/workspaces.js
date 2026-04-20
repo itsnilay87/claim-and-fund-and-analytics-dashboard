@@ -7,7 +7,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { Workspace } = require('../db/models');
+const { Workspace, Claim, Portfolio } = require('../db/models');
 
 // UUID v4 format validation
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -101,6 +101,42 @@ router.delete('/:id', async (req, res) => {
     res.json({ deleted: true });
   } catch (err) {
     console.error('[DELETE /api/workspaces/:id]', err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────
+// GET /api/workspaces/:id/export
+// Export full workspace (workspace + claims + portfolios) as JSON
+// Useful for backup/restore and migrating between environments
+// ────────────────────────────────────────────────────────────────
+router.get('/:id/export', async (req, res) => {
+  try {
+    if (!UUID_RE.test(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid workspace ID format' });
+    }
+
+    const workspace = await Workspace.findById(req.params.id, req.user.id);
+    if (!workspace) {
+      return res.status(404).json({ error: 'Workspace not found' });
+    }
+
+    const claims = await Claim.findAllByWorkspace(req.params.id, req.user.id);
+    const portfolios = await Portfolio.findAllByWorkspace(req.params.id, req.user.id);
+
+    const exportData = {
+      version: 1,
+      exported_at: new Date().toISOString(),
+      workspace,
+      claims,
+      portfolios,
+    };
+
+    const filename = `workspace_${workspace.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.json`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.json(exportData);
+  } catch (err) {
+    console.error('[GET /api/workspaces/:id/export]', err.message);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

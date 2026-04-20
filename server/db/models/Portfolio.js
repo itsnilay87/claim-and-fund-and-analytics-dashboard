@@ -30,7 +30,7 @@ const Portfolio = {
               structure_type, structure_config, simulation_config,
               status, run_id, created_at, updated_at
        FROM portfolios
-       WHERE workspace_id = $1 AND user_id = $2
+       WHERE workspace_id = $1 AND user_id = $2 AND deleted_at IS NULL
        ORDER BY created_at DESC`,
       [workspaceId, userId]
     );
@@ -49,7 +49,7 @@ const Portfolio = {
               structure_type, structure_config, simulation_config,
               status, run_id, created_at, updated_at
        FROM portfolios
-       WHERE id = $1 AND user_id = $2`,
+       WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
       [id, userId]
     );
     return normalizePortfolio(rows[0]) || null;
@@ -143,7 +143,7 @@ const Portfolio = {
    */
   async delete(id, userId) {
     const { rowCount } = await query(
-      'DELETE FROM portfolios WHERE id = $1 AND user_id = $2',
+      'UPDATE portfolios SET deleted_at = NOW() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
       [id, userId]
     );
     return rowCount > 0;

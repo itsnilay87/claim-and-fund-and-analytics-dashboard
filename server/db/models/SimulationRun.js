@@ -79,7 +79,7 @@ const SimulationRun = {
    */
   async findById(id, userId) {
     const { rows } = await query(
-      'SELECT * FROM simulation_runs WHERE id = $1 AND user_id = $2',
+      'SELECT * FROM simulation_runs WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
       [id, userId]
     );
     return rows[0] || null;
@@ -105,7 +105,7 @@ const SimulationRun = {
    * @returns {Promise<{ runs: object[], total: number }>}
    */
   async findAllByUser(userId, { limit = 20, offset = 0, status, structureType } = {}) {
-    const conditions = ['user_id = $1'];
+    const conditions = ['user_id = $1', 'deleted_at IS NULL'];
     const params = [userId];
     let idx = 2;
 
@@ -148,7 +148,7 @@ const SimulationRun = {
   async findByPortfolio(portfolioId, userId) {
     const { rows } = await query(
       `SELECT * FROM simulation_runs
-       WHERE portfolio_id = $1 AND user_id = $2
+       WHERE portfolio_id = $1 AND user_id = $2 AND deleted_at IS NULL
        ORDER BY created_at DESC`,
       [portfolioId, userId]
     );
@@ -245,22 +245,16 @@ const SimulationRun = {
    * @returns {Promise<boolean>} true if deleted
    */
   async delete(id, userId) {
-    // Fetch results_path for cleanup
     const run = await this.findById(id, userId);
     if (!run) return false;
 
     const { rowCount } = await query(
-      'DELETE FROM simulation_runs WHERE id = $1 AND user_id = $2',
+      'UPDATE simulation_runs SET deleted_at = NOW() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
       [id, userId]
     );
 
-    if (rowCount > 0 && run.results_path) {
-      try {
-        fs.rmSync(path.resolve(run.results_path), { recursive: true, force: true });
-      } catch {
-        // Best-effort cleanup
-      }
-    }
+    // Soft-delete: keep files on disk for recovery. Files are purged
+    // only when permanently deleted (see purgeDeleted below).
 
     return rowCount > 0;
   },

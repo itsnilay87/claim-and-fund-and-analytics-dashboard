@@ -60,7 +60,7 @@ const Claim = {
               jurisdiction, claim_type, soc_value_cr, currency, status,
               data, created_at, updated_at
        FROM claims
-       WHERE workspace_id = $1 AND user_id = $2
+       WHERE workspace_id = $1 AND user_id = $2 AND deleted_at IS NULL
        ORDER BY created_at DESC`,
       [workspaceId, userId]
     );
@@ -79,7 +79,7 @@ const Claim = {
               jurisdiction, claim_type, soc_value_cr, currency, status,
               data, created_at, updated_at
        FROM claims
-       WHERE id = $1 AND user_id = $2`,
+       WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
       [id, userId]
     );
     return rows[0] ? mergeRow(rows[0]) : null;
@@ -178,7 +178,7 @@ const Claim = {
    */
   async delete(id, userId) {
     const { rowCount } = await query(
-      'DELETE FROM claims WHERE id = $1 AND user_id = $2',
+      'UPDATE claims SET deleted_at = NOW() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
       [id, userId]
     );
     return rowCount > 0;

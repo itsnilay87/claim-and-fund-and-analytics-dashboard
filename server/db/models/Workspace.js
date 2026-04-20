@@ -12,7 +12,7 @@ const Workspace = {
    */
   async findAllByUser(userId) {
     const { rows } = await query(
-      'SELECT id, user_id, name, description, created_at, updated_at FROM workspaces WHERE user_id = $1 ORDER BY created_at DESC',
+      'SELECT id, user_id, name, description, created_at, updated_at FROM workspaces WHERE user_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC',
       [userId]
     );
     return rows;
@@ -26,7 +26,7 @@ const Workspace = {
    */
   async findById(id, userId) {
     const { rows } = await query(
-      'SELECT id, user_id, name, description, created_at, updated_at FROM workspaces WHERE id = $1 AND user_id = $2',
+      'SELECT id, user_id, name, description, created_at, updated_at FROM workspaces WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
       [id, userId]
     );
     return rows[0] || null;
@@ -76,7 +76,7 @@ const Workspace = {
    */
   async delete(id, userId) {
     const { rowCount } = await query(
-      'DELETE FROM workspaces WHERE id = $1 AND user_id = $2',
+      'UPDATE workspaces SET deleted_at = NOW() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
       [id, userId]
     );
     return rowCount > 0;
