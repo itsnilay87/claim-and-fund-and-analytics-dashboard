@@ -1,6 +1,6 @@
 ﻿import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
-import { Home, Scale, Briefcase, History, User, HelpCircle, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Home, Scale, Briefcase, History, User, HelpCircle, LogOut, ChevronLeft, ChevronRight, FolderOpen } from 'lucide-react'
 import { useState } from 'react'
 
 function useNavItems() {
@@ -31,6 +31,16 @@ export default function Sidebar() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M8 16 L12 20 L20 8"/></svg>
         </div>
         {!collapsed && <span className="ml-3 text-sm font-bold text-slate-900 dark:text-white whitespace-nowrap">Claim Analytics</span>}
+      </div>
+
+      {/* Workspace switcher */}
+      <div className="px-2 pt-4 pb-2">
+        <NavLink to="/workspaces"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
+        >
+          <FolderOpen size={18} className="flex-shrink-0" />
+          {!collapsed && <span>All Workspaces</span>}
+        </NavLink>
       </div>
 
       {/* Nav items */}
