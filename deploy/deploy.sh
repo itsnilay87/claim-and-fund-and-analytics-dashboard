@@ -58,10 +58,12 @@ ssh -i "$SSH_KEY" "root@${SERVER}" << 'REMOTE_EOF'
     # Generate secure random passwords
     PG_PASS=$(openssl rand -hex 16)
     JWT_SEC=$(openssl rand -hex 48)
-    sed -i "s|change-me-to-a-secure-random-password|${PG_PASS}|g" deploy/.env
-    sed -i "s|change-me-to-a-long-random-string-min-64-chars|${JWT_SEC}|g" deploy/.env
-    # Fix DATABASE_URL to use the generated password
-    sed -i "s|cap_user:change-me-to-a-secure-random-password@|cap_user:${PG_PASS}@|g" deploy/.env
+    # Replace POSTGRES_PASSWORD first
+    sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${PG_PASS}|" deploy/.env
+    # Rebuild DATABASE_URL with the same password (guarantees sync)
+    sed -i "s|^DATABASE_URL=.*|DATABASE_URL=postgresql://cap_user:${PG_PASS}@db:5432/claim_analytics|" deploy/.env
+    # Replace JWT_SECRET
+    sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${JWT_SEC}|" deploy/.env
     echo "  ✓ .env created with generated secrets"
     echo "  ⚠ SAVE THESE — stored in deploy/.env on server"
   else
