@@ -92,10 +92,10 @@ export default function WorkspaceDashboard() {
             <Plus className="w-4 h-4" /> New Portfolio
           </button>
           <button
-            onClick={() => navigate('/workspaces?new=1')}
+            onClick={() => navigate('/workspaces')}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 rounded-lg transition-colors"
           >
-            <FolderPlus className="w-4 h-4" /> New Workspace
+            <FolderPlus className="w-4 h-4" /> All Workspaces
           </button>
         </div>
       </div>
