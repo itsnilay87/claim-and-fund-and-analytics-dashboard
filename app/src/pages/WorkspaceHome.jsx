@@ -9,7 +9,7 @@
  * Route: /workspaces
  */
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import WorkspaceCard from '../components/workspace/WorkspaceCard';
@@ -25,8 +25,17 @@ export default function WorkspaceHome() {
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace);
   const setActive = useWorkspaceStore((s) => s.setActive);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => { fetchWorkspaces(); }, [fetchWorkspaces]);
+
+  // Auto-open create modal when navigated with ?new=1
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setShowModal(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const [showModal, setShowModal] = useState(false);
   const [showDemoModal, setShowDemoModal] = useState(false);

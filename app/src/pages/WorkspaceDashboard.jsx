@@ -12,7 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useClaimStore } from '../store/claimStore';
 import { usePortfolioStore } from '../store/portfolioStore';
-import { FileText, Briefcase, Plus, ArrowRight } from 'lucide-react';
+import { FileText, Briefcase, Plus, ArrowRight, FolderPlus } from 'lucide-react';
 
 export default function WorkspaceDashboard() {
   const { wsId } = useParams();
@@ -90,6 +90,12 @@ export default function WorkspaceDashboard() {
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" /> New Portfolio
+          </button>
+          <button
+            onClick={() => navigate('/workspaces?new=1')}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 rounded-lg transition-colors"
+          >
+            <FolderPlus className="w-4 h-4" /> New Workspace
           </button>
         </div>
       </div>
