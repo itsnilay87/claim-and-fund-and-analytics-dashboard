@@ -389,6 +389,42 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
+// ── PUT /api/auth/me/password ──
+
+router.put('/me/password', authenticateToken, async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+    if (new_password.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+    if (current_password === new_password) {
+      return res.status(400).json({ error: 'New password must differ from current password' });
+    }
+
+    const hash = await User.getPasswordHash(req.user.id);
+    if (!hash) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const valid = await bcrypt.compare(current_password, hash);
+    if (!valid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    const newHash = await bcrypt.hash(new_password, BCRYPT_SALT_ROUNDS);
+    await User.updatePassword(req.user.id, newHash);
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('[AUTH] Password change error:', err.message);
+    res.status(500).json({ error: 'Failed to update password' });
+  }
+});
+
 // ── PUT /api/auth/me ──
 
 router.put('/me', authenticateToken, async (req, res) => {

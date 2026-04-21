@@ -54,6 +54,32 @@ const User = {
   },
 
   /**
+   * Fetch only the password_hash for a user (for password verification).
+   * @param {string} id - UUID
+   * @returns {Promise<string|null>} password_hash or null
+   */
+  async getPasswordHash(id) {
+    const { rows } = await query(
+      'SELECT password_hash FROM users WHERE id = $1',
+      [id]
+    );
+    return rows[0]?.password_hash || null;
+  },
+
+  /**
+   * Update a user's password hash.
+   * @param {string} id - UUID
+   * @param {string} password_hash - new bcrypt hash
+   */
+  async updatePassword(id, password_hash) {
+    const { rowCount } = await query(
+      'UPDATE users SET password_hash = $1 WHERE id = $2',
+      [password_hash, id]
+    );
+    if (rowCount === 0) throw new Error('User not found');
+  },
+
+  /**
    * Update a user's profile fields.
    * @param {string} id - UUID
    * @param {{ full_name?: string, email?: string }} fields

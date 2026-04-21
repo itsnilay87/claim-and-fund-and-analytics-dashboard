@@ -10,7 +10,7 @@
  * Layout: DashboardLayout wraps all authenticated routes with TopBar + WorkspaceSidebar.
  */
 import { useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import DashboardLayout from './layouts/DashboardLayout';
 import PublicLayout from './layouts/PublicLayout';
@@ -28,6 +28,7 @@ import ClaimResults from './pages/ClaimResults';
 import PortfolioList from './pages/PortfolioList';
 import PortfolioBuilder from './pages/PortfolioBuilder';
 import PortfolioResults from './pages/PortfolioResults';
+import { ArrowLeft, BarChart3 } from 'lucide-react';
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -35,6 +36,35 @@ function ProtectedRoute({ children }) {
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-950"><div className="w-8 h-8 border-2 border-teal-500/30 border-t-teal-500 rounded-full animate-spin" /></div>;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return children;
+}
+
+/** Minimal layout for the standalone /account page */
+function AccountLayout() {
+  const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
+  return (
+    <div className="min-h-screen bg-slate-950">
+      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-20">
+        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-4">
+          <button
+            onClick={() => navigate('/workspaces')}
+            className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" /> Workspaces
+          </button>
+          <div className="flex items-center gap-2 ml-auto">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center">
+              <BarChart3 className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-bold text-white hidden sm:inline">Claim Analytics</span>
+          </div>
+        </div>
+      </header>
+      <main className="max-w-3xl mx-auto px-6 py-10">
+        <Profile />
+      </main>
+    </div>
+  );
 }
 
 function GuestRoute({ children }) {
@@ -62,6 +92,12 @@ export default function App() {
       <Route
         path="/workspaces"
         element={<ProtectedRoute><WorkspaceHome /></ProtectedRoute>}
+      />
+
+      {/* Standalone account settings page */}
+      <Route
+        path="/account"
+        element={<ProtectedRoute><AccountLayout /></ProtectedRoute>}
       />
 
       {/* Inside a workspace */}

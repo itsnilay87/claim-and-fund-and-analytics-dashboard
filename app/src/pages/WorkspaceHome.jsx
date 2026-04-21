@@ -8,12 +8,12 @@
  *
  * Route: /workspaces
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import WorkspaceCard from '../components/workspace/WorkspaceCard';
-import { Plus, LogOut, BarChart3, X, Download } from 'lucide-react';
+import { Plus, LogOut, BarChart3, X, Download, UserCircle, Settings } from 'lucide-react';
 import { DEMO_WORKSPACES, importDemoWorkspace } from '../utils/demoLoader';
 
 export default function WorkspaceHome() {
@@ -30,8 +30,21 @@ export default function WorkspaceHome() {
 
   const [showModal, setShowModal] = useState(false);
   const [showDemoModal, setShowDemoModal] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef(null);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
+
+  // Close user menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setShowUserMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLoadDemo = async (demo) => {
     const ws = await importDemoWorkspace(demo);
@@ -67,19 +80,39 @@ export default function WorkspaceHome() {
             <span className="text-lg font-bold text-white">Claim Analytics</span>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-sm font-semibold text-indigo-300">
-                {user?.name?.charAt(0) || 'U'}
-              </div>
-              <span className="text-sm text-slate-300 hidden sm:inline">{user?.name}</span>
+            {/* User menu */}
+            <div className="relative" ref={userMenuRef}>
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-sm font-semibold text-indigo-300 select-none">
+                  {(user?.full_name || user?.name || 'U').charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm text-slate-300 hidden sm:inline">{user?.full_name || user?.name}</span>
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-52 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl py-1.5 z-50">
+                  <div className="px-4 py-2.5 border-b border-slate-800">
+                    <p className="text-xs font-semibold text-white truncate">{user?.full_name || user?.name}</p>
+                    <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+                  </div>
+                  <button
+                    onClick={() => { setShowUserMenu(false); navigate('/account'); }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+                  >
+                    <Settings className="w-4 h-4" /> Account Settings
+                  </button>
+                  <button
+                    onClick={() => { setShowUserMenu(false); handleLogout(); }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" /> Sign Out
+                  </button>
+                </div>
+              )}
             </div>
-            <button
-              onClick={handleLogout}
-              className="p-2 text-slate-500 hover:text-slate-300 transition-colors"
-              title="Sign out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
           </div>
         </div>
       </header>

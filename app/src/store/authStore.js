@@ -121,5 +121,17 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  changePassword: async (currentPassword, newPassword) => {
+    try {
+      await api.put('/api/auth/me/password', {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+    } catch (err) {
+      set({ error: err.message });
+      throw err;
+    }
+  },
+
   clearError: () => set({ error: null }),
 }));
