@@ -96,9 +96,15 @@ ssh -i "$SSH_KEY" "root@${SERVER}" << 'REMOTE_EOF'
   docker stop claim-analytics 2>/dev/null && docker rm claim-analytics 2>/dev/null && echo "  ✓ Old container stopped" || true
 
   # ── 6. Build and start with docker-compose ──
-  echo "▸ Building and starting services (web + PostgreSQL)..."
+  # NOTE: Always force --no-cache for the web image because Docker's layer
+  # cache occasionally fails to detect frontend source changes (Vite
+  # bundles get reused). A clean build guarantees the latest commit is
+  # actually shipped to /app/static/app inside the container.
+  echo "▸ Building web image (no-cache to guarantee fresh frontend bundle)..."
   cd "$REMOTE_DIR"
-  docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yml build --no-cache web
+  echo "▸ Starting services (web + PostgreSQL)..."
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d
 
   # ── 7. Wait for DB healthy ──
   echo "▸ Waiting for PostgreSQL to be ready..."
