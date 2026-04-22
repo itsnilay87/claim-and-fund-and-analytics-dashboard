@@ -41,11 +41,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_OTP_ATTEMPTS = 5;
 
-// When email delivery is unavailable (no SMTP configured, or send fails),
-// fall back to creating the user account immediately without OTP. This is
-// controlled per-deployment by SKIP_EMAIL_VERIFICATION=true. Otherwise the
-// fallback is also triggered automatically when sendOtpEmail returns false,
-// so users are never blocked from registering by a broken mail server.
+// Emergency bypass for environments where SMTP is intentionally unavailable.
+// Keep this false in production to enforce OTP-based verification.
 const SKIP_EMAIL_VERIFICATION = process.env.SKIP_EMAIL_VERIFICATION === 'true';
 
 // Cookie secure flag: only true if COOKIE_SECURE=true or if HTTPS is detected
@@ -169,28 +166,10 @@ router.post('/register/request-otp', authLimiter, async (req, res) => {
     // Opportunistic cleanup of expired rows
     PendingRegistration.deleteExpired().catch(() => {});
 
-    // Send OTP email (falls back to console.log in dev)
+    // Send OTP email
     const sent = await sendOtpEmail(normEmail, otp);
     if (!sent) {
-      // Email delivery failed (bad SMTP creds, network, etc).
-      // Rather than blocking the user, fall back to creating the account
-      // directly — same outcome as SKIP_EMAIL_VERIFICATION mode.
-      console.warn('[AUTH] OTP email failed to send — falling back to instant account creation for', normEmail);
-      try {
-        await PendingRegistration.deleteByEmail(normEmail);
-      } catch { /* ignore */ }
-      const user = await User.create({
-        email: normEmail,
-        password_hash,
-        full_name: full_name.trim(),
-      });
-      await User.markEmailVerified(user.id);
-      const accessToken = await issueTokens(res, user);
-      return res.status(201).json({
-        user: { id: user.id, email: user.email, full_name: user.full_name, role: user.role },
-        accessToken,
-        verification_skipped: true,
-      });
+      return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
     }
 
     res.status(200).json({ message: 'Verification code sent', email: normEmail });
