@@ -95,6 +95,30 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  requestPasswordResetOtp: async (email) => {
+    set({ error: null });
+    try {
+      await api.post('/api/auth/forgot-password/request-otp', { email });
+    } catch (err) {
+      set({ error: err.message });
+      throw err;
+    }
+  },
+
+  resetPasswordWithOtp: async (email, otp, newPassword) => {
+    set({ error: null });
+    try {
+      await api.post('/api/auth/forgot-password/verify-otp', {
+        email,
+        otp,
+        new_password: newPassword,
+      });
+    } catch (err) {
+      set({ error: err.message });
+      throw err;
+    }
+  },
+
   logout: async () => {
     try { await api.post('/api/auth/logout'); } catch { /* ignore */ }
     clearAccessToken();

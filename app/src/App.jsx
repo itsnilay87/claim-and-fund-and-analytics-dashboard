@@ -17,6 +17,7 @@ import PublicLayout from './layouts/PublicLayout';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import ForgotPassword from './pages/ForgotPassword';
 import WorkspaceHome from './pages/WorkspaceHome';
 import WorkspaceDashboard from './pages/WorkspaceDashboard';
 import Home from './pages/Home';
@@ -86,6 +87,7 @@ export default function App() {
         <Route path="/" element={<GuestRoute><Landing /></GuestRoute>} />
         <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
         <Route path="/signup" element={<GuestRoute><Signup /></GuestRoute>} />
+        <Route path="/forgot-password" element={<GuestRoute><ForgotPassword /></GuestRoute>} />
       </Route>
 
       {/* Workspace list */}

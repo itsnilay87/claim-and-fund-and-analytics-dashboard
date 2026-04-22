@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const User = require('../db/models/User');
 const RefreshToken = require('../db/models/RefreshToken');
 const PendingRegistration = require('../db/models/PendingRegistration');
+const PasswordResetRequest = require('../db/models/PasswordResetRequest');
 const { generateAccessToken, generateRefreshToken, hashToken } = require('../utils/jwt');
 const { authenticateToken } = require('../middleware/auth');
 const { sendOtpEmail } = require('../services/email');
@@ -291,6 +292,108 @@ router.post('/register/resend-otp', authLimiter, async (req, res) => {
   } catch (err) {
     console.error('[AUTH] Resend OTP error:', err.message);
     res.status(500).json({ error: 'Failed to resend verification code' });
+  }
+});
+
+// ── POST /api/auth/forgot-password/request-otp ──
+// Request a reset code by email.
+
+router.post('/forgot-password/request-otp', authLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ error: 'Valid email is required' });
+    }
+
+    const normEmail = email.toLowerCase();
+    const user = await User.findByEmail(normEmail);
+
+    // Never disclose whether an account exists.
+    if (!user) {
+      return res.status(200).json({ message: 'If the account exists, a verification code has been sent.' });
+    }
+
+    const otp = generateOtp();
+    const otp_hash = await bcrypt.hash(otp, BCRYPT_SALT_ROUNDS);
+    const expires_at = new Date(Date.now() + OTP_EXPIRY_MS);
+
+    await PasswordResetRequest.upsert({
+      email: normEmail,
+      user_id: user.id,
+      otp_hash,
+      expires_at,
+    });
+
+    PasswordResetRequest.deleteExpired().catch(() => {});
+
+    const sent = await sendOtpEmail(normEmail, otp);
+    if (!sent) {
+      return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
+    }
+
+    return res.status(200).json({ message: 'Verification code sent' });
+  } catch (err) {
+    console.error('[AUTH] Forgot password request OTP error:', err.message);
+    return res.status(500).json({ error: 'Failed to send verification code' });
+  }
+});
+
+// ── POST /api/auth/forgot-password/verify-otp ──
+// Verify reset OTP and set a new password.
+
+router.post('/forgot-password/verify-otp', authLimiter, async (req, res) => {
+  try {
+    const { email, otp, new_password } = req.body;
+
+    if (!email || !otp || !new_password) {
+      return res.status(400).json({ error: 'Email, verification code, and new password are required' });
+    }
+    if (new_password.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+
+    const normEmail = email.toLowerCase();
+    const reset = await PasswordResetRequest.findByEmail(normEmail);
+    if (!reset) {
+      return res.status(400).json({ error: 'No pending password reset found. Please request a new code.' });
+    }
+
+    if (new Date(reset.expires_at) < new Date()) {
+      await PasswordResetRequest.deleteByEmail(normEmail);
+      return res.status(410).json({ error: 'Verification code expired. Please request a new one.' });
+    }
+
+    if (reset.attempts >= MAX_OTP_ATTEMPTS) {
+      await PasswordResetRequest.deleteByEmail(normEmail);
+      return res.status(429).json({ error: 'Too many failed attempts. Please request a new code.' });
+    }
+
+    const valid = await bcrypt.compare(String(otp), reset.otp_hash);
+    if (!valid) {
+      await PasswordResetRequest.incrementAttempts(normEmail);
+      const remaining = MAX_OTP_ATTEMPTS - reset.attempts - 1;
+      return res.status(401).json({
+        error: `Invalid verification code. ${remaining > 0 ? remaining + ' attempts remaining.' : 'Please request a new code.'}`,
+      });
+    }
+
+    const user = await User.findByEmail(normEmail);
+    if (!user) {
+      await PasswordResetRequest.deleteByEmail(normEmail);
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const newHash = await bcrypt.hash(new_password, BCRYPT_SALT_ROUNDS);
+    await User.updatePassword(user.id, newHash);
+
+    // Force logout from all devices after password reset.
+    await RefreshToken.deleteAllForUser(user.id);
+    await PasswordResetRequest.deleteByEmail(normEmail);
+
+    return res.status(200).json({ message: 'Password reset successful' });
+  } catch (err) {
+    console.error('[AUTH] Forgot password verify OTP error:', err.message);
+    return res.status(500).json({ error: 'Failed to reset password' });
   }
 });
 
