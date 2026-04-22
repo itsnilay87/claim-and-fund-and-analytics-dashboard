@@ -80,11 +80,20 @@ export default function WorkspaceHome() {
             <span className="text-lg font-bold text-white">Claim Analytics</span>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => navigate('/account')}
+              className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 text-sm text-slate-200 hover:bg-slate-800 transition-colors"
+            >
+              <Settings className="w-4 h-4" /> Account
+            </button>
             {/* User menu */}
             <div className="relative" ref={userMenuRef}>
               <button
+                type="button"
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                aria-label="Open user menu"
               >
                 <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-sm font-semibold text-indigo-300 select-none">
                   {(user?.full_name || user?.name || 'U').charAt(0).toUpperCase()}
