@@ -88,6 +88,8 @@ export default function App() {
         <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
         <Route path="/signup" element={<GuestRoute><Signup /></GuestRoute>} />
         <Route path="/forgot-password" element={<GuestRoute><ForgotPassword /></GuestRoute>} />
+        <Route path="/reset-password" element={<GuestRoute><ForgotPassword /></GuestRoute>} />
+        <Route path="/forgot" element={<GuestRoute><ForgotPassword /></GuestRoute>} />
       </Route>
 
       {/* Workspace list */}
