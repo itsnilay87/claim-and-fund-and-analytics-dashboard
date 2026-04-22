@@ -49,7 +49,13 @@ export default function Signup() {
     }
     setLoading(true)
     try {
-      await requestOtp(form.email, form.password, form.name)
+      const result = await requestOtp(form.email, form.password, form.name)
+      // If the server skipped email verification (SMTP unavailable), the
+      // user is already signed in — go straight to workspaces.
+      if (result && result.skipped) {
+        navigate('/workspaces')
+        return
+      }
       setStep(2)
       setResendCooldown(30)
     } catch (err) {

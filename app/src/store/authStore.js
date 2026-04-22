@@ -46,11 +46,21 @@ export const useAuthStore = create((set, get) => ({
 
   /**
    * Step 1 of registration: request an OTP to be sent to the email.
+   * If the server cannot send email (SMTP unavailable), it falls back to
+   * creating the account immediately and returns user + accessToken. In
+   * that case we sign the user in and return { skipped: true } so the UI
+   * can bypass the OTP step.
    */
   requestOtp: async (email, password, full_name) => {
     set({ error: null });
     try {
-      await api.post('/api/auth/register/request-otp', { email, password, full_name });
+      const resp = await api.post('/api/auth/register/request-otp', { email, password, full_name });
+      if (resp && resp.verification_skipped && resp.accessToken) {
+        setAccessToken(resp.accessToken);
+        set({ user: resp.user, isAuthenticated: true, isLoading: false });
+        return { skipped: true };
+      }
+      return { skipped: false };
     } catch (err) {
       set({ error: err.message });
       throw err;

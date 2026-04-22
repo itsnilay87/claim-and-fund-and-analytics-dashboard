@@ -41,6 +41,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_OTP_ATTEMPTS = 5;
 
+// When email delivery is unavailable (no SMTP configured, or send fails),
+// fall back to creating the user account immediately without OTP. This is
+// controlled per-deployment by SKIP_EMAIL_VERIFICATION=true. Otherwise the
+// fallback is also triggered automatically when sendOtpEmail returns false,
+// so users are never blocked from registering by a broken mail server.
+const SKIP_EMAIL_VERIFICATION = process.env.SKIP_EMAIL_VERIFICATION === 'true';
+
 // Cookie secure flag: only true if COOKIE_SECURE=true or if HTTPS is detected
 // Default to false for plain HTTP deployments (e.g. http://178.104.35.208)
 const COOKIE_SECURE = process.env.COOKIE_SECURE === 'true';
@@ -127,6 +134,25 @@ router.post('/register/request-otp', authLimiter, async (req, res) => {
 
     // Hash password and OTP
     const password_hash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
+
+    // ── Fast-path: skip email verification when explicitly configured ──
+    // Used in deployments where SMTP is unavailable. Creates the user
+    // account immediately and issues tokens, just like a verified login.
+    if (SKIP_EMAIL_VERIFICATION) {
+      const user = await User.create({
+        email: normEmail,
+        password_hash,
+        full_name: full_name.trim(),
+      });
+      await User.markEmailVerified(user.id);
+      const accessToken = await issueTokens(res, user);
+      return res.status(201).json({
+        user: { id: user.id, email: user.email, full_name: user.full_name, role: user.role },
+        accessToken,
+        verification_skipped: true,
+      });
+    }
+
     const otp = generateOtp();
     const otp_hash = await bcrypt.hash(otp, BCRYPT_SALT_ROUNDS);
     const expires_at = new Date(Date.now() + OTP_EXPIRY_MS);
@@ -146,7 +172,25 @@ router.post('/register/request-otp', authLimiter, async (req, res) => {
     // Send OTP email (falls back to console.log in dev)
     const sent = await sendOtpEmail(normEmail, otp);
     if (!sent) {
-      return res.status(500).json({ error: 'Failed to send verification email. Please try again.' });
+      // Email delivery failed (bad SMTP creds, network, etc).
+      // Rather than blocking the user, fall back to creating the account
+      // directly — same outcome as SKIP_EMAIL_VERIFICATION mode.
+      console.warn('[AUTH] OTP email failed to send — falling back to instant account creation for', normEmail);
+      try {
+        await PendingRegistration.deleteByEmail(normEmail);
+      } catch { /* ignore */ }
+      const user = await User.create({
+        email: normEmail,
+        password_hash,
+        full_name: full_name.trim(),
+      });
+      await User.markEmailVerified(user.id);
+      const accessToken = await issueTokens(res, user);
+      return res.status(201).json({
+        user: { id: user.id, email: user.email, full_name: user.full_name, role: user.role },
+        accessToken,
+        verification_skipped: true,
+      });
     }
 
     res.status(200).json({ message: 'Verification code sent', email: normEmail });
