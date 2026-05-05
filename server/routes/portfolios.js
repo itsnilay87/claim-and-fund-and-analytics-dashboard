@@ -8,6 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const { Portfolio, Workspace, Claim } = require('../db/models');
+const SimulationRun = require('../db/models/SimulationRun');
 
 // UUID v4 format validation
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -280,6 +281,24 @@ router.put('/:id/structure', async (req, res) => {
     }
     console.error('[PUT /api/portfolios/:id/structure]', err.message);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────
+// GET /api/portfolios/:portfolioId/runs
+// List all simulation runs for a portfolio (user-scoped).
+// ────────────────────────────────────────────────────────────────
+router.get('/:portfolioId/runs', async (req, res) => {
+  try {
+    if (!UUID_RE.test(req.params.portfolioId)) {
+      return res.status(400).json({ error: 'Invalid portfolio ID format' });
+    }
+
+    const runs = await SimulationRun.findByPortfolio(req.params.portfolioId, req.user.id);
+    res.json({ runs });
+  } catch (err) {
+    console.error('[GET /api/portfolios/:portfolioId/runs]', err.message);
+    res.status(500).json({ error: 'Failed to fetch portfolio runs' });
   }
 });
 

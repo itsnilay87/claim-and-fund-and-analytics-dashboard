@@ -58,6 +58,36 @@ export default function History() {
     })
   }
 
+  const getRunMode = (run) => {
+    if (run.portfolio_id) return 'portfolio'
+    if (run.claim_id) return 'claim'
+    return 'legacy'
+  }
+
+  const getResultsPath = (run) => {
+    const mode = getRunMode(run)
+    if (mode === 'portfolio') {
+      return `/workspace/${wsId}/portfolio/${run.portfolio_id}/results?runId=${encodeURIComponent(run.id)}`
+    }
+    if (mode === 'claim') {
+      return `/workspace/${wsId}/claims/${run.claim_id}/results?runId=${encodeURIComponent(run.id)}`
+    }
+    return null
+  }
+
+  const formatMoic = (v) => {
+    if (v === null || v === undefined || Number.isNaN(Number(v))) return '-'
+    return `${Number(v).toFixed(2)}x`
+  }
+
+  const formatIrr = (v) => {
+    if (v === null || v === undefined || Number.isNaN(Number(v))) return '-'
+    const n = Number(v)
+    // Heuristic: values <= 1 (e.g. 0.18) are fractions; otherwise already in %.
+    const pct = Math.abs(n) <= 1 ? n * 100 : n
+    return `${pct.toFixed(1)}%`
+  }
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div>
@@ -101,6 +131,7 @@ export default function History() {
             <thead>
               <tr className="text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-white/5">
                 <th className="text-left py-3 px-5 font-medium">Simulation</th>
+                <th className="text-left py-3 px-5 font-medium">Mode</th>
                 <th className="text-left py-3 px-5 font-medium">Type</th>
                 <th className="text-left py-3 px-5 font-medium">Status</th>
                 <th className="text-left py-3 px-5 font-medium">Date</th>
@@ -113,9 +144,33 @@ export default function History() {
               {filtered.map((run) => {
                 const sc = statusConfig[run.status] || statusConfig.completed
                 const summary = run.summary || {}
+                const mode = getRunMode(run)
+                const resultsPath = getResultsPath(run)
+                const moicValue = summary.portfolio_moic ?? summary.moic
+                const irrValue = summary.portfolio_irr ?? summary.irr
                 return (
                   <tr key={run.id} className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
-                    <td className="py-3.5 px-5 text-sm text-slate-900 dark:text-white font-medium">{run.name || `Run ${run.id.slice(0, 8)}`}</td>
+                    <td className="py-3.5 px-5 text-sm text-slate-900 dark:text-white font-medium">
+                      <div className="flex items-center gap-2">
+                        <span>{run.name || `Run ${run.id.slice(0, 8)}`}</span>
+                        {run.saved === true && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-500/20">
+                            Saved
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-5 text-sm">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
+                        mode === 'portfolio'
+                          ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/20'
+                          : mode === 'claim'
+                          ? 'bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-500/20'
+                          : 'bg-slate-100 dark:bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-500/20'
+                      }`}>
+                        {mode === 'legacy' ? '—' : mode}
+                      </span>
+                    </td>
                     <td className="py-3.5 px-5 text-sm text-slate-500 dark:text-slate-400 capitalize">{run.structure_type || '-'}</td>
                     <td className="py-3.5 px-5">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${sc.bg} ${sc.color}`}>
@@ -124,11 +179,11 @@ export default function History() {
                       </span>
                     </td>
                     <td className="py-3.5 px-5 text-sm text-slate-500 dark:text-slate-400">{formatDate(run.created_at)}</td>
-                    <td className="py-3.5 px-5 text-sm text-slate-900 dark:text-white text-right font-mono">{summary.moic ?? '-'}</td>
-                    <td className="py-3.5 px-5 text-sm text-slate-900 dark:text-white text-right font-mono">{summary.irr ?? '-'}</td>
+                    <td className="py-3.5 px-5 text-sm text-slate-900 dark:text-white text-right font-mono">{formatMoic(moicValue)}</td>
+                    <td className="py-3.5 px-5 text-sm text-slate-900 dark:text-white text-right font-mono">{formatIrr(irrValue)}</td>
                     <td className="py-3.5 px-5 text-right space-x-2">
-                      {run.status === 'completed' && (
-                        <Link to={`/workspace/${wsId}/portfolio/${run.id}/results`} className="text-xs text-teal-600 dark:text-teal-400 hover:text-teal-500 dark:hover:text-teal-300">View</Link>
+                      {run.status === 'completed' && resultsPath && (
+                        <Link to={resultsPath} className="text-xs text-teal-600 dark:text-teal-400 hover:text-teal-500 dark:hover:text-teal-300">View</Link>
                       )}
                       <button onClick={() => handleDelete(run.id)} className="text-xs text-slate-500 hover:text-red-400"><Trash2 size={12} className="inline" /></button>
                     </td>

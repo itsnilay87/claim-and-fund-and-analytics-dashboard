@@ -10,14 +10,14 @@ const SimulationRun = {
   /**
    * Create a new simulation run record.
    * @param {string} userId - UUID
-   * @param {{ workspaceId?: string, portfolioId?: string, claimId?: string, mode: string, structureType?: string, config?: object }} data
+   * @param {{ workspaceId?: string, portfolioId?: string, claimId?: string, mode: string, structureType?: string, config?: object, name?: string }} data
    * @returns {Promise<object>} created run record
    */
-  async create(userId, { workspaceId, portfolioId, claimId, mode, structureType, config }) {
+  async create(userId, { workspaceId, portfolioId, claimId, mode, structureType, config, name }) {
     const { rows } = await query(
       `INSERT INTO simulation_runs
-         (user_id, workspace_id, portfolio_id, claim_id, mode, structure_type, config)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+         (user_id, workspace_id, portfolio_id, claim_id, mode, structure_type, config, name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         userId,
@@ -27,6 +27,7 @@ const SimulationRun = {
         mode,
         structureType || null,
         JSON.stringify(config || {}),
+        name || null,
       ]
     );
     return rows[0];
@@ -52,8 +53,11 @@ const SimulationRun = {
       }
     }
     if ('summary' in fields) {
+      // `summary` is a JSONB column — accepts arbitrary keys without schema
+      // changes. Extended fields (portfolio_name, structure_params,
+      // run_duration_seconds, n_portfolios, etc.) are stored as-is.
       setClauses.push(`summary = $${idx}`);
-      params.push(JSON.stringify(fields.summary));
+      params.push(JSON.stringify(fields.summary || {}));
       idx++;
     }
 

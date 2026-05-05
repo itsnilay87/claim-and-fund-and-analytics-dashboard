@@ -12,8 +12,10 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Briefcase, Loader2, AlertCircle, ExternalLink, Download } from 'lucide-react';
 import { usePortfolioStore } from '../store/portfolioStore';
+import { useAuthStore } from '../store/authStore';
 import { api } from '../services/api';
 import DownloadsPanel from '../components/simulation/DownloadsPanel';
+import SaveDiscardModal from '../components/simulation/SaveDiscardModal';
 
 const STRUCTURE_LABELS = {
   litigation_funding: 'Litigation Funding',
@@ -31,6 +33,7 @@ export default function PortfolioResults() {
 
   const portfolios = usePortfolioStore((s) => s.portfolios);
   const loadPortfolios = usePortfolioStore((s) => s.loadPortfolios);
+  const autoSavedPref = useAuthStore((s) => !!s.user?.settings?.auto_save_portfolio_runs);
 
   useEffect(() => { loadPortfolios(wsId); }, [wsId, loadPortfolios]);
 
@@ -41,6 +44,8 @@ export default function PortfolioResults() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloadsOpen, setDownloadsOpen] = useState(false);
+  const [showSavePrompt, setShowSavePrompt] = useState(false);
+  const [savedToast, setSavedToast] = useState(false);
 
   // Load dashboard data from server
   useEffect(() => {
@@ -66,6 +71,19 @@ export default function PortfolioResults() {
     load();
     return () => { cancelled = true; };
   }, [effectiveRunId]);
+
+  // Prompt to save/discard once per run per browser session, after data loads.
+  useEffect(() => {
+    if (!data || !effectiveRunId) return;
+    const key = `portfolio_save_prompted:${effectiveRunId}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+    } catch {
+      // sessionStorage unavailable; still show prompt this time.
+    }
+    setShowSavePrompt(true);
+  }, [data, effectiveRunId]);
 
   const structureType = data?.structure_type || portfolio?.structure || 'monetisation_upfront_tail';
 
@@ -169,6 +187,32 @@ export default function PortfolioResults() {
         isOpen={downloadsOpen}
         onClose={() => setDownloadsOpen(false)}
       />
+
+      {/* Save / Discard prompt shown once after a fresh portfolio run completes */}
+      {showSavePrompt && (
+        <SaveDiscardModal
+          runId={effectiveRunId}
+          autoSaved={autoSavedPref}
+          onClose={() => setShowSavePrompt(false)}
+          onSaved={() => {
+            setSavedToast(true);
+            setTimeout(() => setSavedToast(false), 2500);
+          }}
+          onRenamed={() => {
+            setSavedToast(true);
+            setTimeout(() => setSavedToast(false), 2500);
+          }}
+          onDiscarded={() => navigate(`/workspace/${wsId}/portfolio/${id}`)}
+          onDeleted={() => navigate(`/workspace/${wsId}/portfolio/${id}`)}
+        />
+      )}
+
+      {/* Saved toast */}
+      {savedToast && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium shadow-lg">
+          Saved
+        </div>
+      )}
     </div>
   );
 }

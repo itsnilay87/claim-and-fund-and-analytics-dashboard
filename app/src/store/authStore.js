@@ -167,5 +167,21 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  /**
+   * Update per-user preferences (e.g. auto_save_portfolio_runs).
+   * Merges the returned settings object back into the cached user.
+   */
+  updateSettings: async (updates) => {
+    try {
+      const { settings } = await api.put('/api/auth/me/settings', updates);
+      const current = get().user || {};
+      set({ user: { ...current, settings } });
+      return settings;
+    } catch (err) {
+      set({ error: err.message });
+      throw err;
+    }
+  },
+
   clearError: () => set({ error: null }),
 }));

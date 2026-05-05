@@ -13,6 +13,7 @@ const { startRun, startLegacyRun } = require('../services/simulationRunner');
 const { mergeConfig, getDefaults, loadDefaults, validateConfig } = require('../services/configService');
 const { authenticateToken } = require('../middleware/auth');
 const SimulationRun = require('../db/models/SimulationRun');
+const UserSettings = require('../db/models/UserSettings');
 const fs = require('fs');
 const path = require('path');
 
@@ -355,6 +356,15 @@ router.post('/portfolio', authenticateToken, simulateLimiter, async (req, res) =
     // Create DB record first to get the UUID
     let dbRunId = null;
     try {
+      // Derive a meaningful run name: prefer the user-provided portfolio name,
+      // otherwise fall back to a timestamped label.
+      const providedName = (req.body.portfolio_config?.name || '').trim();
+      const fallbackName = `Portfolio Run — ${new Date()
+        .toISOString()
+        .replace('T', ' ')
+        .slice(0, 16)}`;
+      const runName = providedName || fallbackName;
+
       const dbRun = await SimulationRun.create(req.user.id, {
         workspaceId: req.body.workspace_id || null,
         portfolioId: req.body.portfolio_id || null,
@@ -362,8 +372,20 @@ router.post('/portfolio', authenticateToken, simulateLimiter, async (req, res) =
         mode: 'portfolio',
         structureType: config.structure?.type,
         config: config,
+        name: runName,
       });
       dbRunId = dbRun.id;
+
+      // Auto-save the run if the user has opted in (exempts it from
+      // deleteOldUnsavedRuns cleanup).
+      try {
+        const settings = await UserSettings.getByUserId(req.user.id);
+        if (settings.auto_save_portfolio_runs) {
+          await SimulationRun.markSaved(dbRunId, req.user.id, runName);
+        }
+      } catch (settingsErr) {
+        console.error('[POST /api/simulate/portfolio] auto-save check failed:', settingsErr.message);
+      }
     } catch (dbErr) {
       console.error('[POST /api/simulate/portfolio] DB create failed (continuing without DB):', dbErr.message);
     }

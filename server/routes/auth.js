@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const User = require('../db/models/User');
+const UserSettings = require('../db/models/UserSettings');
 const RefreshToken = require('../db/models/RefreshToken');
 const PendingRegistration = require('../db/models/PendingRegistration');
 const PasswordResetRequest = require('../db/models/PasswordResetRequest');
@@ -500,6 +501,7 @@ router.get('/me', authenticateToken, async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    const settings = await UserSettings.getByUserId(req.user.id);
     res.json({
       user: {
         id: user.id,
@@ -507,11 +509,43 @@ router.get('/me', authenticateToken, async (req, res) => {
         full_name: user.full_name,
         role: user.role,
         created_at: user.created_at,
+        settings,
       },
     });
   } catch (err) {
     console.error('[AUTH] Profile fetch error:', err.message);
     res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// ── GET /api/auth/me/settings ──
+
+router.get('/me/settings', authenticateToken, async (req, res) => {
+  try {
+    const settings = await UserSettings.getByUserId(req.user.id);
+    res.json({ settings });
+  } catch (err) {
+    console.error('[AUTH] Settings fetch error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
+});
+
+// ── PUT /api/auth/me/settings ──
+
+router.put('/me/settings', authenticateToken, async (req, res) => {
+  try {
+    const { auto_save_portfolio_runs } = req.body || {};
+    if (
+      auto_save_portfolio_runs !== undefined
+      && typeof auto_save_portfolio_runs !== 'boolean'
+    ) {
+      return res.status(400).json({ error: 'auto_save_portfolio_runs must be boolean' });
+    }
+    const settings = await UserSettings.upsert(req.user.id, { auto_save_portfolio_runs });
+    res.json({ settings });
+  } catch (err) {
+    console.error('[AUTH] Settings update error:', err.message);
+    res.status(500).json({ error: 'Failed to update settings' });
   }
 });
 

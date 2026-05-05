@@ -50,24 +50,73 @@ const runCallbacks = new Map();
 /**
  * Extract a summary from dashboard_data.json for DB storage.
  * @param {string} outputDir - Absolute path to outputs directory
+ * @param {{ config?: object, startedAt?: string|Date }} [context]
  * @returns {object} summary object or empty object
  */
-function extractSummary(outputDir) {
+function extractSummary(outputDir, context = {}) {
+  const { config = {}, startedAt = null } = context || {};
+
+  // Run duration (best effort).
+  let runDurationSeconds = null;
+  if (startedAt) {
+    const startMs = new Date(startedAt).getTime();
+    if (!Number.isNaN(startMs)) {
+      runDurationSeconds = Math.max(0, Math.round((Date.now() - startMs) / 1000));
+    }
+  }
+
+  // Pull structure params from config (small projection — avoid dumping the
+  // entire structure block in case it grows large).
+  const structureBlock = config.structure || {};
+  const structureType = structureBlock.type || null;
+  const rawParams = structureBlock.params || structureBlock.config || {};
+  const structureParams = {};
+  for (const [k, v] of Object.entries(rawParams)) {
+    if (v === null || v === undefined) continue;
+    if (typeof v === 'object' && !Array.isArray(v)) {
+      // Keep small nested objects (e.g., upfront_range: {min, max}).
+      const keys = Object.keys(v);
+      if (keys.length <= 6) structureParams[k] = v;
+    } else {
+      structureParams[k] = v;
+    }
+  }
+
+  const portfolioName = config.portfolio?.name || config.name || null;
+
+  let dashData = {};
   try {
     const dashPath = path.join(outputDir, 'dashboard_data.json');
-    if (!fs.existsSync(dashPath)) return {};
-    const data = JSON.parse(fs.readFileSync(dashPath, 'utf-8'));
-    return {
-      structure_type: data.structure_type || null,
-      n_claims: data.portfolio_summary?.n_claims || data.claims?.length || null,
-      n_simulations: data.portfolio_summary?.n_simulations || data.simulation?.n_simulations || null,
-      portfolio_moic: data.portfolio_summary?.expected_moic ?? null,
-      portfolio_irr: data.portfolio_summary?.expected_irr ?? null,
-      total_investment: data.portfolio_summary?.total_investment_cr ?? null,
-    };
+    if (fs.existsSync(dashPath)) {
+      dashData = JSON.parse(fs.readFileSync(dashPath, 'utf-8'));
+    }
   } catch {
-    return {};
+    dashData = {};
   }
+
+  // n_portfolios: present when a grid sweep was run.
+  const nPortfolios =
+    dashData.portfolio_grid?.length
+    || dashData.portfolios?.length
+    || dashData.grid_results?.length
+    || (Array.isArray(dashData.investment_grid) ? dashData.investment_grid.length : null)
+    || null;
+
+  return {
+    // Existing keys (kept for backward compatibility).
+    structure_type: dashData.structure_type || structureType || null,
+    n_claims: dashData.portfolio_summary?.n_claims || dashData.claims?.length || null,
+    n_simulations: dashData.portfolio_summary?.n_simulations || dashData.simulation?.n_simulations || null,
+    portfolio_moic: dashData.portfolio_summary?.expected_moic ?? null,
+    portfolio_irr: dashData.portfolio_summary?.expected_irr ?? null,
+    total_investment: dashData.portfolio_summary?.total_investment_cr ?? null,
+
+    // Extended keys.
+    portfolio_name: portfolioName,
+    n_portfolios: nPortfolios,
+    structure_params: structureParams,
+    run_duration_seconds: runDurationSeconds,
+  };
 }
 
 /**
@@ -301,7 +350,14 @@ function _spawnPython(runId, configPath, outputDir, mode) {
       // Fire onComplete callback async (don't block)
       const cb = runCallbacks.get(runId);
       if (cb && cb.onComplete) {
-        const summary = extractSummary(outputDir);
+        let runConfig = {};
+        try {
+          runConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        } catch { /* ignore */ }
+        const summary = extractSummary(outputDir, {
+          config: runConfig,
+          startedAt: status.startedAt,
+        });
         cb.onComplete(runId, outputDir, summary).catch(err =>
           console.error(`[SimRunner] onComplete callback error for ${runId}:`, err.message)
         );

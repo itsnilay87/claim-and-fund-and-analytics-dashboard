@@ -21,6 +21,7 @@ import UpfrontTailConfig from '../components/portfolio/UpfrontTailConfig';
 import StagedPaymentConfig from '../components/portfolio/StagedPaymentConfig';
 import SimulationSettings from '../components/portfolio/SimulationSettings';
 import PortfolioSummaryCard from '../components/portfolio/PortfolioSummaryCard';
+import PortfolioRunHistory from '../components/portfolio/PortfolioRunHistory';
 
 const STRUCTURE_LABELS = {
   litigation_funding: 'Litigation Funding',
@@ -352,6 +353,9 @@ export default function PortfolioBuilder() {
           />
         </div>
       </div>
+
+      {/* Previous runs for this portfolio */}
+      <PortfolioRunHistory workspaceId={wsId} portfolioId={id} />
     </div>
   );
 }

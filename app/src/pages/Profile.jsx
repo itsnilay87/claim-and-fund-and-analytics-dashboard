@@ -1,11 +1,12 @@
 ﻿import { useState } from 'react'
 import { useAuthStore } from '../store/authStore'
-import { User, Mail, Building2, Shield, Camera, Check, Eye, EyeOff, AlertCircle, KeyRound } from 'lucide-react'
+import { User, Mail, Building2, Shield, Camera, Check, Eye, EyeOff, AlertCircle, KeyRound, Settings as SettingsIcon } from 'lucide-react'
 
 export default function Profile() {
   const user = useAuthStore((s) => s.user)
   const updateUser = useAuthStore((s) => s.updateUser)
   const changePassword = useAuthStore((s) => s.changePassword)
+  const updateSettings = useAuthStore((s) => s.updateSettings)
 
   // Profile form
   const [form, setForm] = useState({
@@ -14,6 +15,23 @@ export default function Profile() {
   })
   const [profileSaved, setProfileSaved] = useState(false)
   const [profileError, setProfileError] = useState('')
+
+  // Preferences
+  const autoSave = !!user?.settings?.auto_save_portfolio_runs
+  const [prefSaving, setPrefSaving] = useState(false)
+  const [prefError, setPrefError] = useState('')
+
+  const handleAutoSaveToggle = async (next) => {
+    setPrefSaving(true)
+    setPrefError('')
+    try {
+      await updateSettings({ auto_save_portfolio_runs: next })
+    } catch (err) {
+      setPrefError(err.message || 'Failed to update preference')
+    } finally {
+      setPrefSaving(false)
+    }
+  }
 
   // Password form
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
@@ -153,6 +171,42 @@ export default function Profile() {
           </button>
         </div>
       </form>
+
+      {/* Preferences */}
+      <div className="glass-card p-6 space-y-5">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+          <SettingsIcon size={15} className="text-slate-400" /> Preferences
+        </h3>
+
+        <label className="flex items-start justify-between gap-4 cursor-pointer">
+          <div>
+            <div className="text-sm font-medium text-slate-900 dark:text-white">
+              Auto-save portfolio runs
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Automatically mark every portfolio simulation as saved so it isn’t purged by the
+              auto-cleanup of older unsaved runs.
+            </p>
+          </div>
+          <span className="relative inline-flex items-center shrink-0">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={autoSave}
+              disabled={prefSaving}
+              onChange={(e) => handleAutoSaveToggle(e.target.checked)}
+            />
+            <span className="w-10 h-5 rounded-full bg-slate-300 dark:bg-slate-700 peer-checked:bg-indigo-500 transition-colors" />
+            <span className="absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+          </span>
+        </label>
+
+        {prefError && (
+          <p className="flex items-center gap-2 text-sm text-red-400">
+            <AlertCircle size={14} /> {prefError}
+          </p>
+        )}
+      </div>
 
       {/* Change password */}
       <form onSubmit={handlePasswordChange} className="glass-card p-6 space-y-5">
