@@ -17,7 +17,7 @@ import {
   COLORS, FONT, SIZES, SPACE, CHART_HEIGHT, CHART_FONT,
   useUISettings, fmtCr, fmtPct, fmtMOIC, moicColor, lossColor, getVerdictStyle, BAR_CURSOR,
 } from '../theme';
-import { Card, SectionTitle, KPI, CustomTooltip, Badge } from './Shared';
+import { Card, SectionTitle, KPI, CustomTooltip, Badge, getAxisMeta } from './Shared';
 
 /* ═══════════════════════════════════════════════════════
    Confidence band colour palettes (professional HFT style)
@@ -129,12 +129,15 @@ function ReportTooltip({ active, payload, label }) {
 /* ═══════════════════════════════════════════════════════
    EXPORTED VIEW: Stochastic Pricing (top-level tab)
    ═══════════════════════════════════════════════════════ */
-export function PricingView({ stochasticData }) {
+export function PricingView({ stochasticData, structureType, hybridParams }) {
   const { ui } = useUISettings();
   const [metric, setMetric] = useState('e_moic');
   const [selectedUpfront, setSelectedUpfront] = useState(null);
   const [selectedTail, setSelectedTail] = useState(null);
   const isNarrow = typeof window !== 'undefined' && window.innerWidth < 1400;
+  const axisMeta = getAxisMeta(structureType, hybridParams);
+  const tailLabel = axisMeta.secondAxisLabel;
+  const fmtTailHeader = (t) => axisMeta.isHybrid ? axisMeta.formatSecond(t / 100) : `${t}%`;
 
   if (!stochasticData || !stochasticData.grid) {
     return (
@@ -201,17 +204,17 @@ export function PricingView({ stochasticData }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: ui.space.md }}>
         <KPI label="Grid Combos" value={nCombos} sub={`${upfrontGrid.length}×${tailGrid.length}`} color={COLORS.accent6} />
         <KPI label="Sims / Combo" value={simsPerCombo.toLocaleString()} color={COLORS.accent3} />
-        <KPI label="Best E[MOIC]" value={fmtMOIC(bestCell.e_moic)} sub={`${bestCell.upfront_pct}% up / ${bestCell.tata_tail_pct}% tail`} color={COLORS.accent4} />
+        <KPI label="Best E[MOIC]" value={fmtMOIC(bestCell.e_moic)} sub={`${bestCell.upfront_pct}% up / ${fmtTailHeader(bestCell.tata_tail_pct)} ${tailLabel}`} color={COLORS.accent4} />
         <KPI label="Best E[IRR]" value={fmtPct(bestCell.e_irr)} color={COLORS.accent2} />
         <KPI label="Portfolio SOC" value={`₹${meta.portfolio_soc_cr?.toLocaleString()} Cr`} color={COLORS.accent1} />
       </div>
 
       {/* ── Section 1: Sliders + Detail ── */}
       <Card>
-        <SectionTitle number="1" title="Interactive Pricing Explorer" subtitle="Drag sliders to explore any upfront % / Tata tail % combination." />
+        <SectionTitle number="1" title="Interactive Pricing Explorer" subtitle={`Drag sliders to explore any upfront % / ${tailLabel} combination.`} />
         <div style={{ display: 'flex', gap: ui.space.xxl, flexWrap: 'wrap', marginBottom: 24 }}>
           <ParamSlider label="Upfront Purchase %" value={activeUpfront} options={upfrontGrid} onChange={setSelectedUpfront} color={COLORS.accent1} />
-          <ParamSlider label="Tata Tail %" value={activeTail} options={tailGrid} onChange={setSelectedTail} color={COLORS.accent2} />
+          <ParamSlider label={tailLabel} value={activeTail} options={tailGrid} onChange={setSelectedTail} color={COLORS.accent2} formatValue={axisMeta.isHybrid ? (v) => axisMeta.formatSecond(v / 100) : undefined} />
         </div>
         {activeCell && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: ui.space.lg }}>
@@ -520,16 +523,16 @@ export function PricingView({ stochasticData }) {
 
       <Card>
         <SectionTitle number="4" title={`${currentMetric.label} Heatmap — Full Pricing Grid`}
-          subtitle={`Rows = upfront %, Columns = Tata Tail %. ${simsPerCombo.toLocaleString()} MC paths per cell. Click to select.`} />
+          subtitle={`Rows = upfront %, Columns = ${tailLabel}. ${simsPerCombo.toLocaleString()} MC paths per cell. Click to select.`} />
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 3, fontFamily: FONT }}>
             <thead>
               <tr>
-                <th style={{ padding: '10px 14px', color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600, textAlign: 'left' }}>Up↓ / Tail→</th>
+                <th style={{ padding: '10px 14px', color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600, textAlign: 'left' }}>Up↓ / {tailLabel}→</th>
                 {tailGrid.map(t => (
                   <th key={t} style={{ padding: '10px 14px', color: t === activeTail ? COLORS.accent2 : COLORS.textMuted,
                     fontSize: ui.sizes.sm, fontWeight: t === activeTail ? 800 : 600, textAlign: 'center',
-                    borderBottom: t === activeTail ? `2px solid ${COLORS.accent2}` : 'none' }}>{t}%</th>
+                    borderBottom: t === activeTail ? `2px solid ${COLORS.accent2}` : 'none' }}>{fmtTailHeader(t)}</th>
                 ))}
               </tr>
             </thead>

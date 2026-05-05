@@ -14,7 +14,7 @@ import {
   ComposedChart, Line,
 } from 'recharts';
 import { COLORS, FONT, SIZES, useUISettings, fmtCr, fmtPct, fmtMOIC, fmtMo, BAR_CURSOR } from '../theme';
-import { Card, SectionTitle, KPI, CustomTooltip } from './Shared';
+import { Card, SectionTitle, KPI, CustomTooltip, getAxisMeta } from './Shared';
 import JCurveFanChart from './JCurveFanChart';
 import { getClaimDisplayName } from '../../utils/claimNames';
 
@@ -32,8 +32,9 @@ const TD_STYLE = { padding: '8px 12px', textAlign: 'right', color: COLORS.text, 
 const TD_LEFT  = { ...TD_STYLE, textAlign: 'left', fontWeight: 600 };
 
 /* ── waterfall builder (from WaterfallChart) ── */
-function buildWaterfallSteps(view, isNominal) {
+function buildWaterfallSteps(view, isNominal, axisMeta) {
   const tailPct = view.reference_tail_pct || 0.20;
+  const tailLabel = axisMeta?.isHybrid ? `${axisMeta.secondAxisLabel} (${axisMeta.formatSecond(axisMeta.defaultSecond)})` : `Tata Tail (${fmtPct(tailPct)})`;
   const steps = [];
   steps.push({ label: 'SOC', value: view.soc_cr, type: 'total' });
   if (!isNominal) {
@@ -46,7 +47,7 @@ function buildWaterfallSteps(view, isNominal) {
   steps.push({ label: 'E[Recovery]', value: view.prob_adjusted_cr, type: 'subtotal' });
   steps.push({ label: 'Legal Costs', value: -view.legal_costs_cr, type: 'subtract' });
   steps.push({ label: 'Net After Legal', value: view.net_after_legal_cr, type: 'subtotal' });
-  steps.push({ label: `Tata Tail (${fmtPct(tailPct)})`, value: -view.tata_receives_cr, type: 'subtract' });
+  steps.push({ label: tailLabel, value: -view.tata_receives_cr, type: 'subtract' });
   steps.push({ label: 'Fund Profit', value: view.fund_net_profit_cr, type: 'total' });
 
   let running = 0;
@@ -74,6 +75,7 @@ export default function CashflowWaterfall({ data }) {
   const { ui } = useUISettings();
   const wf = data?.waterfall;
   const cf = data?.cashflow_analysis;
+  const axisMeta = getAxisMeta(data?.structure_type, data?.hybrid_payoff_params);
   const [wfMode, setWfMode] = useState('nominal');
   const [showQuarterly, setShowQuarterly] = useState(false);
   const isNarrow = typeof window !== 'undefined' && window.innerWidth < 1400;
@@ -90,7 +92,7 @@ export default function CashflowWaterfall({ data }) {
   const pvView     = wf?.present_value || wf || {};
   const activeView = wfMode === 'nominal' ? nomView : pvView;
   const isNominal  = wfMode === 'nominal';
-  const chartData  = hasWaterfall ? buildWaterfallSteps(activeView, isNominal) : [];
+  const chartData  = hasWaterfall ? buildWaterfallSteps(activeView, isNominal, axisMeta) : [];
 
   /* ── cashflow analysis aliases ── */
   const summary    = cf?.portfolio_summary;
@@ -137,13 +139,15 @@ export default function CashflowWaterfall({ data }) {
         <Card>
           <SectionTitle number="1b"
             title="Portfolio Cashflow J-Curve"
-            subtitle="Cumulative portfolio cashflow over time. Select upfront % and Tata tail % to visualise any investment structure." />
+            subtitle={`Cumulative portfolio cashflow over time. Select upfront % and ${axisMeta.secondAxisLabel} to visualise any investment structure.`} />
           <JCurveFanChart
             data={data}
             height={420}
             showControls
             upfrontPct={0.10}
-            tataTailPct={0.20}
+            tataTailPct={axisMeta.isHybrid ? axisMeta.defaultSecond : 0.20}
+            tailLabel={axisMeta.secondAxisLabel}
+            formatTail={axisMeta.isHybrid ? axisMeta.formatSecond : undefined}
           />
         </Card>
       )}
@@ -222,8 +226,8 @@ export default function CashflowWaterfall({ data }) {
             <SectionTitle number="1"
               title={isNominal ? 'Nominal Value Decomposition' : `PV Decomposition @ ${fmtPct(pvView.discount_rate)}`}
               subtitle={isNominal
-                ? 'SOC → Win/Quantum Adj → Legal Costs → Tata Tail → Fund Profit'
-                : `SOC → PV Discount (~${pvView.avg_timeline_months?.toFixed(0) || '?'}m) → Win/Quantum Adj → Legal → Tata → Fund`} />
+                ? `SOC → Win/Quantum Adj → Legal Costs → ${axisMeta.secondAxisLabel} → Fund Profit`
+                : `SOC → PV Discount (~${pvView.avg_timeline_months?.toFixed(0) || '?'}m) → Win/Quantum Adj → Legal → ${axisMeta.secondAxisLabel} → Fund`} />
             <ResponsiveContainer width="100%" height={ui.chartHeight.lg}>
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 30, bottom: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
@@ -444,7 +448,7 @@ export default function CashflowWaterfall({ data }) {
       {scenarios.length > 0 && (
         <Card>
           <SectionTitle number="7" title="Investor Cashflow Under Key Structures"
-            subtitle="Fund performance under different upfront% / Tata tail% combinations. All ₹ Crore." />
+            subtitle={`Fund performance under different upfront% / ${axisMeta.secondAxisLabel} combinations. All ₹ Crore.`} />
           <div style={{ overflowX: 'auto' }}>
             <table style={TABLE_STYLE}>
               <thead>

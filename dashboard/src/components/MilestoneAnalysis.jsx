@@ -16,6 +16,7 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine, Cell, Legend,
 } from 'recharts';
 import { COLORS, FONT, BAR_CURSOR, useUISettings, fmtCr, fmtPct, fmtMo, fmtMOIC } from '../theme';
+import { getClaimDisplayName } from '../utils/claimNames';
 import { Card, SectionTitle, KPI, CustomTooltip, DataTable } from './Shared';
 
 export default function MilestoneAnalysis({ data }) {
@@ -99,7 +100,7 @@ export default function MilestoneAnalysis({ data }) {
 
   // Timeline data from claims
   const timelineData = claims.map(c => ({
-    claim: c.claim_id,
+    claim: getClaimDisplayName(c),
     name: c.name,
     meanDuration: c.mean_duration_months || c.duration_stats?.mean || 0,
     medianDuration: c.duration_stats?.median || 0,

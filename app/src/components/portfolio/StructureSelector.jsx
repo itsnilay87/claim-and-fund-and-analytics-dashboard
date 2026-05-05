@@ -34,6 +34,7 @@ const STRUCTURES = [
       { id: 'monetisation_full_purchase', label: 'Full Upfront Purchase', desc: 'Pay a single discounted price upfront for full claim rights' },
       { id: 'monetisation_upfront_tail', label: 'Upfront % + Tail % (Grid Analysis)', desc: 'Pay upfront percentage plus tail share of outcome — grid explores all combos' },
       { id: 'monetisation_staged', label: 'Staged Milestone Payments', desc: 'Pay in stages tied to claim milestones (DAB, arbitration, etc.)' },
+      { id: 'monetisation_hybrid_payoff', label: 'Hybrid Payoff (Upfront + Capped Return)', desc: 'Upfront plus min/max of (multiple-of-upfront, % of recovery), with optional payout floor & cap' },
     ],
   },
   {

@@ -95,6 +95,21 @@ export function usePortfolioBuilder(wsId, portfolioId) {
         purchased_share_pct: 100,
         ...prev,
       }));
+    } else if (type === 'monetisation_hybrid_payoff') {
+      setStructureConfig((prev) => ({
+        upfront_basis: 'pct_soc',
+        upfront_value: 0.10,
+        upfront_range: { min: 0.05, max: 0.30, step: 0.05 },
+        return_a_type: 'multiple_of_upfront',
+        return_a_value: 3.0,
+        return_a_range: { min: 2.0, max: 4.0, step: 0.5 },
+        return_b_type: 'pct_of_recovery',
+        return_b_value: 0.30,
+        operator: 'max',
+        min_payout: null,
+        max_payout: null,
+        ...prev,
+      }));
     } else if (type === 'comparative') {
       setStructureConfig((prev) => ({
         lit_funding: {
@@ -243,6 +258,23 @@ export function usePortfolioBuilder(wsId, portfolioId) {
           milestones: structureConfig.milestones,
           legal_cost_bearer: structureConfig.legal_cost_bearer,
           purchased_share_pct: structureConfig.purchased_share_pct,
+        },
+      };
+    } else if (structure === 'monetisation_hybrid_payoff') {
+      structurePayload = {
+        type: 'monetisation_hybrid_payoff',
+        params: {
+          upfront_basis: structureConfig.upfront_basis,
+          upfront_value: structureConfig.upfront_value,
+          upfront_range: structureConfig.upfront_range,
+          return_a_type: structureConfig.return_a_type,
+          return_a_value: structureConfig.return_a_value,
+          return_a_range: structureConfig.return_a_range,
+          return_b_type: structureConfig.return_b_type,
+          return_b_value: structureConfig.return_b_value,
+          operator: structureConfig.operator,
+          min_payout: structureConfig.min_payout,
+          max_payout: structureConfig.max_payout,
         },
       };
     } else if (structure === 'comparative') {

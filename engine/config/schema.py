@@ -1046,6 +1046,94 @@ class StagedPaymentParams(BaseModel):
 # 16. PortfolioStructure
 # ============================================================================
 
+class HybridPayoffParams(BaseModel):
+    """Hybrid Payoff monetisation parameters.
+
+    Generalised investor payoff structure used as the "Standard Modern" deal:
+
+      Investor pays an *upfront* amount at close (either ``%`` of SOC or a
+      fixed ``₹ Cr`` amount) and bears all legal costs through to resolution.
+
+      On a winning resolution, the investor receives the better/worse of two
+      candidate returns combined via ``operator``:
+
+        Return A  = either ``return_a_value × upfront``  (multiple_of_upfront)
+                    or     ``return_a_value × collected`` (pct_of_recovery)
+        Return B  = same two-way switch on ``return_b_type``
+        Payout   = clip( op(A, B),  min_payout,  max_payout )
+
+      On loss, the investor recovers nothing (legal costs already sunk).
+
+    Both legs are sweepable on the analysis grid (``upfront_range`` ×
+    ``return_a_range``) for sensitivity surfaces.
+    """
+
+    # --- Upfront leg ---------------------------------------------------------
+    upfront_basis: Literal["pct_soc", "fixed_amount"] = Field(
+        default="pct_soc",
+        description="Whether upfront is a % of SOC or a fixed ₹Cr amount.",
+    )
+    upfront_value: float = Field(
+        default=0.10, ge=0.0,
+        description="Upfront amount: fraction of SOC (0..1) or absolute ₹Cr.",
+    )
+    upfront_range: _GridRange = Field(
+        default_factory=lambda: _GridRange(min=0.05, max=0.30, step=0.05),
+        description="Sweep range for upfront leg (same units as upfront_value).",
+    )
+
+    # --- Return leg A --------------------------------------------------------
+    return_a_type: Literal["multiple_of_upfront", "pct_of_recovery"] = Field(
+        default="multiple_of_upfront",
+        description="How return A is computed.",
+    )
+    return_a_value: float = Field(
+        default=3.0, ge=0.0,
+        description="Multiplier (e.g. 3.0 = 3×) or fraction (e.g. 0.30 = 30%).",
+    )
+    return_a_range: _GridRange = Field(
+        default_factory=lambda: _GridRange(min=2.0, max=4.0, step=0.5),
+        description="Sweep range for return-A leg.",
+    )
+
+    # --- Return leg B --------------------------------------------------------
+    return_b_type: Literal["multiple_of_upfront", "pct_of_recovery"] = Field(
+        default="pct_of_recovery",
+        description="How return B is computed.",
+    )
+    return_b_value: float = Field(
+        default=0.30, ge=0.0,
+        description="Multiplier or fraction for return B.",
+    )
+
+    # --- Combine + clip ------------------------------------------------------
+    operator: Literal["min", "max"] = Field(
+        default="max",
+        description="How to combine A and B: 'min' (lesser) or 'max' (greater).",
+    )
+    min_payout: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Floor (₹Cr) on the winning payout. Null = no floor.",
+    )
+    max_payout: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Cap (₹Cr) on the winning payout. Null = no cap.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_payout_bounds(self) -> "HybridPayoffParams":
+        if (self.min_payout is not None and self.max_payout is not None
+                and self.min_payout > self.max_payout):
+            raise ValueError(
+                "HybridPayoffParams: min_payout cannot exceed max_payout."
+            )
+        return self
+
+
+# ============================================================================
+# 16. PortfolioStructure
+# ============================================================================
+
 class PortfolioStructure(BaseModel):
     """Investment structure selection and parameters.
 
@@ -1059,13 +1147,20 @@ class PortfolioStructure(BaseModel):
         "monetisation_full_purchase",
         "monetisation_upfront_tail",
         "monetisation_staged",
+        "monetisation_hybrid_payoff",
         "comparative",
     ] = Field(
         ...,
         description="Investment structure type.",
     )
     params: Optional[
-        Union[LitFundingParams, FullPurchaseParams, UpfrontTailParams, StagedPaymentParams]
+        Union[
+            LitFundingParams,
+            FullPurchaseParams,
+            UpfrontTailParams,
+            StagedPaymentParams,
+            HybridPayoffParams,
+        ]
     ] = Field(
         default=None,
         description="Structure-specific parameters (not used for 'comparative' type).",
@@ -1075,7 +1170,12 @@ class PortfolioStructure(BaseModel):
         description="Litigation funding config (required for 'comparative' type).",
     )
     monetisation_params: Optional[
-        Union[FullPurchaseParams, UpfrontTailParams, StagedPaymentParams]
+        Union[
+            FullPurchaseParams,
+            UpfrontTailParams,
+            StagedPaymentParams,
+            HybridPayoffParams,
+        ]
     ] = Field(
         default=None,
         description="Monetisation config (required for 'comparative' type).",

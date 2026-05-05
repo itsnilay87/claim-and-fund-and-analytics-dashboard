@@ -22,6 +22,7 @@ import RiskAnalytics from './components/RiskAnalytics';
 import LitFundingWaterfall from './components/LitFundingWaterfall';
 import PurchaseSensitivity from './components/PurchaseSensitivity';
 import MilestoneAnalysis from './components/MilestoneAnalysis';
+import HybridPayoffCurve from './components/HybridPayoffCurve';
 import ComparativeView from './components/ComparativeView';
 import ExportPanel from './components/ExportPanel';
 
@@ -91,6 +92,14 @@ const STRUCTURE_TABS = {
   monetisation_staged: [
     { id: 'milestone', label: 'Milestone Analysis', icon: '🏁' },
   ],
+  monetisation_hybrid_payoff: [
+    { id: 'hybrid_payoff_curve',  label: 'Payoff Curve',         icon: '📈' },
+    { id: 'investment_analysis',  label: 'Investment Analysis',  icon: '📊' },
+    { id: 'pricing_grid',         label: 'Pricing Grid',         icon: '📐' },
+    { id: 'per_claim_analysis',   label: 'Per-Claim Analysis',   icon: '🔍' },
+    { id: 'legal_costs',          label: 'Legal Costs',          icon: '⚖️' },
+    { id: 'prob_sensitivity',     label: 'Prob. Sensitivity',    icon: '📈' },
+  ],
   comparative: [
     { id: 'comparative', label: 'Comparative View', icon: '🔄' },
   ],
@@ -117,6 +126,7 @@ const STRUCTURE_LABELS = {
   monetisation_full_purchase: 'Full Purchase Monetisation',
   monetisation_upfront_tail: 'Upfront + Tail Monetisation',
   monetisation_staged: 'Staged Monetisation',
+  monetisation_hybrid_payoff: 'Hybrid Payoff Monetisation',
   comparative: 'Comparative Analysis',
 };
 
@@ -169,7 +179,7 @@ export default function App() {
       case 'investment_analysis':
         return <V2InvestmentAnalysis data={data} />;
       case 'pricing_grid':
-        return <V2PricingView stochasticData={stochasticData} />;
+        return <V2PricingView stochasticData={stochasticData} structureType={structureType} hybridParams={data?.hybrid_payoff_params} />;
       case 'pricing_surface':
         return <V2PricingSurface data={pricingSurfaceData} />;
       case 'per_claim_analysis':
@@ -202,6 +212,10 @@ export default function App() {
       /* ── Staged tabs ── */
       case 'milestone':
         return <MilestoneAnalysis data={data} />;
+
+      /* ── Hybrid Payoff tabs ── */
+      case 'hybrid_payoff_curve':
+        return <HybridPayoffCurve data={data} />;
 
       /* ── Comparative tabs ── */
       case 'comparative':

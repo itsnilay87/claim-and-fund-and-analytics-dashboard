@@ -19,6 +19,7 @@ import LitFundingConfig from '../components/portfolio/LitFundingConfig';
 import FullPurchaseConfig from '../components/portfolio/FullPurchaseConfig';
 import UpfrontTailConfig from '../components/portfolio/UpfrontTailConfig';
 import StagedPaymentConfig from '../components/portfolio/StagedPaymentConfig';
+import HybridPayoffConfig from '../components/portfolio/HybridPayoffConfig';
 import SimulationSettings from '../components/portfolio/SimulationSettings';
 import PortfolioSummaryCard from '../components/portfolio/PortfolioSummaryCard';
 import PortfolioRunHistory from '../components/portfolio/PortfolioRunHistory';
@@ -28,6 +29,7 @@ const STRUCTURE_LABELS = {
   monetisation_full_purchase: 'Full Purchase',
   monetisation_upfront_tail: 'Upfront + Tail',
   monetisation_staged: 'Staged Payments',
+  monetisation_hybrid_payoff: 'Hybrid Payoff',
   comparative: 'Comparative',
 };
 
@@ -212,6 +214,9 @@ export default function PortfolioBuilder() {
                 )}
                 {structure === 'monetisation_staged' && (
                   <StagedPaymentConfig config={structureConfig} onChange={updateStructureConfig} />
+                )}
+                {structure === 'monetisation_hybrid_payoff' && (
+                  <HybridPayoffConfig config={structureConfig} onChange={updateStructureConfig} />
                 )}
                 {structure === 'comparative' && (
                   <div className="space-y-8">

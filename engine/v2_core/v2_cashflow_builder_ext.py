@@ -453,5 +453,33 @@ def _dispatch_builder(
             total_ret += ret
         merged = merge_monthly_cashflows(all_cfs)
         return merged, total_inv, total_ret
+    elif structure_type == "monetisation_hybrid_payoff":
+        from .v2_cashflow_builder import build_hybrid_payoff_cashflow_simple
+        all_cfs: list[np.ndarray] = []
+        total_inv = 0.0
+        total_ret = 0.0
+        for i, claim in enumerate(claims):
+            pr = all_paths[i][path_idx]
+            legal_burn = _get_path_legal_burn(pr)
+            cf, inv, ret = build_hybrid_payoff_cashflow_simple(
+                claim=claim,
+                total_duration_months=pr.total_duration_months,
+                quantum_received_cr=pr.collected_cr,
+                monthly_legal_burn=legal_burn,
+                upfront_basis=params.get("upfront_basis", "pct_soc"),
+                upfront_value=params.get("upfront_value", 0.10),
+                return_a_type=params.get("return_a_type", "multiple_of_upfront"),
+                return_a_value=params.get("return_a_value", 3.0),
+                return_b_type=params.get("return_b_type", "pct_of_recovery"),
+                return_b_value=params.get("return_b_value", 0.30),
+                operator=params.get("operator", "max"),
+                min_payout=params.get("min_payout"),
+                max_payout=params.get("max_payout"),
+            )
+            all_cfs.append(cf)
+            total_inv += inv
+            total_ret += ret
+        merged = merge_monthly_cashflows(all_cfs)
+        return merged, total_inv, total_ret
     else:
         raise ValueError(f"Unknown structure type: {structure_type}")

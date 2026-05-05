@@ -352,3 +352,43 @@ export function useCountUp(target, duration = 800) {
 
   return value;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Structure-aware axis metadata.
+ *
+ * The investment grid uses two axes whose semantics depend on the chosen
+ * portfolio structure.  For the canonical upfront-tail monetisation we
+ * label the second axis ``Tata Tail %`` (= 1 − award_share_pct).  For the
+ * hybrid payoff structure we label it ``Return A`` and treat the value as
+ * a multiple/percentage rather than a tail share.
+ *
+ * Components consume this helper to render labels and axis ticks correctly
+ * without changing the underlying data lookup keys.
+ * ─────────────────────────────────────────────────────────────────────── */
+export function getAxisMeta(structureType, hybridParams) {
+  if (structureType === 'monetisation_hybrid_payoff') {
+    const aType = hybridParams?.return_a_type || 'multiple_of_upfront';
+    const isMultiple = aType === 'multiple_of_upfront';
+    return {
+      isHybrid: true,
+      secondAxisLabel: 'Return A',
+      secondAxisFullLabel: isMultiple ? 'Return A (× upfront)' : 'Return A (% of recovery)',
+      // Format raw award_share_pct value (which carries return_a_value for hybrid)
+      formatSecond: (v) => isMultiple ? `${(+v).toFixed(2)}×` : `${((+v) * 100).toFixed(0)}%`,
+      formatSecondShort: (v) => isMultiple ? `${(+v).toFixed(1)}×` : `${((+v) * 100).toFixed(0)}%`,
+      // Convert grid row → label-axis value (return_a_value, not 1 - aw)
+      rowToSecond: (row) => row.return_a_value ?? row.award_share_pct ?? 0,
+      defaultSecond: hybridParams?.return_a_value ?? 3.0,
+    };
+  }
+  // Default: upfront-tail semantics
+  return {
+    isHybrid: false,
+    secondAxisLabel: 'Tata Tail %',
+    secondAxisFullLabel: 'Tata Tail % (1 − award share)',
+    formatSecond: (v) => `${((+v) * 100).toFixed(0)}%`,
+    formatSecondShort: (v) => `${((+v) * 100).toFixed(0)}%`,
+    rowToSecond: (row) => row.tata_tail_pct ?? +(1 - (row.award_share_pct || 0)).toFixed(2),
+    defaultSecond: 0.30,
+  };
+}

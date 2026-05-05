@@ -11,19 +11,14 @@
 import React, { useMemo } from 'react';
 import {
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
-import { COLORS, FONT, CHART_COLORS, useUISettings, fmtCr, fmtPct, fmtMOIC } from '../theme';
-import { Card, SectionTitle, KPI, CustomTooltip, Badge } from './Shared';
+import { COLORS, FONT, CHART_COLORS, useUISettings, fmtCr } from '../theme';
+import { Card, SectionTitle, KPI, CustomTooltip } from './Shared';
 import { getClaimDisplayName } from '../utils/claimNames';
 import JCurveFanChart from './JCurveFanChart';
 import DistributionExplorer from './DistributionExplorer';
+import BreakdownTreemap from './BreakdownTreemap';
 import KPIRow from './kpis';
-
-const prettyKey = (value) =>
-  String(value || 'Unknown')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase());
 
 /* ═══════════════════════════════════════════════════════════
  *  Main component
@@ -42,56 +37,6 @@ export default function ExecutiveSummary({ data, structureType }) {
       fill: CHART_COLORS[i % CHART_COLORS.length],
     })),
   [claims]);
-
-  // Jurisdiction bar data
-  const jurisdictionData = useMemo(() => {
-    const jb = risk?.concentration?.jurisdiction_breakdown || {};
-    if (Object.keys(jb).length > 0) {
-      return Object.entries(jb).map(([k, v]) => ({
-        name: prettyKey(k),
-        weight: +(Number(v || 0) * 100).toFixed(1),
-      }));
-    }
-
-    const totalSOC = claims.reduce((sum, claim) => sum + Number(claim?.soc_value_cr || 0), 0);
-    if (totalSOC <= 0) return [];
-
-    const jurSums = {};
-    claims.forEach((claim) => {
-      const key = String(claim?.jurisdiction || 'unknown').trim() || 'unknown';
-      jurSums[key] = (jurSums[key] || 0) + Number(claim?.soc_value_cr || 0);
-    });
-
-    return Object.entries(jurSums).map(([k, v]) => ({
-      name: prettyKey(k),
-      weight: +((v / totalSOC) * 100).toFixed(1),
-    }));
-  }, [risk, claims]);
-
-  // Claim type bar data
-  const typeData = useMemo(() => {
-    const tb = risk?.concentration?.type_breakdown || {};
-    if (Object.keys(tb).length > 0) {
-      return Object.entries(tb).map(([k, v]) => ({
-        name: prettyKey(k),
-        weight: +(Number(v || 0) * 100).toFixed(1),
-      }));
-    }
-
-    const totalSOC = claims.reduce((sum, claim) => sum + Number(claim?.soc_value_cr || 0), 0);
-    if (totalSOC <= 0) return [];
-
-    const typeSums = {};
-    claims.forEach((claim) => {
-      const key = String(claim?.claim_type || 'unclassified').trim() || 'unclassified';
-      typeSums[key] = (typeSums[key] || 0) + Number(claim?.soc_value_cr || 0);
-    });
-
-    return Object.entries(typeSums).map(([k, v]) => ({
-      name: prettyKey(k),
-      weight: +((v / totalSOC) * 100).toFixed(1),
-    }));
-  }, [risk, claims]);
 
   // J-curve default scenario key
   const jcDefault = data?.jcurve_data?.default_key || null;
@@ -128,44 +73,34 @@ export default function ExecutiveSummary({ data, structureType }) {
           </ResponsiveContainer>
         </Card>
 
-        {/* Jurisdiction */}
+        {/* Jurisdiction × Claim treemap */}
         <Card>
-          <SectionTitle number="2" title="Jurisdiction Breakdown" subtitle="SOC weight by jurisdiction" />
-          {jurisdictionData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={ui.chartHeight.sm}>
-              <BarChart data={jurisdictionData} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
-                <XAxis type="number" tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} unit="%" />
-                <YAxis type="category" dataKey="name" width={120} tick={{ fill: COLORS.text, fontSize: ui.sizes.sm }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="weight" name="Weight %" fill={COLORS.accent6} radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div style={{ color: COLORS.textMuted, padding: 40, textAlign: 'center' }}>
-              Jurisdiction data unavailable. Ensure claims include a jurisdiction and SOC value.
-            </div>
-          )}
+          <SectionTitle
+            number="2"
+            title="Jurisdiction × Claim"
+            subtitle="Hierarchical SOC weight — tile size = SOC, hue = jurisdiction"
+          />
+          <BreakdownTreemap
+            claims={claims}
+            groupBy="jurisdiction"
+            height={ui.chartHeight.sm}
+            emptyText="Jurisdiction data unavailable. Ensure claims include a jurisdiction and SOC value."
+          />
         </Card>
 
-        {/* Claim type */}
+        {/* Claim type × Claim treemap */}
         <Card>
-          <SectionTitle number="3" title="Claim Type Distribution" subtitle="SOC weight by type" />
-          {typeData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={ui.chartHeight.sm}>
-              <BarChart data={typeData} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
-                <XAxis type="number" tick={{ fill: COLORS.textMuted, fontSize: ui.sizes.sm }} unit="%" />
-                <YAxis type="category" dataKey="name" width={120} tick={{ fill: COLORS.text, fontSize: ui.sizes.sm }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="weight" name="Weight %" fill={COLORS.accent2} radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div style={{ color: COLORS.textMuted, padding: 40, textAlign: 'center' }}>
-              Claim type data unavailable. Ensure claims include claim_type and SOC value.
-            </div>
-          )}
+          <SectionTitle
+            number="3"
+            title="Claim Type × Claim"
+            subtitle="Hierarchical SOC weight — tile size = SOC, hue = claim type"
+          />
+          <BreakdownTreemap
+            claims={claims}
+            groupBy="claim_type"
+            height={ui.chartHeight.sm}
+            emptyText="Claim type data unavailable. Ensure claims include claim_type and SOC value."
+          />
         </Card>
       </div>
 
@@ -174,34 +109,6 @@ export default function ExecutiveSummary({ data, structureType }) {
         <SectionTitle number="4" title="Return Distribution" subtitle="Monte Carlo simulated outcomes — toggle metric, hover bars for details" />
         <DistributionExplorer data={data} defaultMetric="moic" height={300} />
       </Card>
-
-      {/* Section 3b — MC Distribution Summary (V2 enhanced) */}
-      {data?.mc_distributions && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: ui.space.lg }}>
-          {['moic', 'irr', 'duration'].map(metric => {
-            const dist = data.mc_distributions[metric];
-            if (!dist) return null;
-            const label = metric === 'moic' ? 'MOIC' : metric === 'irr' ? 'IRR' : 'Duration (months)';
-            return (
-              <Card key={metric}>
-                <SectionTitle title={`${label} Distribution`} subtitle="P5 / P25 / P50 / P75 / P95" />
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, textAlign: 'center' }}>
-                  {['p5', 'p25', 'p50', 'p75', 'p95'].map(pct => (
-                    <div key={pct}>
-                      <div style={{ color: COLORS.textMuted, fontSize: ui.sizes.xs, fontWeight: 600, textTransform: 'uppercase' }}>{pct}</div>
-                      <div style={{ color: COLORS.textBright, fontSize: ui.sizes.lg, fontWeight: 800, marginTop: 4 }}>
-                        {metric === 'moic' ? fmtMOIC(dist[pct] || 0) :
-                         metric === 'irr' ? fmtPct(dist[pct] || 0) :
-                         (dist[pct] || 0).toFixed(0) + 'm'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
 
       {/* Section 4 — J-Curve Fan Chart */}
       <Card>

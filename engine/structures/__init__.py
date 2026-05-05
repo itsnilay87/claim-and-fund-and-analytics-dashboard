@@ -11,6 +11,7 @@ from .litigation_funding import LitigationFundingHandler
 from .monetisation_upfront_tail import UpfrontTailHandler
 from .monetisation_full_purchase import FullPurchaseHandler
 from .monetisation_staged import StagedHandler
+from .monetisation_hybrid_payoff import HybridPayoffHandler
 from .comparative import ComparativeHandler
 
 _REGISTRY: dict[str, type[StructureHandler]] = {
@@ -18,6 +19,7 @@ _REGISTRY: dict[str, type[StructureHandler]] = {
     "monetisation_upfront_tail": UpfrontTailHandler,
     "monetisation_full_purchase": FullPurchaseHandler,
     "monetisation_staged": StagedHandler,
+    "monetisation_hybrid_payoff": HybridPayoffHandler,
     "comparative": ComparativeHandler,
 }
 
@@ -37,5 +39,6 @@ __all__ = [
     "UpfrontTailHandler",
     "FullPurchaseHandler",
     "StagedHandler",
+    "HybridPayoffHandler",
     "ComparativeHandler",
 ]

@@ -29,6 +29,7 @@ import numpy as np
 from engine.config.schema import (
     ClaimConfig,
     FullPurchaseParams,
+    HybridPayoffParams,
     LitFundingParams,
     MilestonePayment,
     PathResult,
@@ -271,6 +272,108 @@ def build_upfront_tail_cashflow(
 
 
 # ===================================================================
+# 3b. Hybrid Payoff cashflow
+# ===================================================================
+
+def _hybrid_payoff_amount(
+    upfront_cr: float,
+    collected_cr: float,
+    return_a_type: str,
+    return_a_value: float,
+    return_b_type: str,
+    return_b_value: float,
+    operator: str,
+    min_payout: Optional[float],
+    max_payout: Optional[float],
+) -> float:
+    """Inline copy of v2_cashflow_builder.compute_hybrid_payoff (avoid cross-package import)."""
+    if collected_cr <= 0.0:
+        return 0.0
+
+    def _leg(kind: str, value: float) -> float:
+        if kind == "multiple_of_upfront":
+            return float(value) * float(upfront_cr)
+        if kind == "pct_of_recovery":
+            return float(value) * float(collected_cr)
+        raise ValueError(f"Unknown return leg type: {kind!r}")
+
+    a = _leg(return_a_type, return_a_value)
+    b = _leg(return_b_type, return_b_value)
+    payout = max(a, b) if operator == "max" else min(a, b)
+
+    if min_payout is not None:
+        payout = max(payout, float(min_payout))
+    if max_payout is not None:
+        payout = min(payout, float(max_payout))
+
+    payout = min(payout, float(collected_cr))
+    return max(payout, 0.0)
+
+
+def build_hybrid_payoff_cashflow(
+    claim: ClaimConfig,
+    path_result: PathResult,
+    upfront_basis: str,
+    upfront_value: float,
+    return_a_type: str,
+    return_a_value: float,
+    return_b_type: str,
+    return_b_value: float,
+    operator: str = "max",
+    min_payout: Optional[float] = None,
+    max_payout: Optional[float] = None,
+    start_date: str = "2026-04-30",
+    expected_quantum_cr: Optional[float] = None,
+) -> tuple[list[datetime], list[float], float, float]:
+    """Cashflow for the hybrid payoff structure (single claim, single MC path).
+
+    Investor pays an upfront amount + bears legal costs, and on win receives
+    a payout = clip(op(A, B), min, max), where A and B are independently
+    parameterised as multiples of the upfront or fractions of recovery.
+
+    See ``HybridPayoffParams`` for the full parameter spec.
+    """
+    start = _parse_start_date(start_date)
+    payment_month = max(int(math.ceil(path_result.timeline_months)), 1)
+
+    if upfront_basis == "fixed_amount":
+        upfront = max(float(upfront_value), 1e-6)
+    elif upfront_basis == "pct_eq" and expected_quantum_cr is not None:
+        upfront = max(float(upfront_value) * float(expected_quantum_cr), 1e-6)
+    else:
+        upfront = max(float(upfront_value) * float(claim.soc_value_cr), 1e-6)
+
+    burn = _spread_legal_costs(path_result, payment_month)
+
+    payout = 0.0
+    if path_result.outcome == "TRUE_WIN" and path_result.collected_cr > 0:
+        payout = _hybrid_payoff_amount(
+            upfront_cr=upfront,
+            collected_cr=path_result.collected_cr,
+            return_a_type=return_a_type,
+            return_a_value=return_a_value,
+            return_b_type=return_b_type,
+            return_b_value=return_b_value,
+            operator=operator,
+            min_payout=min_payout,
+            max_payout=max_payout,
+        )
+
+    total_legal = float(np.sum(burn))
+    total_invested = upfront + total_legal
+
+    n_months = payment_month + 1
+    dates = [_month_end(start, m) for m in range(n_months)]
+    cashflows = [0.0] * n_months
+    cashflows[0] = -upfront - burn[0]
+    for m in range(1, payment_month):
+        cashflows[m] = -burn[m]
+    cashflows[payment_month] = -burn[payment_month] + payout
+
+    return dates, cashflows, total_invested, payout
+
+
+# ===================================================================
 # 4. Staged Milestone Payment cashflow
 # ===================================================================
 
@@ -424,6 +527,23 @@ def _build_single_claim_cashflow(
             milestones=params_sp.milestones,
             legal_cost_bearer=params_sp.legal_cost_bearer,
             purchased_share_pct=params_sp.purchased_share_pct,
+            start_date=start_date,
+        )
+
+    elif stype == "monetisation_hybrid_payoff":
+        params_hp: HybridPayoffParams = structure.params  # type: ignore[assignment]
+        return build_hybrid_payoff_cashflow(
+            claim=claim,
+            path_result=path_result,
+            upfront_basis=params_hp.upfront_basis,
+            upfront_value=params_hp.upfront_value,
+            return_a_type=params_hp.return_a_type,
+            return_a_value=params_hp.return_a_value,
+            return_b_type=params_hp.return_b_type,
+            return_b_value=params_hp.return_b_value,
+            operator=params_hp.operator,
+            min_payout=params_hp.min_payout,
+            max_payout=params_hp.max_payout,
             start_date=start_date,
         )
 

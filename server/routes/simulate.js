@@ -13,7 +13,6 @@ const { startRun, startLegacyRun } = require('../services/simulationRunner');
 const { mergeConfig, getDefaults, loadDefaults, validateConfig } = require('../services/configService');
 const { authenticateToken } = require('../middleware/auth');
 const SimulationRun = require('../db/models/SimulationRun');
-const UserSettings = require('../db/models/UserSettings');
 const fs = require('fs');
 const path = require('path');
 
@@ -170,6 +169,45 @@ function validateAndEnrichPortfolioStructure(portfolioConfig) {
     if (!structParams.tail_range && structParams.tail_pct == null) {
       console.warn('[simulate/portfolio] Missing tail_range/tail_pct, using defaults');
       structParams.tail_range = { ...DEFAULT_TAIL_RANGE };
+    }
+  }
+
+  if (structType === 'monetisation_hybrid_payoff') {
+    if (structParams.upfront_basis == null) structParams.upfront_basis = 'pct_soc';
+    if (structParams.upfront_value == null) structParams.upfront_value = 0.10;
+    if (!structParams.upfront_range) {
+      structParams.upfront_range = { min: 0.05, max: 0.30, step: 0.05 };
+    }
+    if (structParams.return_a_type == null) structParams.return_a_type = 'multiple_of_upfront';
+    if (structParams.return_a_value == null) structParams.return_a_value = 3.0;
+    if (!structParams.return_a_range) {
+      structParams.return_a_range = { min: 2.0, max: 4.0, step: 0.5 };
+    }
+    if (structParams.return_b_type == null) structParams.return_b_type = 'pct_of_recovery';
+    if (structParams.return_b_value == null) structParams.return_b_value = 0.30;
+    if (structParams.operator == null) structParams.operator = 'max';
+
+    const allowedOps = ['min', 'max'];
+    if (!allowedOps.includes(structParams.operator)) {
+      throw new Error(`Invalid hybrid_payoff operator: ${structParams.operator}`);
+    }
+    const allowedBasis = ['pct_soc', 'fixed_amount'];
+    if (!allowedBasis.includes(structParams.upfront_basis)) {
+      throw new Error(`Invalid hybrid_payoff upfront_basis: ${structParams.upfront_basis}`);
+    }
+    const allowedReturn = ['multiple_of_upfront', 'pct_of_recovery'];
+    if (!allowedReturn.includes(structParams.return_a_type)) {
+      throw new Error(`Invalid hybrid_payoff return_a_type: ${structParams.return_a_type}`);
+    }
+    if (!allowedReturn.includes(structParams.return_b_type)) {
+      throw new Error(`Invalid hybrid_payoff return_b_type: ${structParams.return_b_type}`);
+    }
+    if (
+      structParams.min_payout != null
+      && structParams.max_payout != null
+      && Number(structParams.min_payout) > Number(structParams.max_payout)
+    ) {
+      throw new Error('hybrid_payoff: min_payout must be ≤ max_payout');
     }
   }
 
@@ -356,15 +394,6 @@ router.post('/portfolio', authenticateToken, simulateLimiter, async (req, res) =
     // Create DB record first to get the UUID
     let dbRunId = null;
     try {
-      // Derive a meaningful run name: prefer the user-provided portfolio name,
-      // otherwise fall back to a timestamped label.
-      const providedName = (req.body.portfolio_config?.name || '').trim();
-      const fallbackName = `Portfolio Run — ${new Date()
-        .toISOString()
-        .replace('T', ' ')
-        .slice(0, 16)}`;
-      const runName = providedName || fallbackName;
-
       const dbRun = await SimulationRun.create(req.user.id, {
         workspaceId: req.body.workspace_id || null,
         portfolioId: req.body.portfolio_id || null,
@@ -372,20 +401,8 @@ router.post('/portfolio', authenticateToken, simulateLimiter, async (req, res) =
         mode: 'portfolio',
         structureType: config.structure?.type,
         config: config,
-        name: runName,
       });
       dbRunId = dbRun.id;
-
-      // Auto-save the run if the user has opted in (exempts it from
-      // deleteOldUnsavedRuns cleanup).
-      try {
-        const settings = await UserSettings.getByUserId(req.user.id);
-        if (settings.auto_save_portfolio_runs) {
-          await SimulationRun.markSaved(dbRunId, req.user.id, runName);
-        }
-      } catch (settingsErr) {
-        console.error('[POST /api/simulate/portfolio] auto-save check failed:', settingsErr.message);
-      }
     } catch (dbErr) {
       console.error('[POST /api/simulate/portfolio] DB create failed (continuing without DB):', dbErr.message);
     }

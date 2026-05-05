@@ -12,15 +12,18 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine,
 } from 'recharts';
 import { COLORS, FONT, CHART_COLORS, useUISettings, fmtCr, fmtPct, fmtMOIC, BAR_CURSOR } from '../theme';
-import { Card, SectionTitle, KPI, CustomTooltip, Badge } from './Shared';
+import { Card, SectionTitle, KPI, CustomTooltip, Badge, getAxisMeta } from './Shared';
 import JCurveFanChart from './JCurveFanChart';
 import DistributionExplorer from './DistributionExplorer';
 import { getClaimDisplayName } from '../../utils/claimNames';
 
-export default function ExecutiveSummary({ data, stochasticData }) {
+export default function ExecutiveSummary({ data, stochasticData, structureType }) {
   const { ui } = useUISettings();
   const { claims, simulation_meta } = data;
   const [showFormulas, setShowFormulas] = useState(false);
+  const axisMeta = getAxisMeta(structureType || data.structure_type, data.hybrid_payoff_params);
+  const tailLabel = axisMeta.secondAxisLabel;
+  const fmtTailOpt = axisMeta.isHybrid ? (t) => axisMeta.formatSecond(t) : (t) => `${t}%`;
 
   /* ── Stochastic grid metadata ── */
   const stocMeta  = stochasticData?.meta || {};
@@ -166,7 +169,7 @@ export default function ExecutiveSummary({ data, stochasticData }) {
         </Card>
 
         <Card>
-          <SectionTitle number="2" title="Cashflow J-Curve" subtitle="Cumulative portfolio cashflow — 10% upfront, 20% Tata tail" />
+          <SectionTitle number="2" title="Cashflow J-Curve" subtitle={`Cumulative portfolio cashflow — 10% upfront, ${axisMeta.isHybrid ? axisMeta.formatSecond(axisMeta.defaultSecond) + ' ' + tailLabel : '20% Tata tail'}`} />
           <JCurveFanChart data={data} height={ui.chartHeight.sm} compact upfrontPct={0.10} tataTailPct={0.20} />
         </Card>
       </div>
@@ -246,7 +249,7 @@ export default function ExecutiveSummary({ data, stochasticData }) {
             >
               {upOpts.map(u => <option key={u} value={u}>{u}%</option>)}
             </select>
-            <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm }}>Tata Tail</span>
+            <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm }}>{tailLabel}</span>
             <select
               value={distTail}
               onChange={e => setDistTail(Number(e.target.value))}
@@ -255,7 +258,7 @@ export default function ExecutiveSummary({ data, stochasticData }) {
                 borderRadius: 6, padding: '5px 10px', fontSize: ui.sizes.sm, fontWeight: 600, cursor: 'pointer',
               }}
             >
-              {tailOpts.map(t => <option key={t} value={t}>{t}%</option>)}
+              {tailOpts.map(t => <option key={t} value={t}>{fmtTailOpt(t)}</option>)}
             </select>
           </div>
         </div>
@@ -265,7 +268,7 @@ export default function ExecutiveSummary({ data, stochasticData }) {
       {/* ── Plot 5: Investment Scenario Summary with tail % dropdown ── */}
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: ui.space.md }}>
-          <SectionTitle number="5" title="Investment Scenario Summary" subtitle={`Upfront levels at ${selectedTail}% Tata Tail`} />
+          <SectionTitle number="5" title="Investment Scenario Summary" subtitle={`Upfront levels at ${fmtTailOpt(selectedTail)} ${tailLabel}`} />
           <select
             value={selectedTail}
             onChange={e => setSelectedTail(Number(e.target.value))}
@@ -276,7 +279,7 @@ export default function ExecutiveSummary({ data, stochasticData }) {
             }}
           >
             {tailOpts.map(t => (
-              <option key={t} value={t}>{t}% Tata Tail</option>
+              <option key={t} value={t}>{fmtTailOpt(t)} {tailLabel}</option>
             ))}
           </select>
         </div>
@@ -358,7 +361,7 @@ export default function ExecutiveSummary({ data, stochasticData }) {
                 borderRadius: 6, padding: '6px 12px', fontSize: ui.sizes.sm, fontWeight: 600, cursor: 'pointer',
               }}
             >
-              {tailOpts.map(t => <option key={t} value={t}>{t}% Tata Tail</option>)}
+              {tailOpts.map(t => <option key={t} value={t}>{fmtTailOpt(t)} {tailLabel}</option>)}
             </select>
           </div>
         </div>
@@ -367,10 +370,17 @@ export default function ExecutiveSummary({ data, stochasticData }) {
           const pcGrid = data.per_claim_grid || {};
           const chartData = claims.map((c, idx) => {
             const entries = pcGrid[c.claim_id] || [];
-            const match = entries.find(e =>
-              Math.abs(e.upfront_pct - ccUpfront / 100) < 0.001 &&
-              Math.abs(e.tata_tail_pct - ccTail / 100) < 0.001
-            );
+            const match = entries.find(e => {
+              if (Math.abs(e.upfront_pct - ccUpfront / 100) < 0.001) {
+                if (axisMeta.isHybrid) {
+                  // Hybrid: dropdown value is index/raw return_a, match against return_a_value or award_share_pct
+                  return Math.abs((e.return_a_value ?? e.award_share_pct ?? 0) - ccTail) < 0.001
+                    || Math.abs((e.return_a_value ?? e.award_share_pct ?? 0) - ccTail / 100) < 0.001;
+                }
+                return Math.abs(e.tata_tail_pct - ccTail / 100) < 0.001;
+              }
+              return false;
+            });
             return {
               claim: getClaimDisplayName(c),
               fullName: getClaimDisplayName(c),

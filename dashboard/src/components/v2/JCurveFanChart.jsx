@@ -30,6 +30,8 @@ export default function JCurveFanChart({
   tataTailPct = 0.20,
   showControls = false,
   onScenarioChange,
+  tailLabel = 'Tata Tail %',
+  formatTail,
 }) {
   const { ui } = useUISettings();
   const svgRef = useRef(null);
@@ -480,10 +482,10 @@ export default function JCurveFanChart({
             </select>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: COLORS.textMuted, fontSize: 12, fontWeight: 600 }}>Tata Tail %:</span>
+            <span style={{ color: COLORS.textMuted, fontSize: 12, fontWeight: 600 }}>{tailLabel}:</span>
             <select value={selectedTail} onChange={handleTailChange} style={selectStyle}>
               {availableTails.map(v => (
-                <option key={v} value={v}>{(v * 100).toFixed(0)}%</option>
+                <option key={v} value={v}>{formatTail ? formatTail(v) : `${(v * 100).toFixed(0)}%`}</option>
               ))}
             </select>
           </div>

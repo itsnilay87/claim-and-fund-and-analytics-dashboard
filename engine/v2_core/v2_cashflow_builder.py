@@ -298,3 +298,188 @@ def build_cashflow_simple(
     total_return = investor_inflow
 
     return cf, total_invested, total_return
+
+
+# ===================================================================
+# Hybrid Payoff Helpers
+# ===================================================================
+
+def compute_hybrid_payoff(
+    upfront_cr: float,
+    collected_cr: float,
+    return_a_type: str,
+    return_a_value: float,
+    return_b_type: str,
+    return_b_value: float,
+    operator: str = "max",
+    min_payout: Optional[float] = None,
+    max_payout: Optional[float] = None,
+) -> float:
+    """Compute investor payout under the hybrid payoff structure.
+
+    Returns 0 when ``collected_cr`` is 0 (i.e. claim lost).
+
+    Each return leg can be expressed as a multiple of the upfront paid
+    (``multiple_of_upfront``) or as a fraction of the recovered amount
+    (``pct_of_recovery``).  The two legs are combined via ``operator``
+    ('min' or 'max') and clipped to ``[min_payout, max_payout]``.
+    """
+    if collected_cr <= 0.0:
+        return 0.0
+
+    def _leg(kind: str, value: float) -> float:
+        if kind == "multiple_of_upfront":
+            return float(value) * float(upfront_cr)
+        if kind == "pct_of_recovery":
+            return float(value) * float(collected_cr)
+        raise ValueError(f"Unknown return leg type: {kind!r}")
+
+    a = _leg(return_a_type, return_a_value)
+    b = _leg(return_b_type, return_b_value)
+
+    payout = max(a, b) if operator == "max" else min(a, b)
+
+    if min_payout is not None:
+        payout = max(payout, float(min_payout))
+    if max_payout is not None:
+        payout = min(payout, float(max_payout))
+
+    # Cap at collected amount: investor can never receive more than what
+    # was actually recovered from the counterparty.
+    payout = min(payout, float(collected_cr))
+    return max(payout, 0.0)
+
+
+def _resolve_upfront(
+    claim: ClaimConfig,
+    upfront_basis: str,
+    upfront_value: float,
+    expected_quantum_cr: Optional[float] = None,
+) -> float:
+    """Resolve the absolute upfront amount in ₹ Cr."""
+    if upfront_basis == "fixed_amount":
+        return max(float(upfront_value), 1e-6)
+    if upfront_basis == "pct_eq" and expected_quantum_cr is not None:
+        return max(float(upfront_value) * float(expected_quantum_cr), 1e-6)
+    # default → pct_soc
+    return max(float(upfront_value) * float(claim.soc_value_cr), 1e-6)
+
+
+# ===================================================================
+# Hybrid Payoff cashflow builders
+# ===================================================================
+
+def build_hybrid_payoff_cashflow(
+    claim: ClaimConfig,
+    total_duration_months: float,
+    quantum_received_cr: float,
+    monthly_legal_burn: np.ndarray,
+    upfront_basis: str,
+    upfront_value: float,
+    return_a_type: str,
+    return_a_value: float,
+    return_b_type: str,
+    return_b_value: float,
+    operator: str = "max",
+    min_payout: Optional[float] = None,
+    max_payout: Optional[float] = None,
+    expected_quantum_cr: Optional[float] = None,
+) -> tuple[list[datetime], list[float], float, float]:
+    """Dated cashflow for the hybrid payoff structure.
+
+    Investor pays ``upfront`` at month 0 + bears legal costs through to
+    payment month, then receives ``compute_hybrid_payoff(...)`` on a winning
+    resolution.
+
+    Returns ``(dates, cashflows, total_invested, total_return)``.
+    """
+    start_date = _parse_start_date()
+    payment_month = max(int(math.ceil(total_duration_months)), 1)
+
+    upfront = _resolve_upfront(
+        claim, upfront_basis, upfront_value, expected_quantum_cr,
+    )
+
+    # Pad / truncate monthly legal burn
+    burn_length = len(monthly_legal_burn)
+    legal_costs_by_month = np.zeros(payment_month + 1)
+    for i in range(min(burn_length, payment_month + 1)):
+        legal_costs_by_month[i] = monthly_legal_burn[i]
+
+    # Investor payout on win
+    investor_inflow = compute_hybrid_payoff(
+        upfront_cr=upfront,
+        collected_cr=quantum_received_cr,
+        return_a_type=return_a_type,
+        return_a_value=return_a_value,
+        return_b_type=return_b_type,
+        return_b_value=return_b_value,
+        operator=operator,
+        min_payout=min_payout,
+        max_payout=max_payout,
+    )
+
+    n_months = payment_month + 1
+    cashflows = [0.0] * n_months
+    dates = [_month_end(start_date, m) for m in range(n_months)]
+
+    cashflows[0] = -upfront - legal_costs_by_month[0]
+    for m in range(1, payment_month):
+        cashflows[m] = -legal_costs_by_month[m]
+    cashflows[payment_month] = -legal_costs_by_month[payment_month] + investor_inflow
+
+    total_invested = upfront + float(np.sum(legal_costs_by_month))
+    total_return = investor_inflow
+    return dates, cashflows, total_invested, total_return
+
+
+def build_hybrid_payoff_cashflow_simple(
+    claim: ClaimConfig,
+    total_duration_months: float,
+    quantum_received_cr: float,
+    monthly_legal_burn: np.ndarray,
+    upfront_basis: str,
+    upfront_value: float,
+    return_a_type: str,
+    return_a_value: float,
+    return_b_type: str,
+    return_b_value: float,
+    operator: str = "max",
+    min_payout: Optional[float] = None,
+    max_payout: Optional[float] = None,
+    expected_quantum_cr: Optional[float] = None,
+) -> tuple[np.ndarray, float, float]:
+    """Monthly-indexed (no dates) variant of ``build_hybrid_payoff_cashflow``."""
+    payment_month = max(int(math.ceil(total_duration_months)), 1)
+
+    upfront = _resolve_upfront(
+        claim, upfront_basis, upfront_value, expected_quantum_cr,
+    )
+
+    burn_length = len(monthly_legal_burn)
+    legal_costs_by_month = np.zeros(payment_month + 1)
+    for i in range(min(burn_length, payment_month + 1)):
+        legal_costs_by_month[i] = monthly_legal_burn[i]
+
+    investor_inflow = compute_hybrid_payoff(
+        upfront_cr=upfront,
+        collected_cr=quantum_received_cr,
+        return_a_type=return_a_type,
+        return_a_value=return_a_value,
+        return_b_type=return_b_type,
+        return_b_value=return_b_value,
+        operator=operator,
+        min_payout=min_payout,
+        max_payout=max_payout,
+    )
+
+    n_months = payment_month + 1
+    cf = np.zeros(n_months)
+    cf[0] = -upfront - legal_costs_by_month[0]
+    for m in range(1, payment_month):
+        cf[m] = -legal_costs_by_month[m]
+    cf[payment_month] += -legal_costs_by_month[payment_month] + investor_inflow
+
+    total_invested = upfront + float(np.sum(legal_costs_by_month))
+    total_return = investor_inflow
+    return cf, total_invested, total_return

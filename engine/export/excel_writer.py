@@ -302,7 +302,7 @@ def _build_per_claim(wb: Workbook, data: dict) -> None:
     for i, c in enumerate(claims):
         net = (c.get("mean_collected_cr", 0) or 0) - (c.get("mean_legal_costs_cr", 0) or 0)
         row_data = [
-            c.get("claim_id", ""),
+            c.get("name") or c.get("claim_id", ""),
             c.get("name", ""),
             c.get("jurisdiction", ""),
             c.get("claim_type", ""),
@@ -428,10 +428,10 @@ def _build_model_assumptions(wb: Workbook, data: dict) -> None:
     # Per-claim inputs summary
     row += len(bands) + 5 if bands else 12
     ws.cell(row=row, column=1, value="Claim Inputs").font = _KPI_FONT
-    _write_header_row(ws, row + 1, ["Claim ID", "Jurisdiction", "SOC (₹ Cr)", "Win Rate"])
+    _write_header_row(ws, row + 1, ["Claim", "Jurisdiction", "SOC (₹ Cr)", "Win Rate"])
     for j, c in enumerate(claims):
         _write_row(ws, row + 2 + j, [
-            c.get("claim_id", ""),
+            c.get("name") or c.get("claim_id", ""),
             c.get("jurisdiction", ""),
             c.get("soc_value_cr", 0),
             c.get("win_rate", 0),

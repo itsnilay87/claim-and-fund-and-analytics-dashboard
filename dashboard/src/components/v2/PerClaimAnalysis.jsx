@@ -9,14 +9,15 @@ import {
   ComposedChart, Line,
 } from 'recharts';
 import { COLORS, FONT, CHART_COLORS, SIZES, SPACE, useUISettings, fmtCr, fmtPct, fmtMOIC, fmtMo, moicColor, BAR_CURSOR } from '../theme';
-import { Card, SectionTitle, KPI, CustomTooltip, Badge } from './Shared';
+import { Card, SectionTitle, KPI, CustomTooltip, Badge, getAxisMeta } from './Shared';
 import { getClaimDisplayName } from '../../utils/claimNames';
 
 export default function PerClaimAnalysis({ data }) {
   const { ui } = useUISettings();
   const { claims, per_claim_grid, simulation_meta, cashflow_analysis } = data;
+  const axisMeta = getAxisMeta(data.structure_type, data.hybrid_payoff_params);
   const [selectedClaim, setSelectedClaim] = useState(claims[0]?.claim_id || '');
-  const [selectedTail, setSelectedTail] = useState(30);
+  const [selectedTail, setSelectedTail] = useState(axisMeta.isHybrid ? Math.round(axisMeta.defaultSecond * 100) : 30);
 
   const claim = claims.find(c => c.claim_id === selectedClaim);
   if (!claim) return <Card><SectionTitle title="No claim data" /></Card>;
@@ -27,10 +28,17 @@ export default function PerClaimAnalysis({ data }) {
   const claimCashflow = cashflow_analysis?.per_claim?.find(c => c.claim_id === selectedClaim) || {};
 
   // Available tail percentages from the data
-  const tailOptions = [...new Set(claimScenarios.map(s => Math.round(s.tata_tail_pct * 100)))].sort((a, b) => a - b);
+  // For hybrid: use return_a_value (× 100 to keep dropdown integer-friendly)
+  const tailOptions = axisMeta.isHybrid
+    ? [...new Set(claimScenarios.map(s => Math.round((s.return_a_value ?? s.award_share_pct ?? 0) * 100)))].sort((a, b) => a - b)
+    : [...new Set(claimScenarios.map(s => Math.round(s.tata_tail_pct * 100)))].sort((a, b) => a - b);
 
   // SOC scenarios filtered by selected tail %
-  const socScenarios = claimScenarios.filter(s => s.basis === 'soc' && Math.abs(s.tata_tail_pct - selectedTail / 100) < 0.001);
+  const socScenarios = claimScenarios.filter(s => s.basis === 'soc' && (
+    axisMeta.isHybrid
+      ? Math.abs((s.return_a_value ?? s.award_share_pct ?? 0) - selectedTail / 100) < 0.001
+      : Math.abs(s.tata_tail_pct - selectedTail / 100) < 0.001
+  ));
 
   const socBarData = socScenarios.map(s => ({
     pct: `${(s.upfront_pct * 100).toFixed(0)}%`,
@@ -201,7 +209,7 @@ export default function PerClaimAnalysis({ data }) {
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: ui.space.md }}>
             <SectionTitle number="1" title={`${selectedClaim} — SOC Pricing MOIC & IRR`}
-              subtitle={`Dual axis: E[MOIC] (bars, left) and E[IRR|Win] (line, right) at ${selectedTail}% Tata Tail`} />
+              subtitle={`Dual axis: E[MOIC] (bars, left) and E[IRR|Win] (line, right) at ${axisMeta.isHybrid ? axisMeta.formatSecond(selectedTail / 100) : selectedTail + '%'} ${axisMeta.secondAxisLabel}`} />
             {tailOptions.length > 1 && (
               <select
                 value={selectedTail}
@@ -212,7 +220,7 @@ export default function PerClaimAnalysis({ data }) {
                   marginLeft: 'auto', cursor: 'pointer',
                 }}
               >
-                {tailOptions.map(t => <option key={t} value={t}>{t}% Tata Tail</option>)}
+                {tailOptions.map(t => <option key={t} value={t}>{axisMeta.isHybrid ? `${axisMeta.formatSecond(t / 100)} ${axisMeta.secondAxisLabel}` : `${t}% Tata Tail`}</option>)}
               </select>
             )}
           </div>

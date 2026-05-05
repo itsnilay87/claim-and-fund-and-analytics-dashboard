@@ -15,7 +15,7 @@ import {
   BarChart, ScatterChart, Scatter, ZAxis,
 } from 'recharts';
 import { COLORS, FONT, SIZES, SPACE, useUISettings, fmtCr, fmtPct, fmtMOIC, moicColor, irrColor, lossColor, varColor, BAR_CURSOR } from '../theme';
-import { Card, SectionTitle, KPI, CustomTooltip } from './Shared';
+import { Card, SectionTitle, KPI, CustomTooltip, getAxisMeta } from './Shared';
 import { getClaimDisplayName } from '../../utils/claimNames';
 
 export default function InvestmentAnalysis({ data }) {
@@ -27,6 +27,7 @@ export default function InvestmentAnalysis({ data }) {
   const ps     = ca.portfolio_summary || {};
   const perClaim = ca.per_claim || [];
   const claims = data.claims || [];
+  const axisMeta = getAxisMeta(data.structure_type, data.hybrid_payoff_params);
   const [heatmapMetric, setHeatmapMetric] = useState('irr');
   const [showFunnelFormula, setShowFunnelFormula] = useState(false);
 
@@ -37,12 +38,21 @@ export default function InvestmentAnalysis({ data }) {
   const totalSOC   = meta.total_soc_cr;
   const upfrontPcts = [...new Set(grid.map(g => g.upfront_pct))].sort((a, b) => a - b);
   const awardPcts   = [...new Set(grid.map(g => g.award_share_pct))].sort((a, b) => a - b);
-  const displayAwards = [...awardPcts].sort((a, b) => b - a); // tail ascending
+  // Hybrid: ascending second-axis values; upfront-tail: tail-ascending = award-descending
+  const displayAwards = axisMeta.isHybrid
+    ? [...awardPcts].sort((a, b) => a - b)
+    : [...awardPcts].sort((a, b) => b - a);
 
-  // Default: 30% Tata Tail = 70% award
-  const defaultAward = awardPcts.find(a => Math.abs(a - 0.70) < 0.001) || awardPcts[Math.floor(awardPcts.length / 2)];
+  // Default: 30% Tata Tail = 70% award (or hybrid default return_a)
+  const defaultAward = axisMeta.isHybrid
+    ? (awardPcts.find(a => Math.abs(a - axisMeta.defaultSecond) < 0.001) || awardPcts[Math.floor(awardPcts.length / 2)])
+    : (awardPcts.find(a => Math.abs(a - 0.70) < 0.001) || awardPcts[Math.floor(awardPcts.length / 2)]);
   const [selectedAward, setSelectedAward] = useState(defaultAward);
-  const selectedTail = +(1 - selectedAward).toFixed(2);
+  const selectedTail = axisMeta.isHybrid
+    ? selectedAward
+    : +(1 - selectedAward).toFixed(2);
+  const fmtSecond = axisMeta.formatSecond;
+  const secondLabel = axisMeta.secondAxisLabel;
 
   /* ── line data for selected tail ── */
   const lineData = upfrontPcts.map(up => {
@@ -71,7 +81,7 @@ export default function InvestmentAnalysis({ data }) {
 
   /* ── best cell ── */
   const bestCell = grid.reduce((a, b) => (a.mean_moic > b.mean_moic ? a : b), grid[0]);
-  const bestTail = bestCell.tata_tail_pct ?? +(1 - bestCell.award_share_pct).toFixed(2);
+  const bestTail = axisMeta.rowToSecond(bestCell);
 
   /* ── breakeven data ── */
   const perClaimBE   = be?.per_claim_at_30_tail || be?.per_claim_at_40_award || {};
@@ -93,7 +103,7 @@ export default function InvestmentAnalysis({ data }) {
   const avgIrr    = refCells.length ? refCells.reduce((s, c) => s + (c.mean_xirr || 0), 0) / refCells.length : 0;
   const safe      = grid.filter(g => g.p_loss < 0.30).sort((a, b) => b.mean_moic - a.mean_moic);
   const sweetSpot = safe[0];
-  const sweetTail = sweetSpot ? (sweetSpot.tata_tail_pct ?? +(1 - sweetSpot.award_share_pct).toFixed(2)) : 0;
+  const sweetTail = sweetSpot ? axisMeta.rowToSecond(sweetSpot) : 0;
 
   /* ───────────────────── Render ───────────────────── */
   return (
@@ -111,7 +121,7 @@ export default function InvestmentAnalysis({ data }) {
             { label: 'Best P(Loss)', value: fmtPct(bestCell.p_loss), sub: 'lowest in grid', color: COLORS.accent5 },
             { label: 'Avg MOIC @30%', value: fmtMOIC(avgMoic), sub: 'across all upfronts', color: COLORS.accent3 },
             { label: 'Avg IRR @30%', value: fmtPct(avgIrr), sub: 'across all upfronts', color: COLORS.accent6 },
-            { label: 'Sweet Spot', value: sweetSpot ? `${fmtPct(sweetSpot.upfront_pct)} / ${fmtPct(sweetTail)}` : 'N/A',
+            { label: 'Sweet Spot', value: sweetSpot ? `${fmtPct(sweetSpot.upfront_pct)} / ${fmtSecond(sweetTail)}` : 'N/A',
               sub: sweetSpot ? `MOIC ${fmtMOIC(sweetSpot.mean_moic)}, P(Loss)<30%` : '', color: COLORS.accent4 },
             { label: 'Max Breakeven', value: breakevenMax.length ? `${Math.max(...breakevenMax.map(b => b.socBE)).toFixed(0)}%` : 'N/A',
               sub: 'highest across claims', color: COLORS.accent1 },
@@ -352,7 +362,7 @@ export default function InvestmentAnalysis({ data }) {
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
           <SectionTitle number="1" title={`${heatmapMetric === 'irr' ? 'E[IRR]' : 'E[MOIC]'} Heatmap — SOC Pricing`}
-            subtitle="Rows = upfront to Tata %, Columns = Tata Tail %. Toggle between IRR and MOIC views." />
+            subtitle={`Rows = upfront % of SOC, Columns = ${secondLabel}. Toggle between IRR and MOIC views.`} />
           <div style={{ display: 'flex', gap: 2, background: '#0F1219', borderRadius: 8, padding: 2 }}>
             {[
               { key: 'irr', label: 'E[IRR]' },
@@ -377,7 +387,7 @@ export default function InvestmentAnalysis({ data }) {
                 <th style={{ padding: '10px 14px', color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600, textAlign: 'left' }}>Upfront</th>
                 {displayAwards.map(aw => (
                   <th key={aw} style={{ padding: '10px 14px', color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600, textAlign: 'center' }}>
-                    {fmtPct(1 - aw)}
+                    {axisMeta.isHybrid ? fmtSecond(aw) : fmtPct(1 - aw)}
                   </th>
                 ))}
               </tr>
@@ -411,9 +421,9 @@ export default function InvestmentAnalysis({ data }) {
 
       {/* ── Tail Selector ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: ui.space.md, flexWrap: 'wrap' }}>
-        <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600 }}>Tata Tail %:</span>
+        <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600 }}>{secondLabel}:</span>
         {displayAwards.map(aw => {
-          const tail = +(1 - aw).toFixed(2);
+          const tail = axisMeta.isHybrid ? aw : +(1 - aw).toFixed(2);
           return (
             <button key={aw} onClick={() => setSelectedAward(aw)} style={{
               padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
@@ -421,7 +431,7 @@ export default function InvestmentAnalysis({ data }) {
               color: selectedAward === aw ? '#fff' : COLORS.textMuted,
               background: selectedAward === aw ? COLORS.accent1 : COLORS.card,
             }}>
-              {fmtPct(tail)}
+              {axisMeta.isHybrid ? fmtSecond(tail) : fmtPct(tail)}
             </button>
           );
         })}
@@ -429,7 +439,7 @@ export default function InvestmentAnalysis({ data }) {
 
       {/* ── MOIC & IRR vs Upfront ── */}
       <Card>
-        <SectionTitle number="2" title={`E[MOIC] & E[IRR] vs Upfront — Tata Tail ${fmtPct(selectedTail)}`}
+        <SectionTitle number="2" title={`E[MOIC] & E[IRR] vs Upfront — ${secondLabel} ${fmtSecond(selectedTail)}`}
           subtitle="Dual-axis: MOIC (left, bars) and annualised IRR (right, line) across upfront purchase levels." />
         <ResponsiveContainer width="100%" height={ui.chartHeight.md}>
           <ComposedChart data={lineData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
@@ -463,7 +473,7 @@ export default function InvestmentAnalysis({ data }) {
 
       {/* ── Plot 3: IRR vs P(Loss) ── */}
       <Card>
-        <SectionTitle number="3" title={`E[IRR] vs P(Loss) — Tata Tail ${fmtPct(selectedTail)}`}
+        <SectionTitle number="3" title={`E[IRR] vs P(Loss) — ${secondLabel} ${fmtSecond(selectedTail)}`}
           subtitle="As upfront % increases, annualised IRR drops and loss probability rises." />
         <ResponsiveContainer width="100%" height={ui.chartHeight.md}>
           <ComposedChart data={lineData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
@@ -497,7 +507,7 @@ export default function InvestmentAnalysis({ data }) {
 
       {/* ── Plot 4: MOIC vs P(Loss) ── */}
       <Card>
-        <SectionTitle number="4" title={`MOIC vs P(Loss) — Tata Tail ${fmtPct(selectedTail)}`}
+        <SectionTitle number="4" title={`MOIC vs P(Loss) — ${secondLabel} ${fmtSecond(selectedTail)}`}
           subtitle="As upfront % increases, MOIC drops and loss probability rises." />
         <ResponsiveContainer width="100%" height={ui.chartHeight.md}>
           <ComposedChart data={lineData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
@@ -609,7 +619,7 @@ export default function InvestmentAnalysis({ data }) {
          Plot 6: Comprehensive Risk Analytics
          ═══════════════════════════════════════════════════════════════════ */}
       <RiskAnalytics grid={grid} upfrontPcts={upfrontPcts} awardPcts={awardPcts} displayAwards={displayAwards}
-        selectedAward={selectedAward} selectedTail={selectedTail} lineData={lineData} totalSOC={totalSOC} ui={ui} />
+        selectedAward={selectedAward} selectedTail={selectedTail} lineData={lineData} totalSOC={totalSOC} ui={ui} axisMeta={axisMeta} />
     </div>
   );
 }
@@ -617,7 +627,9 @@ export default function InvestmentAnalysis({ data }) {
 /* ═══════════════════════════════════════════════════════════════════════════
    Risk Analytics sub-component — four advanced risk visualizations
    ═══════════════════════════════════════════════════════════════════════════ */
-function RiskAnalytics({ grid, upfrontPcts, awardPcts, displayAwards, selectedAward, selectedTail, lineData, totalSOC, ui }) {
+function RiskAnalytics({ grid, upfrontPcts, awardPcts, displayAwards, selectedAward, selectedTail, lineData, totalSOC, ui, axisMeta }) {
+  const fmtSecond = axisMeta?.formatSecond || (v => fmtPct(v));
+  const secondLabel = axisMeta?.secondAxisLabel || 'Tata Tail';
   const [riskMetric, setRiskMetric] = useState('var');
 
   /* ── VaR/CVaR heatmap data ── */
@@ -635,10 +647,10 @@ function RiskAnalytics({ grid, upfrontPcts, awardPcts, displayAwards, selectedAw
 
   /* ── Risk-Return scatter data ── */
   const scatterData = useMemo(() => {
-    const tailPcts = [...new Set(grid.map(g => g.tata_tail_pct ?? +(1 - g.award_share_pct).toFixed(2)))].sort((a, b) => a - b);
+    const tailPcts = [...new Set(grid.map(g => axisMeta.rowToSecond(g)))].sort((a, b) => a - b);
     const SCATTER_COLORS = [COLORS.accent1, COLORS.accent2, COLORS.accent3, COLORS.accent4, COLORS.accent6, COLORS.accent7];
     return grid.map(g => {
-      const tail = g.tata_tail_pct ?? +(1 - g.award_share_pct).toFixed(2);
+      const tail = axisMeta.rowToSecond(g);
       const tailIdx = tailPcts.indexOf(tail);
       return {
         p_loss: g.p_loss,
@@ -648,7 +660,7 @@ function RiskAnalytics({ grid, upfrontPcts, awardPcts, displayAwards, selectedAw
         upfront_pct: g.upfront_pct,
         mean_xirr: g.mean_xirr,
         fill: SCATTER_COLORS[tailIdx % SCATTER_COLORS.length],
-        label: `${fmtPct(g.upfront_pct)} up / ${fmtPct(tail)} tail`,
+        label: `${fmtPct(g.upfront_pct)} up / ${fmtSecond(tail)} ${secondLabel}`,
       };
     });
   }, [grid, totalSOC]);
@@ -657,7 +669,7 @@ function RiskAnalytics({ grid, upfrontPcts, awardPcts, displayAwards, selectedAw
   const sharpeData = useMemo(() => {
     return lineData.map(d => {
       const cell = grid.find(g =>
-        g.upfront_pct === d.upfront_pct && Math.abs(g.award_share_pct - (1 - selectedTail)) < 0.001
+        g.upfront_pct === d.upfront_pct && Math.abs(g.award_share_pct - selectedAward) < 0.001
       );
       const stdMoic = cell?.std_moic || 1;
       const sharpe = stdMoic > 0 ? (d.moic - 1) / stdMoic : 0;
@@ -674,7 +686,7 @@ function RiskAnalytics({ grid, upfrontPcts, awardPcts, displayAwards, selectedAw
   const tailRiskData = useMemo(() => {
     return lineData.map(d => {
       const cell = grid.find(g =>
-        g.upfront_pct === d.upfront_pct && Math.abs(g.award_share_pct - (1 - selectedTail)) < 0.001
+        g.upfront_pct === d.upfront_pct && Math.abs(g.award_share_pct - selectedAward) < 0.001
       );
       return {
         pct: d.pct,
@@ -720,7 +732,7 @@ function RiskAnalytics({ grid, upfrontPcts, awardPcts, displayAwards, selectedAw
                   <th style={{ padding: '8px 12px', color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600, textAlign: 'left' }}>Upfront</th>
                   {displayAwards.map(aw => (
                     <th key={aw} style={{ padding: '8px 12px', color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600, textAlign: 'center' }}>
-                      {fmtPct(1 - aw)}
+                      {axisMeta?.isHybrid ? fmtSecond(aw) : fmtPct(1 - aw)}
                     </th>
                   ))}
                 </tr>
@@ -814,7 +826,7 @@ function RiskAnalytics({ grid, upfrontPcts, awardPcts, displayAwards, selectedAw
         <div>
           <div style={{ marginBottom: 8 }}>
             <span style={{ color: COLORS.textBright, fontSize: ui.sizes.base, fontWeight: 700 }}>6c. Risk-Adjusted Return (Sharpe-like Ratio)</span>
-            <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, marginLeft: 12 }}>(MOIC − 1) / σ(MOIC) at Tata Tail {fmtPct(selectedTail)}. Higher = better risk-adjusted return.</span>
+            <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, marginLeft: 12 }}>(MOIC − 1) / σ(MOIC) at {secondLabel} {fmtSecond(selectedTail)}. Higher = better risk-adjusted return.</span>
           </div>
           <ResponsiveContainer width="100%" height={ui.chartHeight.md}>
             <BarChart data={sharpeData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
@@ -864,7 +876,7 @@ function RiskAnalytics({ grid, upfrontPcts, awardPcts, displayAwards, selectedAw
         <div>
           <div style={{ marginBottom: 8 }}>
             <span style={{ color: COLORS.textBright, fontSize: ui.sizes.base, fontWeight: 700 }}>6d. Tail Risk Distribution</span>
-            <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, marginLeft: 12 }}>P(Loss) and CVaR 1% across upfront levels at Tata Tail {fmtPct(selectedTail)}.</span>
+            <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, marginLeft: 12 }}>P(Loss) and CVaR 1% across upfront levels at {secondLabel} {fmtSecond(selectedTail)}.</span>
           </div>
           <ResponsiveContainer width="100%" height={ui.chartHeight.md}>
             <ComposedChart data={tailRiskData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>

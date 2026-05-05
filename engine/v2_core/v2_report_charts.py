@@ -130,6 +130,13 @@ def chart_win_probability_waterfall(
     n = len(claim_ids)
     y_pos = np.arange(n)
 
+    # Build a {claim_id: display_name} map so y-axis ticks show the claim name,
+    # not its UUID.
+    name_lookup = {
+        c.claim_id: (getattr(c, "name", None) or c.claim_id)
+        for c in claims
+    }
+
     arb_win_rates = []
     final_win_rates = []
 
@@ -155,7 +162,7 @@ def chart_win_probability_waterfall(
                 va="center", fontsize=8, color=TXT_LIGHT)
 
     ax.set_yticks(y_pos)
-    ax.set_yticklabels(claim_ids, fontsize=9)
+    ax.set_yticklabels([name_lookup.get(cid, cid) for cid in claim_ids], fontsize=9)
     ax.set_xlabel("Probability", fontsize=10)
     ax.set_title("Win Probability: Arbitration vs Final Outcome",
                  fontsize=13, fontweight="bold", color=TXT_LIGHT, pad=12)

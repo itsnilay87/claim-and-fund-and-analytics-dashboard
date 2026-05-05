@@ -344,3 +344,5 @@ CRITICAL: You MUST re-run the analysis engine after deployment — the old dashb
 | Silent export failure | `_pct(None)` → TypeError caught by try/except | `run_v2.py` lines 884-905 | Print traceback |
 | Claim names show UUID | `{c.claim_id}` in JSX instead of `getClaimDisplayName(c)` | 6 files in `dashboard/src/components/v2/` | Import + replace |
 | `Claim {i+1}` fallback crashes | Loop is `for c in claims:` — `i` undefined | `v2_json_exporter.py` `_build_claims_section` | Use `enumerate` |
+
+

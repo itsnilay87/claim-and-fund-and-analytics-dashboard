@@ -16,6 +16,7 @@ import {
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { COLORS, FONT, BAR_CURSOR, useUISettings, fmtCr, fmtPct, fmtMOIC, moicColor } from '../theme';
+import { getClaimDisplayName } from '../utils/claimNames';
 import { Card, SectionTitle, KPI, CustomTooltip, DataTable } from './Shared';
 
 function cellColor(moic) {
@@ -68,7 +69,7 @@ export default function LitFundingWaterfall({ data }) {
 
   // Legal cost distribution per claim
   const legalCostBars = claims.map(c => ({
-    claim: c.claim_id,
+    claim: getClaimDisplayName(c),
     mean: c.mean_legal_costs_cr || 0,
     p95: c.legal_cost_stats?.p95 || 0,
   }));

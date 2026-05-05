@@ -85,6 +85,26 @@ def _auto_width(ws, min_width=10, max_width=25):
         ws.column_dimensions[col_letter].width = min(max(max_len + 2, min_width), max_width)
 
 
+def _claim_name_map(data) -> dict:
+    """Build a {claim_id: display_name} map from the dashboard `data` dict.
+
+    Falls back to the claim_id when no name field is present so callers always
+    get a usable string.
+    """
+    mapping: dict = {}
+    for c in (data.get("claims") or []):
+        cid = c.get("claim_id") or c.get("id")
+        if not cid:
+            continue
+        mapping[cid] = c.get("name") or c.get("display_name") or cid
+    return mapping
+
+
+def _name_for(name_map: dict, cid: str) -> str:
+    """Resolve a claim_id to a display name (falls back to the id)."""
+    return name_map.get(cid, cid) if cid is not None else ""
+
+
 # ===================================================================
 # Sheet builders
 # ===================================================================
@@ -155,6 +175,7 @@ def _write_irr_analysis(wb, data):
     if not pcg or not isinstance(pcg, dict):
         return
 
+    name_map = _claim_name_map(data)
     ws = wb.create_sheet(title="IRR Analysis")
 
     headers = [
@@ -181,7 +202,7 @@ def _write_irr_analysis(wb, data):
         if ref is None:
             ref = entries[0]  # fallback to first entry
 
-        ws.cell(row=ri, column=1, value=claim_id)
+        ws.cell(row=ri, column=1, value=_name_for(name_map, claim_id))
         ws.cell(row=ri, column=2, value=ref.get("mean_xirr", 0))
         _style_data_cell(ws, ri, 2, PCT_FMT)
         ws.cell(row=ri, column=3, value=ref.get("median_xirr", 0))
@@ -530,6 +551,7 @@ def _write_per_claim_summary(wb, data):
     ws = wb.create_sheet(title="Per-Claim Detail")
 
     if isinstance(pcg, dict) and pcg:
+        name_map = _claim_name_map(data)
         # Determine columns from first claim's first entry
         first_claim = next(iter(pcg.values()))
         if not first_claim or not isinstance(first_claim, list):
@@ -537,7 +559,7 @@ def _write_per_claim_summary(wb, data):
         sample = first_claim[0] if first_claim else {}
         entry_keys = [k for k in sample.keys()]
 
-        headers = ["Claim ID"] + [k.replace("_", " ").title() for k in entry_keys]
+        headers = ["Claim"] + [k.replace("_", " ").title() for k in entry_keys]
         for ci, h in enumerate(headers, 1):
             ws.cell(row=1, column=ci, value=h)
         _style_header_row(ws, 1, len(headers))
@@ -547,7 +569,7 @@ def _write_per_claim_summary(wb, data):
             if not isinstance(entries, list):
                 continue
             for entry in entries:
-                ws.cell(row=ri, column=1, value=claim_id)
+                ws.cell(row=ri, column=1, value=_name_for(name_map, claim_id))
                 for ci, k in enumerate(entry_keys, 2):
                     val = entry.get(k, "")
                     ws.cell(row=ri, column=ci, value=val)
@@ -1124,10 +1146,11 @@ def _write_timeline_summary(wb, data):
         return
 
     ws = wb.create_sheet(title="Timeline Summary")
+    name_map = _claim_name_map(data)
     ws.cell(row=1, column=1, value="Per-Claim Duration Analysis (Months)")
     ws.cell(row=1, column=1).font = Font(bold=True, size=12, color="1F4E79")
 
-    headers = ["Claim ID", "Pipeline", "Jurisdiction", "Mean", "Median",
+    headers = ["Claim", "Pipeline", "Jurisdiction", "Mean", "Median",
                "P5", "P25", "P75", "P95", "Max", "P(>96 mo)"]
     for ci, h in enumerate(headers, 1):
         ws.cell(row=2, column=ci, value=h)
@@ -1135,7 +1158,7 @@ def _write_timeline_summary(wb, data):
 
     ri = 3
     for claim_id, stats in per_claim.items():
-        ws.cell(row=ri, column=1, value=claim_id)
+        ws.cell(row=ri, column=1, value=_name_for(name_map, claim_id))
         ws.cell(row=ri, column=2, value=stats.get("pipeline", ""))
         ws.cell(row=ri, column=3, value=stats.get("jurisdiction", ""))
         ws.cell(row=ri, column=4, value=stats.get("mean", 0))
@@ -1287,18 +1310,19 @@ def _write_breakeven(wb, data):
     # Write per-claim breakeven at reference tail
     per_claim = be.get("per_claim_at_30_tata_tail", {})
     if per_claim:
+        name_map = _claim_name_map(data)
         ws.cell(row=ri, column=1, value="Per-Claim Breakeven (at 30% Tata Tail)")
         ws.cell(row=ri, column=1).font = Font(bold=True, size=12, color="1F4E79")
         ri += 1
 
-        headers = ["Claim ID", "SOC (Cr)", "Archetype", "SOC Breakeven %", "EQ Breakeven %"]
+        headers = ["Claim", "SOC (Cr)", "Archetype", "SOC Breakeven %", "EQ Breakeven %"]
         for ci, h in enumerate(headers, 1):
             ws.cell(row=ri, column=ci, value=h)
         _style_header_row(ws, ri, len(headers))
         ri += 1
 
         for claim_id, claim_data in per_claim.items():
-            ws.cell(row=ri, column=1, value=claim_id)
+            ws.cell(row=ri, column=1, value=_name_for(name_map, claim_id))
             ws.cell(row=ri, column=2, value=claim_data.get("soc_cr", 0))
             _style_data_cell(ws, ri, 2, CR_FMT)
             ws.cell(row=ri, column=3, value=claim_data.get("archetype", ""))

@@ -14,6 +14,7 @@ const STRUCTURE_LABELS = {
   monetisation_full_purchase: 'Full Purchase',
   monetisation_upfront_tail: 'Upfront + Tail',
   monetisation_staged: 'Staged Payments',
+  monetisation_hybrid_payoff: 'Hybrid Payoff',
   comparative: 'Comparative',
 };
 
