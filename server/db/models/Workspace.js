@@ -12,7 +12,14 @@ const Workspace = {
    */
   async findAllByUser(userId) {
     const { rows } = await query(
-      'SELECT id, user_id, name, description, created_at, updated_at FROM workspaces WHERE user_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC',
+      `SELECT w.id, w.user_id, w.name, w.description, w.created_at, w.updated_at,
+              (SELECT COUNT(*)::int FROM claims c
+                 WHERE c.workspace_id = w.id AND c.deleted_at IS NULL) AS claim_count,
+              (SELECT COUNT(*)::int FROM portfolios p
+                 WHERE p.workspace_id = w.id AND p.deleted_at IS NULL) AS portfolio_count
+         FROM workspaces w
+        WHERE w.user_id = $1 AND w.deleted_at IS NULL
+        ORDER BY w.created_at DESC`,
       [userId]
     );
     return rows;
