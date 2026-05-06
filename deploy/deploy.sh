@@ -116,6 +116,33 @@ ssh -i "$SSH_KEY" "root@${SERVER}" << 'REMOTE_EOF'
     sleep 2
   done
 
+  # ── 7b. Reconcile DB role password with deploy/.env ──
+  # The pgdata volume persists across deploys, so the cap_user role retains
+  # whatever password was in effect when initdb first ran. If deploy/.env is
+  # ever rotated (manually or by an out-of-band script) without re-initialising
+  # the volume, the web service will fail to authenticate. This step is
+  # idempotent: ALTER USER … WITH PASSWORD is a no-op when the password
+  # already matches, and otherwise restores the invariant
+  #   role(cap_user).password === POSTGRES_PASSWORD in deploy/.env
+  # NEVER drop or recreate the pgdata volume here — that would destroy data.
+  echo "▸ Reconciling DB role password with deploy/.env..."
+  ENV_PG_PASS=$(grep -E '^POSTGRES_PASSWORD=' deploy/.env | head -n1 | cut -d= -f2-)
+  if [ -z "${ENV_PG_PASS}" ]; then
+    echo "  ✗ POSTGRES_PASSWORD missing from deploy/.env — aborting"
+    exit 1
+  fi
+  # Use psql variable substitution to avoid quoting/SQL-injection issues with
+  # special characters in the password. -v var=value + :'var' is safe.
+  if docker compose --env-file deploy/.env -f deploy/docker-compose.yml \
+       exec -T db psql -U cap_user -d claim_analytics \
+       -v new_pw="${ENV_PG_PASS}" \
+       -c "ALTER USER cap_user WITH PASSWORD :'new_pw';" >/dev/null; then
+    echo "  ✓ DB role password aligned with deploy/.env"
+  else
+    echo "  ✗ Failed to align DB role password — web auth may fail"
+    exit 1
+  fi
+
   # ── 8. Run database migrations ──
   echo "▸ Running database migrations..."
   docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec -T web node server/db/migrate.js
