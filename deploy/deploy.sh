@@ -146,6 +146,34 @@ SQL
     exit 1
   fi
 
+  # ── 7c. Verify SCRAM auth via the real network path (web → db:5432) ──
+  # pg_hba.conf grants `trust` to 127.0.0.1, so a localhost psql test would
+  # succeed even with a wrong password. Verifying from the web container
+  # over the internal docker network forces real SCRAM-SHA-256 auth and
+  # catches stale baked-in env vars in the running web container that a
+  # role-password reset alone cannot fix.
+  echo "▸ Verifying web → db SCRAM auth over internal network..."
+  if ! docker compose --env-file deploy/.env -f deploy/docker-compose.yml \
+         exec -T web sh -c "PGPASSWORD='${ENV_PG_PASS}' psql -h db -U cap_user -d claim_analytics -tAc 'select 1' 2>&1" \
+       | grep -q '^1$'; then
+    echo "  ⚠ SCRAM auth failed — web container has a stale baked DATABASE_URL."
+    echo "    Force-recreating web so it picks up the current deploy/.env..."
+    docker compose --env-file deploy/.env -f deploy/docker-compose.yml \
+      up -d --force-recreate --no-deps web
+    # give web time to come back before migrations run
+    for i in $(seq 1 15); do
+      if docker compose --env-file deploy/.env -f deploy/docker-compose.yml \
+           exec -T web sh -c "PGPASSWORD='${ENV_PG_PASS}' psql -h db -U cap_user -d claim_analytics -tAc 'select 1' 2>/dev/null" \
+         | grep -q '^1$'; then
+        echo "  ✓ web container recreated and SCRAM auth verified"
+        break
+      fi
+      sleep 2
+    done
+  else
+    echo "  ✓ web → db SCRAM auth verified"
+  fi
+
   # ── 8. Run database migrations ──
   echo "▸ Running database migrations..."
   docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec -T web node server/db/migrate.js
