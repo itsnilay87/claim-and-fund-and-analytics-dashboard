@@ -131,12 +131,15 @@ ssh -i "$SSH_KEY" "root@${SERVER}" << 'REMOTE_EOF'
     echo "  ✗ POSTGRES_PASSWORD missing from deploy/.env — aborting"
     exit 1
   fi
-  # Use psql variable substitution to avoid quoting/SQL-injection issues with
-  # special characters in the password. -v var=value + :'var' is safe.
+  # psql variable substitution (`:'var'`) only happens for input read from
+  # stdin or -f, NOT for -c. Pipe SQL via stdin so :'new_pw' is properly
+  # quoted by psql itself — safe against any character in the password.
   if docker compose --env-file deploy/.env -f deploy/docker-compose.yml \
-       exec -T db psql -U cap_user -d claim_analytics \
-       -v new_pw="${ENV_PG_PASS}" \
-       -c "ALTER USER cap_user WITH PASSWORD :'new_pw';" >/dev/null; then
+       exec -T db psql -U cap_user -d claim_analytics -X --quiet \
+       --set=ON_ERROR_STOP=1 --set=new_pw="${ENV_PG_PASS}" <<'SQL' >/dev/null
+ALTER USER cap_user WITH PASSWORD :'new_pw';
+SQL
+  then
     echo "  ✓ DB role password aligned with deploy/.env"
   else
     echo "  ✗ Failed to align DB role password — web auth may fail"
