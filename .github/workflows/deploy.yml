@@ -101,11 +101,16 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GHCR_PAT
           script: |
+            set -e
             echo "$GHCR_PAT" | docker login ghcr.io -u itsnilay87 --password-stdin
             docker pull ghcr.io/itsnilay87/claim-analytics-platform:latest
 
             cd /root/claim-analytics-platform
-            git pull origin main 2>/dev/null || true
-            docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
+            # Sync compose/env files from main (no embedded credentials).
+            git fetch origin main
+            git checkout origin/main -- deploy/docker-compose.yml deploy/nginx.conf deploy/supervisord.conf 2>/dev/null || true
+
+            # Run prebuilt GHCR image (no local build).
+            docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --remove-orphans
             docker image prune -f
             echo "Deploy complete at $(date)"

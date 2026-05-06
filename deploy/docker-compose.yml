@@ -22,9 +22,14 @@ services:
       retries: 10
 
   web:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    # In production, pull the prebuilt image from GHCR (set WEB_IMAGE in .env).
+    # For local dev, override with: docker compose -f docker-compose.yml -f docker-compose.dev.yml ...
+    # or set WEB_IMAGE= (empty) and uncomment the build block below.
+    image: ${WEB_IMAGE:-ghcr.io/itsnilay87/claim-analytics-platform:latest}
+    # build:
+    #   context: ..
+    #   dockerfile: deploy/Dockerfile
+    pull_policy: always
     ports:
       - "8080:80"
     volumes:
