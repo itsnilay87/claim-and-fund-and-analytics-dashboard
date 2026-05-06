@@ -35,7 +35,7 @@ export default function TopBar() {
   const initials = displayName.charAt(0).toUpperCase()
 
   return (
-    <header className="h-16 flex items-center justify-between px-6 border-b border-slate-200 dark:border-white/5 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm">
+    <header className="sticky top-0 z-40 isolate h-16 flex items-center justify-between px-6 border-b border-slate-200 dark:border-white/5 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm">
       <div className="flex items-center gap-3 flex-1">
         {activeWsId && (
           <button
