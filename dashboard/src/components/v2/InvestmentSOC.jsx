@@ -110,7 +110,7 @@ export default function InvestmentSOC({ data }) {
 
       {/* MOIC Heatmap */}
       <Card>
-        <SectionTitle number="1" title="E[MOIC] Heatmap — SOC Pricing" subtitle="Rows = upfront to Tata %, Columns = Tata Tail %. Green = attractive, red = loss." />
+        <SectionTitle number="1" title="E[MOIC] Heatmap — SOC Pricing" subtitle="Rows = upfront to Tata %, Columns = Tail %. Green = attractive, red = loss." />
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 3, fontFamily: FONT }}>
             <thead>
@@ -148,7 +148,7 @@ export default function InvestmentSOC({ data }) {
 
       {/* IRR + MOIC vs Upfront line chart */}
       <Card>
-        <SectionTitle number="1b" title={`E[MOIC] & E[IRR] vs Upfront — Tata Tail ${fmtPct(selectedTail)}`}
+        <SectionTitle number="1b" title={`E[MOIC] & E[IRR] vs Upfront — Tail ${fmtPct(selectedTail)}`}
           subtitle="Dual-axis: MOIC (left, bars) and annualised IRR (right, line) across upfront purchase levels." />
         <ResponsiveContainer width="100%" height={380}>
           <ComposedChart data={lineData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
@@ -179,9 +179,9 @@ export default function InvestmentSOC({ data }) {
         </div>
       </Card>
 
-      {/* Tata Tail selector */}
+      {/* Tail selector */}
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.md, flexWrap: 'wrap' }}>
-        <span style={{ color: COLORS.textMuted, fontSize: SIZES.sm }}>Tata Tail:</span>
+        <span style={{ color: COLORS.textMuted, fontSize: SIZES.sm }}>Tail:</span>
         {displayAwards.map(aw => {
           const tail = +(1 - aw).toFixed(2);
           return (
@@ -199,7 +199,7 @@ export default function InvestmentSOC({ data }) {
 
       {/* MOIC + P(Loss) dual axis chart */}
       <Card>
-        <SectionTitle number="3" title={`MOIC vs P(Loss) — Tata Tail ${fmtPct(selectedTail)}`}
+        <SectionTitle number="3" title={`MOIC vs P(Loss) — Tail ${fmtPct(selectedTail)}`}
           subtitle="As upfront % increases, MOIC drops and loss probability rises." />
         <ResponsiveContainer width="100%" height={360}>
           <ComposedChart data={lineData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
@@ -219,7 +219,7 @@ export default function InvestmentSOC({ data }) {
 
       {/* Net return chart */}
       <Card>
-        <SectionTitle number="4" title={`E[Net Return] vs Investment — Tata Tail ${fmtPct(selectedTail)}`}
+        <SectionTitle number="4" title={`E[Net Return] vs Investment — Tail ${fmtPct(selectedTail)}`}
           subtitle="Investment required (₹ Crore) and expected net return." />
         <ResponsiveContainer width="100%" height={320}>
           <ComposedChart data={lineData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>

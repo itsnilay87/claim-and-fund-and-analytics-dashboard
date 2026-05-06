@@ -34,7 +34,7 @@ const TD_LEFT  = { ...TD_STYLE, textAlign: 'left', fontWeight: 600 };
 /* ── waterfall builder (from WaterfallChart) ── */
 function buildWaterfallSteps(view, isNominal, axisMeta) {
   const tailPct = view.reference_tail_pct || 0.20;
-  const tailLabel = axisMeta?.isHybrid ? `${axisMeta.secondAxisLabel} (${axisMeta.formatSecond(axisMeta.defaultSecond)})` : `Tata Tail (${fmtPct(tailPct)})`;
+  const tailLabel = axisMeta?.isHybrid ? `${axisMeta.secondAxisLabel} (${axisMeta.formatSecond(axisMeta.defaultSecond)})` : `Tail (${fmtPct(tailPct)})`;
   const steps = [];
   steps.push({ label: 'SOC', value: view.soc_cr, type: 'total' });
   if (!isNominal) {

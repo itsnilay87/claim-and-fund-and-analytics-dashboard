@@ -255,7 +255,7 @@ function NominalValueDecompositionChart({ data, mode }) {
     steps.push({ name: 'E[Recovery]', value: collected, delta: collected, color: COLORS.accent4, type: 'subtotal' });
     steps.push({ name: 'Legal Costs', value: net, delta: -legal, color: COLORS.accent5, type: 'subtract' });
     steps.push({ name: 'Net After Legal', value: net, delta: net, color: COLORS.accent2, type: 'subtotal' });
-    steps.push({ name: `Tata Tail (${pct(tailPct, 0)})`, value: fundProfit, delta: -tataTail, color: COLORS.accent5, type: 'subtract' });
+    steps.push({ name: `Tail (${pct(tailPct, 0)})`, value: fundProfit, delta: -tataTail, color: COLORS.accent5, type: 'subtract' });
     steps.push({ name: 'Fund Profit', value: fundProfit, delta: fundProfit, color: fundProfit >= 0 ? COLORS.accent4 : COLORS.accent5, type: 'total' });
 
     // Build waterfall bars with invisible base + visible bar
@@ -293,7 +293,7 @@ function NominalValueDecompositionChart({ data, mode }) {
         number="1"
         title={isNominal ? 'Nominal Value Decomposition' : `PV Decomposition @ ${pct(pvView.discount_rate || 0.07, 1)}`}
         subtitle={isNominal
-          ? 'SOC → Win/Quantum Adj → Legal Costs → Tata Tail → Fund Profit'
+          ? 'SOC → Win/Quantum Adj → Legal Costs → Tail → Fund Profit'
           : `SOC → PV Discount (~${(pvView.avg_timeline_months || 0).toFixed(0)}m) → Win/Quantum Adj → Legal → Tata → Fund`}
       />
 

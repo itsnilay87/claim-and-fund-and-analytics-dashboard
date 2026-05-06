@@ -517,7 +517,7 @@ export default function JCurveFanChart({
             </select>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: COLORS.textMuted, fontSize: 12, fontWeight: 600 }}>Tata Tail %:</span>
+            <span style={{ color: COLORS.textMuted, fontSize: 12, fontWeight: 600 }}>Tail %:</span>
             <select value={selectedTail} onChange={handleTailChange} style={selectStyle}>
               {availableTails.map(v => (
                 <option key={v} value={v}>{(v * 100).toFixed(0)}%</option>

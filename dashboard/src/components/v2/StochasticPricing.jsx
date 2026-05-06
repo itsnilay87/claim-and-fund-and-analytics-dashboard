@@ -208,7 +208,7 @@ export default function StochasticPricing({ stochasticData }) {
       {/* ═══════ Section 1: Interactive Sliders + Detail Panel ═══════ */}
       <Card>
         <SectionTitle number="1" title="Interactive Pricing Explorer"
-          subtitle="Drag sliders to explore any upfront % / Tata tail % combination." />
+          subtitle="Drag sliders to explore any upfront % / tail % combination." />
 
         <div style={{ display: 'flex', gap: ui.space.xxl, flexWrap: 'wrap', marginBottom: 24 }}>
           <ParamSlider
@@ -219,7 +219,7 @@ export default function StochasticPricing({ stochasticData }) {
             color={COLORS.accent1}
           />
           <ParamSlider
-            label="Tata Tail %"
+            label="Tail %"
             value={activeTail}
             options={tailGrid}
             onChange={setSelectedTail}
@@ -420,7 +420,7 @@ export default function StochasticPricing({ stochasticData }) {
 
       {/* ═══════ Section 3: MOIC Confidence Bands ═══════ */}
       <Card>
-        <SectionTitle number="3" title={`MOIC Confidence Bands — Tata Tail ${activeTail}%`}
+        <SectionTitle number="3" title={`MOIC Confidence Bands — Tail ${activeTail}%`}
           subtitle="Shaded: P5–P95 (outer) and P25–P75 (inner). Line: median. Dot: mean." />
         <ResponsiveContainer width="100%" height={ui.chartHeight.lg}>
           <ComposedChart data={bandData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
@@ -454,7 +454,7 @@ export default function StochasticPricing({ stochasticData }) {
 
       {/* ═══════ Section 4: IRR Confidence Bands ═══════ */}
       <Card>
-        <SectionTitle number="4" title={`IRR Confidence Bands — Tata Tail ${activeTail}%`}
+        <SectionTitle number="4" title={`IRR Confidence Bands — Tail ${activeTail}%`}
           subtitle="Annual IRR distribution percentiles across upfront purchase levels." />
         <ResponsiveContainer width="100%" height={ui.chartHeight.lg}>
           <ComposedChart data={irrBandData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
@@ -491,7 +491,7 @@ export default function StochasticPricing({ stochasticData }) {
 
       <Card>
         <SectionTitle number="5" title={`${currentMetric.label} Heatmap — Full Pricing Grid`}
-          subtitle={`Rows = upfront %, Columns = Tata Tail %. ${simsPerCombo.toLocaleString()} MC paths per cell. Click to select.`} />
+          subtitle={`Rows = upfront %, Columns = Tail %. ${simsPerCombo.toLocaleString()} MC paths per cell. Click to select.`} />
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 3, fontFamily: FONT }}>
             <thead>

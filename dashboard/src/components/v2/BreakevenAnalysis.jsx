@@ -68,14 +68,14 @@ export default function BreakevenAnalysis({ data }) {
         <KPI label="Min SOC Breakeven" value={`${Math.min(...breakevenMax.map(b => b.socBE)).toFixed(0)}%`}
           sub="weakest claim" color={breakevenMax.some(b => b.socBE < 15) ? COLORS.accent5 : COLORS.accent4} />
         <KPI label="Claims Analyzed" value={claimIds.length} color={COLORS.accent6} />
-        <KPI label="Tata Tail" value="30%" sub="reference breakeven level" color={COLORS.accent3} />
+        <KPI label="Tail" value="30%" sub="reference breakeven level" color={COLORS.accent3} />
       </div>
 
       {/* SOC MOIC curve with dual axis (MOIC + IRR) */}
       {portfolioSOC.length > 0 && (
         <Card>
           <SectionTitle number="1" title="SOC Pricing — Portfolio MOIC & IRR vs Upfront %"
-            subtitle="Higher upfront investment reduces MOIC. Dashed line = breakeven (1.0×). At 30% Tata Tail." />
+            subtitle="Higher upfront investment reduces MOIC. Dashed line = breakeven (1.0×). At 30% Tail." />
           <ResponsiveContainer width="100%" height={380}>
             <ComposedChart data={portfolioSOC} margin={{ top: 10, right: 50, left: 10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
@@ -120,7 +120,7 @@ export default function BreakevenAnalysis({ data }) {
       {/* Per-claim max breakeven horizontal bar */}
       <Card>
         <SectionTitle number="2" title="Maximum Breakeven Purchase Price (MOIC ≥ 1.0×)"
-          subtitle="Max upfront % of SOC an investor can pay and still expect breakeven. At 30% Tata Tail." />
+          subtitle="Max upfront % of SOC an investor can pay and still expect breakeven. At 30% Tail." />
         <ResponsiveContainer width="100%" height={Math.max(280, breakevenMax.length * 50)}>
           <BarChart data={breakevenMax} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
@@ -206,7 +206,7 @@ export default function BreakevenAnalysis({ data }) {
       {/* Breakeven surface — SOC only */}
       {surfaceData.length > 0 && (
         <Card>
-          <SectionTitle number="3" title="Breakeven Surface — Tata Tail vs Max SOC Upfront"
+          <SectionTitle number="3" title="Breakeven Surface — Tail vs Max SOC Upfront"
             subtitle="How the maximum SOC upfront % changes as Tata's retained tail percentage varies." />
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={surfaceData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
@@ -227,7 +227,7 @@ export default function BreakevenAnalysis({ data }) {
       {/* Capital deployed at breakeven */}
       <Card>
         <SectionTitle number="4" title="Capital Deployed at Breakeven"
-          subtitle="Total SOC investment at the maximum breakeven upfront % (30% Tata Tail)." />
+          subtitle="Total SOC investment at the maximum breakeven upfront % (30% Tail)." />
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={breakevenMax} margin={{ top: 10, right: 20, left: 20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />

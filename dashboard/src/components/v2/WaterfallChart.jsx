@@ -40,7 +40,7 @@ function buildWaterfallSteps(view, isNominal) {
   steps.push({ label: 'E[Recovery]', value: view.prob_adjusted_cr, type: 'subtotal' });
   steps.push({ label: 'Legal Costs', value: -view.legal_costs_cr, type: 'subtract' });
   steps.push({ label: 'Net After Legal', value: view.net_after_legal_cr, type: 'subtotal' });
-  steps.push({ label: `Tata Tail (${fmtPct(tailPct)})`, value: -view.tata_receives_cr, type: 'subtract' });
+  steps.push({ label: `Tail (${fmtPct(tailPct)})`, value: -view.tata_receives_cr, type: 'subtract' });
   steps.push({ label: 'Fund Profit', value: view.fund_net_profit_cr, type: 'total' });
 
   // Build floating bars
@@ -121,7 +121,7 @@ export default function WaterfallChart({ data }) {
         <SectionTitle number="1"
           title={isNominal ? 'Nominal Value Decomposition' : `PV Decomposition @ ${fmtPct(pvView.discount_rate)}`}
           subtitle={isNominal
-            ? `SOC → Win/Quantum Adjusted → Legal Costs → Tata Tail → Fund Profit. No time-value discounting.`
+            ? `SOC → Win/Quantum Adjusted → Legal Costs → Tail → Fund Profit. No time-value discounting.`
             : `SOC → PV Discount (avg ${pvView.avg_timeline_months?.toFixed(0) || '?'}m) → Win/Quantum Adjusted → Legal → Tata → Fund. Rate: ${fmtPct(pvView.discount_rate)}.`
           } />
         <ResponsiveContainer width="100%" height={ui.chartHeight.lg}>
@@ -213,7 +213,7 @@ export default function WaterfallChart({ data }) {
           {[
             { label: 'Win Rate', value: fmtPct(activeView.win_rate) },
             { label: 'E[Q] Multiplier', value: `${(activeView.eq_multiplier || 0).toFixed(3)}×` },
-            { label: 'Tata Tail', value: fmtPct(tailPct) },
+            { label: 'Tail', value: fmtPct(tailPct) },
             { label: 'PV Discount', value: pvView.pv_factor ? pvView.pv_factor.toFixed(4) : 'N/A' },
             { label: 'PV Rate', value: fmtPct(pvView.discount_rate || 0.07) },
             { label: 'Avg Timeline', value: `${(pvView.avg_timeline_months || 0).toFixed(0)}m` },

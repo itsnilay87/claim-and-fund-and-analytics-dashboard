@@ -623,7 +623,7 @@ export function ReportView({ stochasticData }) {
   const sub = { color: REPORT_MUTED, fontSize: SIZES.sm, fontFamily: FONT, marginBottom: 20 };
 
   const charts = [
-    { data: moicData, label: 'E[MOIC] vs Upfront Purchase %', sub: 'Multi-line comparison across Tata Tail levels. Higher is better.',
+    { data: moicData, label: 'E[MOIC] vs Upfront Purchase %', sub: 'Multi-line comparison across Tail levels. Higher is better.',
       yFmt: v => v + '×', yLabel: 'E[MOIC]', refY: 1, refStroke: '#94A3B8', refLabel: null },
     { data: irrData, label: 'E[IRR] vs Upfront Purchase %', sub: 'Expected annual IRR. 30% hurdle shown dashed.',
       yFmt: v => (v * 100).toFixed(0) + '%', yLabel: 'E[IRR]', refY: 0.30, refStroke: '#D97706', refLabel: '30% hurdle' },
@@ -635,7 +635,7 @@ export function ReportView({ stochasticData }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: ui.space.xl }}>
       {/* Tail selector */}
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.md, flexWrap: 'wrap' }}>
-        <span style={{ color: COLORS.textMuted, fontSize: SIZES.sm }}>Show Tata Tail lines:</span>
+        <span style={{ color: COLORS.textMuted, fontSize: SIZES.sm }}>Show Tail lines:</span>
         {tailGrid.map((t, i) => (
           <button key={t} onClick={() => toggleTail(t)} style={{
             padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',

@@ -199,7 +199,7 @@ export default function DistributionExplorer({
 
             const dealLabel = (metric === 'duration')
               ? null
-              : `${combo.upfront_pct}% upfront / ${combo.tata_tail_pct}% Tata tail`;
+              : `${combo.upfront_pct}% upfront / ${combo.tata_tail_pct}% tail`;
 
             return { bins, stats, dealLabel };
           }

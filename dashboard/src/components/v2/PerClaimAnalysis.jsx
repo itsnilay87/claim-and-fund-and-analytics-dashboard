@@ -220,7 +220,7 @@ export default function PerClaimAnalysis({ data }) {
                   marginLeft: 'auto', cursor: 'pointer',
                 }}
               >
-                {tailOptions.map(t => <option key={t} value={t}>{axisMeta.isHybrid ? `${axisMeta.formatSecond(t / 100)} ${axisMeta.secondAxisLabel}` : `${t}% Tata Tail`}</option>)}
+                {tailOptions.map(t => <option key={t} value={t}>{axisMeta.isHybrid ? `${axisMeta.formatSecond(t / 100)} ${axisMeta.secondAxisLabel}` : `${t}% Tail`}</option>)}
               </select>
             )}
           </div>

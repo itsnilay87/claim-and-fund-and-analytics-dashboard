@@ -169,7 +169,7 @@ export default function ExecutiveSummary({ data, stochasticData, structureType }
         </Card>
 
         <Card>
-          <SectionTitle number="2" title="Cashflow J-Curve" subtitle={`Cumulative portfolio cashflow — 10% upfront, ${axisMeta.isHybrid ? axisMeta.formatSecond(axisMeta.defaultSecond) + ' ' + tailLabel : '20% Tata tail'}`} />
+          <SectionTitle number="2" title="Cashflow J-Curve" subtitle={`Cumulative portfolio cashflow — 10% upfront, ${axisMeta.isHybrid ? axisMeta.formatSecond(axisMeta.defaultSecond) + ' ' + tailLabel : '20% tail'}`} />
           <JCurveFanChart data={data} height={ui.chartHeight.sm} compact upfrontPct={0.10} tataTailPct={0.20} />
         </Card>
       </div>

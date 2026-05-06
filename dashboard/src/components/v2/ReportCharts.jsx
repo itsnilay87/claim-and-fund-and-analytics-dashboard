@@ -118,7 +118,7 @@ export default function ReportCharts({ stochasticData }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE.xl }}>
       {/* Tail selector */}
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.md, flexWrap: 'wrap' }}>
-        <span style={{ color: COLORS.textMuted, fontSize: SIZES.sm }}>Show Tata Tail lines:</span>
+        <span style={{ color: COLORS.textMuted, fontSize: SIZES.sm }}>Show Tail lines:</span>
         {tailGrid.map((t, i) => (
           <button key={t} onClick={() => toggleTail(t)} style={{
             padding: '6px 14px', borderRadius: 6, border: 'none', cursor: 'pointer',
@@ -134,7 +134,7 @@ export default function ReportCharts({ stochasticData }) {
       {/* Chart 1: E[MOIC] vs Upfront */}
       <div style={chartStyle}>
         <div style={titleStyle}>E[MOIC] vs Upfront Purchase %</div>
-        <div style={subtitleStyle}>Multi-line comparison across Tata Tail levels. Higher is better.</div>
+        <div style={subtitleStyle}>Multi-line comparison across Tail levels. Higher is better.</div>
         <ResponsiveContainer width="100%" height={400}>
           <LineChart data={moicData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={REPORT_GRID} />

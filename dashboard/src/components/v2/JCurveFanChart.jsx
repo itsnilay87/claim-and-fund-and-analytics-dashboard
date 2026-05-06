@@ -30,7 +30,7 @@ export default function JCurveFanChart({
   tataTailPct = 0.20,
   showControls = false,
   onScenarioChange,
-  tailLabel = 'Tata Tail %',
+  tailLabel = 'Tail %',
   formatTail,
 }) {
   const { ui } = useUISettings();

@@ -610,7 +610,7 @@ export default function CashflowAnalysis({ data }) {
       <SectionTitle
         number="8"
         title="Investor Cashflow Under Key Structures"
-        subtitle="How the fund performs under different upfront% / Tata tail% combinations. All ₹ Crore."
+        subtitle="How the fund performs under different upfront% / tail% combinations. All ₹ Crore."
       />
       <Card style={CARD_STYLE}>
         <InvestorScenarios scenarios={investor_scenarios} />

@@ -88,7 +88,7 @@ export default function InvestmentEQ({ data }) {
 
       {/* EQ MOIC Heatmap */}
       <Card>
-        <SectionTitle number="1" title="E[MOIC] Heatmap — EQ Pricing" subtitle="Rows = upfront to Tata %, Columns = Tata Tail %. EQ pricing yields higher MOIC because E[Q] < SOC." />
+        <SectionTitle number="1" title="E[MOIC] Heatmap — EQ Pricing" subtitle="Rows = upfront to Tata %, Columns = Tail %. EQ pricing yields higher MOIC because E[Q] < SOC." />
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 3, fontFamily: FONT }}>
             <thead>
@@ -119,9 +119,9 @@ export default function InvestmentEQ({ data }) {
         </div>
       </Card>
 
-      {/* Tata Tail selector */}
+      {/* Tail selector */}
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACE.md, flexWrap: 'wrap' }}>
-        <span style={{ color: COLORS.textMuted, fontSize: SIZES.sm }}>Tata Tail:</span>
+        <span style={{ color: COLORS.textMuted, fontSize: SIZES.sm }}>Tail:</span>
         {displayAwards.map(aw => {
           const tail = +(1 - aw).toFixed(2);
           return (
@@ -137,7 +137,7 @@ export default function InvestmentEQ({ data }) {
 
       {/* SOC vs EQ MOIC comparison */}
       <Card>
-        <SectionTitle number="2" title={`SOC vs EQ — MOIC Comparison (Tata Tail ${fmtPct(selectedTail)})`}
+        <SectionTitle number="2" title={`SOC vs EQ — MOIC Comparison (Tail ${fmtPct(selectedTail)})`}
           subtitle="EQ pricing consistently delivers higher MOIC because the denominator (E[Q]) is smaller than SOC." />
         <ResponsiveContainer width="100%" height={360}>
           <ComposedChart data={comparisonData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
@@ -169,7 +169,7 @@ export default function InvestmentEQ({ data }) {
 
       {/* Capital deployed: SOC vs EQ */}
       <Card>
-        <SectionTitle number="3" title={`Capital Deployed: SOC vs EQ (Tata Tail ${fmtPct(selectedTail)})`}
+        <SectionTitle number="3" title={`Capital Deployed: SOC vs EQ (Tail ${fmtPct(selectedTail)})`}
           subtitle="At the same upfront %, SOC requires more capital because SOC > E[Q]." />
         <ResponsiveContainer width="100%" height={320}>
           <ComposedChart data={comparisonData} margin={{ top: 10, right: 20, left: 20, bottom: 20 }}>
