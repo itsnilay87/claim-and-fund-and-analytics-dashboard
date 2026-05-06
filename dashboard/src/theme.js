@@ -12,38 +12,26 @@ import React, { createContext, useContext, useMemo, useState } from 'react';
  * 1. PRIMITIVE CONSTANTS — defined first, no dependencies
  * ═══════════════════════════════════════════════════════════ */
 
-/**
- * Cyberpunk Neon palette — high-contrast, saturated, dark-bg native.
- * Keys preserved (accent1..7) so all consumers continue to work.
- *
- *   accent1  cyan       #00F0FF
- *   accent2  magenta    #FF2E97
- *   accent3  yellow     #FFEE00
- *   accent4  green      #39FF14   (success / positive)
- *   accent5  red        #FF3864   (loss / risk)
- *   accent6  purple     #B026FF
- *   accent7  orange     #FF6B00
- */
 export const COLORS = {
-  bg: '#08090F',
-  card: '#0F1320',
-  cardBorder: '#1B2138',
-  cardHover: '#161B2E',
-  text: '#E8ECF7',
-  textMuted: '#8C95B8',
-  textBright: '#FFFFFF',
-  accent1: '#00F0FF',   // neon cyan
-  accent2: '#FF2E97',   // neon magenta
-  accent3: '#FFEE00',   // neon yellow
-  accent4: '#39FF14',   // neon green (positive)
-  accent5: '#FF3864',   // neon red (loss)
-  accent6: '#B026FF',   // neon purple
-  accent7: '#FF6B00',   // neon orange
-  breakeven: '#FFEE00',
-  gridLine: '#1B2138',
-  gradient1: 'linear-gradient(135deg, #00F0FF 0%, #B026FF 100%)',
-  gradient2: 'linear-gradient(135deg, #39FF14 0%, #00F0FF 100%)',
-  gradient3: 'linear-gradient(135deg, #FFEE00 0%, #FF3864 100%)',
+  bg: '#0B0E17',
+  card: '#111827',
+  cardBorder: '#1F2937',
+  cardHover: '#1a2332',
+  text: '#E5E7EB',
+  textMuted: '#9CA3AF',
+  textBright: '#F9FAFB',
+  accent1: '#06B6D4',   // cyan
+  accent2: '#8B5CF6',   // purple
+  accent3: '#F59E0B',   // amber
+  accent4: '#10B981',   // green
+  accent5: '#EF4444',   // red
+  accent6: '#3B82F6',   // blue
+  accent7: '#EC4899',   // pink
+  breakeven: '#F59E0B',
+  gridLine: '#1E293B',
+  gradient1: 'linear-gradient(135deg, #06B6D4 0%, #8B5CF6 100%)',
+  gradient2: 'linear-gradient(135deg, #10B981 0%, #06B6D4 100%)',
+  gradient3: 'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)',
 };
 
 export const FONT = "'Segoe UI', system-ui, -apple-system, sans-serif";
@@ -81,20 +69,15 @@ export const CHART_HEIGHT = {
 
 /* ── Reusable chart font configs (floors raised to match new SIZES) ── */
 export const CHART_FONT = {
-  axisTick:   { fontSize: Math.max(SIZES.sm, 13), fontFamily: FONT, fill: '#8C95B8' },
-  axisLabel:  { fontSize: Math.max(SIZES.md, 14), fontFamily: FONT, fill: '#E8ECF7', fontWeight: 600 },
+  axisTick:   { fontSize: Math.max(SIZES.sm, 13), fontFamily: FONT, fill: '#9CA3AF' },
+  axisLabel:  { fontSize: Math.max(SIZES.md, 14), fontFamily: FONT, fill: '#E5E7EB', fontWeight: 600 },
   legendItem: { fontSize: Math.max(SIZES.sm, 13), fontFamily: FONT },
 };
 
 export const CHART_COLORS = [
   COLORS.accent1, COLORS.accent2, COLORS.accent3,
-  COLORS.accent4, COLORS.accent6, COLORS.accent7,
-  COLORS.accent5,
-  '#7DF9FF',  // electric blue
-  '#CCFF00',  // chartreuse
-  '#FF61F6',  // hot pink
-  '#00FFC6',  // mint
-  '#FFB000',  // amber-neon
+  COLORS.accent4, COLORS.accent5, COLORS.accent6,
+  COLORS.accent7, '#34D399', '#A78BFA',
 ];
 
 /* ═══════════════════════════════════════════════════════════
@@ -166,12 +149,12 @@ export function getChartFont(sizes = SIZES) {
     axisTick: {
       fontSize: clampMin(sizes.sm, 13),
       fontFamily: FONT,
-      fill: '#8C95B8',
+      fill: '#9CA3AF',
     },
     axisLabel: {
       fontSize: clampMin(sizes.md, 14),
       fontFamily: FONT,
-      fill: '#E8ECF7',
+      fill: '#E5E7EB',
       fontWeight: 600,
     },
     legendItem: {
@@ -274,63 +257,63 @@ export const fmtMOIC = (v) => `${Number(v || 0).toFixed(2)}×`;
 /** Format months */
 export const fmtMo = (v) => `${Number(v || 0).toFixed(1)}m`;
 
-/** Get verdict style — neon palette */
+/** Get verdict style */
 export const getVerdictStyle = (verdict) => {
   switch (verdict) {
-    case 'STRONG BUY': return { color: '#39FF14', bg: 'rgba(57,255,20,0.12)' };
-    case 'ATTRACTIVE': return { color: '#00F0FF', bg: 'rgba(0,240,255,0.12)' };
-    case 'MARGINAL':   return { color: '#FFEE00', bg: 'rgba(255,238,0,0.12)' };
-    case 'AVOID':      return { color: '#FF3864', bg: 'rgba(255,56,100,0.14)' };
-    default:           return { color: '#8C95B8', bg: 'rgba(140,149,184,0.12)' };
+    case 'STRONG BUY': return { color: '#34D399', bg: '#34D39918' };
+    case 'ATTRACTIVE': return { color: '#06B6D4', bg: '#06B6D418' };
+    case 'MARGINAL':   return { color: '#F59E0B', bg: '#F59E0B18' };
+    case 'AVOID':      return { color: '#EF4444', bg: '#EF444418' };
+    default:           return { color: '#9CA3AF', bg: '#9CA3AF18' };
   }
 };
 
-/** Colour scale for heatmap cells based on MOIC — neon green/cyan/yellow/red */
+/** Colour scale for heatmap cells based on MOIC */
 export const moicColor = (moic) => {
-  if (moic >= 3.0) return 'rgba(57,255,20,0.45)';
-  if (moic >= 2.0) return 'rgba(57,255,20,0.30)';
-  if (moic >= 1.5) return 'rgba(0,240,255,0.30)';
-  if (moic >= 1.0) return 'rgba(255,238,0,0.25)';
-  return 'rgba(255,56,100,0.30)';
+  if (moic >= 3.0) return 'rgba(16,185,129,0.45)';
+  if (moic >= 2.0) return 'rgba(16,185,129,0.30)';
+  if (moic >= 1.5) return 'rgba(6,182,212,0.25)';
+  if (moic >= 1.0) return 'rgba(245,158,11,0.20)';
+  return 'rgba(239,68,68,0.25)';
 };
 
 /** Colour scale for P(loss) cells */
 export const lossColor = (pLoss) => {
   const v = pLoss * 100;
-  if (v > 45) return `rgba(255,56,100,${0.3 + (v/60) * 0.4})`;
-  if (v > 35) return `rgba(255,107,0,${0.2 + (v/60) * 0.3})`;
-  if (v > 25) return `rgba(255,238,0,${0.15 + (v/60) * 0.2})`;
-  return `rgba(57,255,20,${0.15 + (1 - v/60) * 0.2})`;
+  if (v > 45) return `rgba(239,68,68,${0.3 + (v/60) * 0.4})`;
+  if (v > 35) return `rgba(249,115,22,${0.2 + (v/60) * 0.3})`;
+  if (v > 25) return `rgba(245,158,11,${0.15 + (v/60) * 0.2})`;
+  return `rgba(16,185,129,${0.15 + (1 - v/60) * 0.2})`;
 };
 
 /** Colour scale for heatmap cells based on IRR */
 export const irrColor = (v) => {
-  if (v >= 0.40) return 'rgba(57,255,20,0.50)';
-  if (v >= 0.30) return 'rgba(57,255,20,0.35)';
-  if (v >= 0.20) return 'rgba(0,240,255,0.30)';
-  if (v >= 0.12) return 'rgba(255,238,0,0.25)';
-  if (v >= 0.00) return 'rgba(176,38,255,0.22)';
-  return 'rgba(255,56,100,0.32)';
+  if (v >= 0.40) return 'rgba(16,185,129,0.50)';
+  if (v >= 0.30) return 'rgba(16,185,129,0.35)';
+  if (v >= 0.20) return 'rgba(6,182,212,0.30)';
+  if (v >= 0.12) return 'rgba(245,158,11,0.25)';
+  if (v >= 0.00) return 'rgba(139,92,246,0.20)';
+  return 'rgba(239,68,68,0.30)';
 };
 
 /** Colour scale for P(IRR>hurdle) cells */
 export const hurdleColor = (v) => {
-  if (v >= 0.80) return 'rgba(57,255,20,0.45)';
-  if (v >= 0.60) return 'rgba(57,255,20,0.30)';
-  if (v >= 0.40) return 'rgba(0,240,255,0.28)';
-  if (v >= 0.20) return 'rgba(255,238,0,0.25)';
-  return 'rgba(255,56,100,0.30)';
+  if (v >= 0.80) return 'rgba(16,185,129,0.45)';
+  if (v >= 0.60) return 'rgba(16,185,129,0.30)';
+  if (v >= 0.40) return 'rgba(6,182,212,0.25)';
+  if (v >= 0.20) return 'rgba(245,158,11,0.25)';
+  return 'rgba(239,68,68,0.30)';
 };
 
 /** Colour scale for VaR/CVaR cells (higher magnitude = worse) */
 export const varColor = (v) => {
   const absV = Math.abs(v);
-  if (absV > 500) return 'rgba(255,56,100,0.45)';
-  if (absV > 200) return 'rgba(255,56,100,0.30)';
-  if (absV > 100) return 'rgba(255,107,0,0.25)';
-  if (absV > 50)  return 'rgba(255,238,0,0.22)';
-  return 'rgba(57,255,20,0.20)';
+  if (absV > 500) return 'rgba(239,68,68,0.45)';
+  if (absV > 200) return 'rgba(239,68,68,0.30)';
+  if (absV > 100) return 'rgba(249,115,22,0.25)';
+  if (absV > 50)  return 'rgba(245,158,11,0.20)';
+  return 'rgba(16,185,129,0.20)';
 };
 
 /** Standard cursor style for Bar hover across the dark theme */
-export const BAR_CURSOR = { fill: 'rgba(0,240,255,0.18)' };
+export const BAR_CURSOR = { fill: 'rgba(6,182,212,0.18)' };
