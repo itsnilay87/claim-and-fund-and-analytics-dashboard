@@ -109,7 +109,12 @@ function getTabsForStructure(structureType, claimMode, data) {
   if (claimMode) return SINGLE_CLAIM_TABS;
   const extra = STRUCTURE_TABS[structureType] || [];
   // Insert structure-specific tabs before the last two universal tabs (Risk, Export)
-  const universal = [...UNIVERSAL_TABS];
+  let universal = [...UNIVERSAL_TABS];
+  // Hide universal Per-Claim Contribution tab for Upfront + Tail Monetisation
+  // (per-claim metrics are surfaced via the structure-specific Per-Claim Analysis tab).
+  if (structureType === 'monetisation_upfront_tail') {
+    universal = universal.filter(t => t.id !== 'per_claim');
+  }
   const insertIdx = universal.length - 2;
   universal.splice(insertIdx, 0, ...extra);
   // Conditionally add Settlement tab when enabled
