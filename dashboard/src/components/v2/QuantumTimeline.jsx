@@ -10,9 +10,11 @@ import {
 } from 'recharts';
 import { COLORS, FONT, CHART_COLORS, SIZES, SPACE, CHART_HEIGHT, CHART_FONT, fmtCr, fmtPct, fmtMo } from '../theme';
 import { Card, SectionTitle, KPI, CustomTooltip } from './Shared';
+import { getClaimDisplayName, truncateClaimName, buildClaimNameMap } from '../../utils/claimNames';
 
 export default function QuantumTimeline({ data }) {
   const { quantum_summary: qs, timeline_summary: ts, claims } = data;
+  const nameMap = buildClaimNameMap(claims);
 
   const totalSOC = claims.reduce((s, c) => s + c.soc_value_cr, 0);
   const totalEQ = claims.reduce((s, c) => s + c.expected_quantum_cr, 0);
@@ -27,8 +29,10 @@ export default function QuantumTimeline({ data }) {
   // Per-claim quantum data
   const claimQuantumData = claims.map((c, i) => {
     const q = qs.per_claim[c.claim_id];
+    const displayName = nameMap[c.claim_id] || getClaimDisplayName(c);
     return {
-      claim: c.claim_id.replace('TP-', ''),
+      claim: truncateClaimName(displayName, 18),
+      fullName: displayName,
       soc: c.soc_value_cr,
       eq: q?.eq_cr || 0,
       mc_mean: q?.mc_quantum_stats?.mean || 0,
@@ -40,8 +44,10 @@ export default function QuantumTimeline({ data }) {
   // Timeline data per claim
   const timelineData = claims.map((c, i) => {
     const t = ts.per_claim[c.claim_id];
+    const displayName = nameMap[c.claim_id] || getClaimDisplayName(c);
     return {
-      claim: c.claim_id.replace('TP-', ''),
+      claim: truncateClaimName(displayName, 18),
+      fullName: displayName,
       mean: t?.mean || 0,
       median: t?.median || 0,
       p5: t?.p5 || 0,
@@ -86,10 +92,10 @@ export default function QuantumTimeline({ data }) {
       {/* Per-claim quantum: SOC vs E[Q] vs MC mean */}
       <Card>
         <SectionTitle number="2" title="Per-Claim Quantum: SOC vs E[Q] vs MC Mean" subtitle="MC mean quantum includes paths with Q=0 (when arb is lost)" />
-        <ResponsiveContainer width="100%" height={320}>
-          <BarChart data={claimQuantumData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+        <ResponsiveContainer width="100%" height={340}>
+          <BarChart data={claimQuantumData} margin={{ top: 10, right: 20, left: 10, bottom: 40 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
-            <XAxis dataKey="claim" tick={{ fill: COLORS.textMuted, fontSize: SIZES.sm }} />
+            <XAxis dataKey="claim" tick={{ fill: COLORS.textMuted, fontSize: SIZES.sm }} interval={0} angle={-20} textAnchor="end" height={60} />
             <YAxis tick={{ fill: COLORS.textMuted, fontSize: SIZES.sm }} tickFormatter={v => '₹' + v.toFixed(0)} />
             <Tooltip cursor={{ fill: 'rgba(6,182,212,0.06)' }} content={<CustomTooltip />} />
             <Legend wrapperStyle={{ fontSize: SIZES.sm, color: COLORS.textMuted }} />
@@ -103,17 +109,17 @@ export default function QuantumTimeline({ data }) {
       {/* Timeline range chart (simulated boxplots with bars) */}
       <Card>
         <SectionTitle number="3" title="Timeline Distribution by Claim" subtitle="P5–P95 range with mean marker. Includes pipeline + challenge + payment delay." />
-        <ResponsiveContainer width="100%" height={360}>
-          <ComposedChart data={timelineData} layout="vertical" margin={{ top: 10, right: 30, left: 80, bottom: 10 }}>
+        <ResponsiveContainer width="100%" height={Math.max(280, timelineData.length * 60)}>
+          <ComposedChart data={timelineData} layout="vertical" margin={{ top: 10, right: 30, left: 20, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
             <XAxis type="number" tick={{ fill: COLORS.textMuted, fontSize: SIZES.sm }} tickFormatter={v => v + 'm'} domain={[0, 'auto']} />
-            <YAxis dataKey="claim" type="category" tick={{ fill: COLORS.textMuted, fontSize: SIZES.sm }} width={70} />
+            <YAxis dataKey="claim" type="category" tick={{ fill: COLORS.textBright, fontSize: SIZES.sm, fontWeight: 600 }} width={140} />
             <Tooltip cursor={{ fill: 'rgba(6,182,212,0.06)' }} content={({ active, payload }) => {
               if (!active || !payload?.[0]) return null;
               const d = payload[0].payload;
               return (
                 <div style={{ background: '#1F2937', border: `1px solid ${COLORS.cardBorder}`, borderRadius: 8, padding: '10px 14px', fontFamily: FONT }}>
-                  <div style={{ color: COLORS.textBright, fontSize: SIZES.sm, fontWeight: 700 }}>{d.claim} ({d.jurisdiction})</div>
+                  <div style={{ color: COLORS.textBright, fontSize: SIZES.sm, fontWeight: 700 }}>{d.fullName || d.claim} ({d.jurisdiction})</div>
                   <div style={{ color: COLORS.textMuted, fontSize: SIZES.sm, marginTop: 4 }}>
                     Mean: {fmtMo(d.mean)} | Median: {fmtMo(d.median)}
                   </div>
@@ -139,11 +145,11 @@ export default function QuantumTimeline({ data }) {
       {/* 96-month breach analysis */}
       <Card>
         <SectionTitle number="4" title="96-Month Breach Probability" subtitle="Fraction of MC paths exceeding the re-arbitration cutoff" />
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={timelineData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={timelineData} margin={{ top: 10, right: 20, left: 10, bottom: 40 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
-            <XAxis dataKey="claim" tick={{ fill: COLORS.textMuted, fontSize: SIZES.sm }} />
-            <YAxis tick={{ fill: COLORS.textMuted, fontSize: SIZES.sm }} tickFormatter={v => fmtPct(v)} />
+            <XAxis dataKey="claim" tick={{ fill: COLORS.textMuted, fontSize: SIZES.sm }} interval={0} angle={-20} textAnchor="end" height={60} />
+            <YAxis tick={{ fill: COLORS.textMuted, fontSize: SIZES.sm }} tickFormatter={v => fmtPct(v)} domain={[0, dataMax => Math.max(0.1, dataMax * 1.2)]} />
             <Tooltip cursor={{ fill: 'rgba(6,182,212,0.06)' }} content={<CustomTooltip />} />
             <ReferenceLine y={0.05} stroke={COLORS.accent3} strokeDasharray="6 3" strokeWidth={1.5}
               label={{ value: '5% threshold', fill: COLORS.accent3, fontSize: SIZES.xs, position: 'top' }} />

@@ -971,6 +971,9 @@ def _build_breakeven_data(
 
     return {
         "surfaces": be_data,
+        # Canonical key (legacy dashboards expect this name)
+        "per_claim_at_30_tail": per_claim_be,
+        # Backward-compat alias
         "per_claim_at_30_tata_tail": per_claim_be,
     }
 

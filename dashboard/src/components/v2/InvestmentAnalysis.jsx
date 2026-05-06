@@ -61,7 +61,10 @@ export default function InvestmentAnalysis({ data }) {
       pct: `${(up * 100).toFixed(0)}%`,
       upfront_pct: up,
       moic: cell?.mean_moic || 0,
-      xirr: cell?.mean_xirr || 0,
+      // Prefer expected_xirr (XIRR of E[cashflows]) over mean_xirr (avg of
+      // per-path IRRs). The latter is heavily skewed by -100% loss paths and
+      // is not what investors typically reason about.
+      xirr: cell?.expected_xirr ?? cell?.mean_xirr ?? 0,
       p_loss: cell?.p_loss || 0,
       net_return_cr: cell?.mean_net_return_cr || 0,
       investment_cr: totalSOC * up,
@@ -74,7 +77,7 @@ export default function InvestmentAnalysis({ data }) {
     for (const aw of awardPcts) {
       const cell = grid.find(g => g.upfront_pct === up && g.award_share_pct === aw);
       row[`aw_${aw}_moic`] = cell?.mean_moic || 0;
-      row[`aw_${aw}_xirr`] = cell?.mean_xirr || 0;
+      row[`aw_${aw}_xirr`] = cell?.expected_xirr ?? cell?.mean_xirr ?? 0;
     }
     return row;
   });
@@ -83,14 +86,24 @@ export default function InvestmentAnalysis({ data }) {
   const bestCell = grid.reduce((a, b) => (a.mean_moic > b.mean_moic ? a : b), grid[0]);
   const bestTail = axisMeta.rowToSecond(bestCell);
 
-  /* ── breakeven data ── */
-  const perClaimBE   = be?.per_claim_at_30_tail || be?.per_claim_at_40_award || {};
+  /* ── breakeven data ──
+     The exporter previously used the key `per_claim_at_30_tata_tail`; older
+     dashboards expect `per_claim_at_30_tail`. Fall through any of them. */
+  const perClaimBE   = be?.per_claim_at_30_tail
+                    || be?.per_claim_at_30_tata_tail
+                    || be?.per_claim_at_40_award
+                    || {};
+  const claimNameMap = useMemo(() => {
+    const m = {};
+    (claims || []).forEach(c => { m[c.claim_id] = getClaimDisplayName(c); });
+    return m;
+  }, [claims]);
   const claimIds     = Object.keys(perClaimBE);
   const breakevenMax = claimIds.map(cid => {
     const info = perClaimBE[cid];
     return {
-      claim: cid.replace('TP-', ''),
-      fullId: cid,
+      claim: claimNameMap[cid] || cid.replace('TP-', ''),
+      fullId: claimNameMap[cid] || cid,
       socBE: (info?.soc_breakeven_pct || 0) * 100,
       soc: info?.soc_cr || 0,
       archetype: info?.archetype || '',
@@ -100,10 +113,20 @@ export default function InvestmentAnalysis({ data }) {
   /* ── aggregate stats ── */
   const refCells  = grid.filter(g => Math.abs(g.award_share_pct - 0.70) < 0.001);
   const avgMoic   = refCells.length ? refCells.reduce((s, c) => s + c.mean_moic, 0) / refCells.length : 0;
-  const avgIrr    = refCells.length ? refCells.reduce((s, c) => s + (c.mean_xirr || 0), 0) / refCells.length : 0;
-  const safe      = grid.filter(g => g.p_loss < 0.30).sort((a, b) => b.mean_moic - a.mean_moic);
-  const sweetSpot = safe[0];
-  const sweetTail = sweetSpot ? axisMeta.rowToSecond(sweetSpot) : 0;
+  const avgIrr    = refCells.length ? refCells.reduce((s, c) => s + (c.expected_xirr ?? c.mean_xirr ?? 0), 0) / refCells.length : 0;
+  // Sweet spot: best MOIC among cells with the lowest achievable P(Loss).
+  // Originally hard-required p_loss < 30% which yields N/A whenever the
+  // entire grid is riskier than that. Now we relax dynamically so a sensible
+  // best-available cell is always shown.
+  const sortedByMoic = [...grid].sort((a, b) => b.mean_moic - a.mean_moic);
+  const minLoss      = grid.length ? Math.min(...grid.map(g => g.p_loss ?? 1)) : 1;
+  const lossCutoff   = Math.max(0.30, minLoss + 0.05);  // allow 5pp above floor
+  const safe         = sortedByMoic.filter(g => (g.p_loss ?? 1) <= lossCutoff);
+  const sweetSpot    = safe[0] || sortedByMoic[0];
+  const sweetTail    = sweetSpot ? axisMeta.rowToSecond(sweetSpot) : 0;
+  const sweetThresholdNote = lossCutoff > 0.301
+    ? `MOIC ${sweetSpot ? fmtMOIC(sweetSpot.mean_moic) : ''}, P(Loss)\u2264${(lossCutoff * 100).toFixed(0)}%`
+    : `MOIC ${sweetSpot ? fmtMOIC(sweetSpot.mean_moic) : ''}, P(Loss)<30%`;
 
   /* ───────────────────── Render ───────────────────── */
   return (
@@ -117,12 +140,12 @@ export default function InvestmentAnalysis({ data }) {
           {[
             { label: 'Total SOC', value: fmtCr(totalSOC), sub: '6 claims', color: COLORS.accent1 },
             { label: 'Best E[MOIC]', value: fmtMOIC(bestCell.mean_moic), sub: `@ ${fmtPct(bestCell.upfront_pct)} up / ${fmtPct(bestTail)} tail`, color: COLORS.accent4 },
-            { label: 'Best E[IRR]', value: fmtPct(bestCell.mean_xirr || 0), sub: 'annualized', color: COLORS.accent2 },
+            { label: 'Best E[IRR]', value: fmtPct(bestCell.expected_xirr ?? bestCell.mean_xirr ?? 0), sub: 'XIRR of E[cashflows]', color: COLORS.accent2 },
             { label: 'Best P(Loss)', value: fmtPct(bestCell.p_loss), sub: 'lowest in grid', color: COLORS.accent5 },
             { label: 'Avg MOIC @30%', value: fmtMOIC(avgMoic), sub: 'across all upfronts', color: COLORS.accent3 },
             { label: 'Avg IRR @30%', value: fmtPct(avgIrr), sub: 'across all upfronts', color: COLORS.accent6 },
             { label: 'Sweet Spot', value: sweetSpot ? `${fmtPct(sweetSpot.upfront_pct)} / ${fmtSecond(sweetTail)}` : 'N/A',
-              sub: sweetSpot ? `MOIC ${fmtMOIC(sweetSpot.mean_moic)}, P(Loss)<30%` : '', color: COLORS.accent4 },
+              sub: sweetSpot ? sweetThresholdNote : '', color: COLORS.accent4 },
             { label: 'Max Breakeven', value: breakevenMax.length ? `${Math.max(...breakevenMax.map(b => b.socBE)).toFixed(0)}%` : 'N/A',
               sub: 'highest across claims', color: COLORS.accent1 },
           ].map((stat, i) => (
@@ -362,7 +385,7 @@ export default function InvestmentAnalysis({ data }) {
       <Card>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
           <SectionTitle number="1" title={`${heatmapMetric === 'irr' ? 'E[IRR]' : 'E[MOIC]'} Heatmap — SOC Pricing`}
-            subtitle={`Rows = upfront % of SOC, Columns = ${secondLabel}. Toggle between IRR and MOIC views.`} />
+            subtitle={`Rows = upfront % of SOC, Columns = ${secondLabel}. ${heatmapMetric === 'irr' ? 'IRR computed as XIRR of expected cashflows (probability‑weighted), not the average of per‑path IRRs.' : 'Toggle between IRR and MOIC views.'}`} />
           <div style={{ display: 'flex', gap: 2, background: '#0F1219', borderRadius: 8, padding: 2 }}>
             {[
               { key: 'irr', label: 'E[IRR]' },
@@ -529,7 +552,7 @@ export default function InvestmentAnalysis({ data }) {
       {breakevenMax.length > 0 && (
         <Card>
           <SectionTitle number="5" title="Maximum Breakeven Purchase Price (MOIC ≥ 1.0×)"
-            subtitle="Max upfront % of SOC an investor can pay and still expect breakeven. At 30% Tata Tail." />
+            subtitle="Max upfront % of SOC an investor can pay and still expect breakeven. At 30% Tail." />
           <ResponsiveContainer width="100%" height={Math.max(280, breakevenMax.length * 50)}>
             <BarChart data={breakevenMax} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLORS.gridLine} />
@@ -629,7 +652,7 @@ export default function InvestmentAnalysis({ data }) {
    ═══════════════════════════════════════════════════════════════════════════ */
 function RiskAnalytics({ grid, upfrontPcts, awardPcts, displayAwards, selectedAward, selectedTail, lineData, totalSOC, ui, axisMeta }) {
   const fmtSecond = axisMeta?.formatSecond || (v => fmtPct(v));
-  const secondLabel = axisMeta?.secondAxisLabel || 'Tata Tail';
+  const secondLabel = axisMeta?.secondAxisLabel || 'Tail';
   const [riskMetric, setRiskMetric] = useState('var');
 
   /* ── VaR/CVaR heatmap data ── */

@@ -49,24 +49,37 @@ export default function PurchaseSensitivity({ data }) {
         cvar1: pt.cvar_1 || 0,
       })).sort((a, b) => a.pricePct - b.pricePct);
     }
-    // Fall back to investment_grid
-    const pts = gridKeys.map(k => {
+    // Fall back to investment_grid.
+    // For monetisation_full_purchase the engine currently produces the full
+    // 2D upfront × tail SOC grid (e.g. 13 × 12 = 156 cells). Tail share is
+    // meaningless for a pure purchase, so we collapse to a 1D curve over
+    // the purchase price (= upfront %). For each upfront we keep the row
+    // with the smallest tail (tail=0 represents the canonical pure-purchase
+    // case). Without this dedupe, recharts plots all 12 tail variants per
+    // price in array order, producing a sawtooth artefact.
+    const byPrice = new Map();
+    for (const k of gridKeys) {
       const c = grid[k];
       const parts = k.split('_').map(Number);
       const pricePct = parts[0];
-      return {
-        pricePct,
-        label: `${pricePct}%`,
-        moic: c.mean_moic || c.e_moic || 0,
-        irr: c.mean_xirr || c.e_irr || 0,
-        pLoss: c.p_loss || c.prob_loss || 0,
-        pHurdle: c.p_hurdle || c.prob_hurdle || 0,
-        medianMoic: c.median_moic || c.p50_moic || 0,
-        var1: c.var_1 || 0,
-        cvar1: c.cvar_1 || 0,
-      };
-    }).sort((a, b) => a.pricePct - b.pricePct);
-    return pts;
+      const tailPct  = parts.length > 1 ? parts[1] : 0;
+      const existing = byPrice.get(pricePct);
+      if (!existing || tailPct < existing._tail) {
+        byPrice.set(pricePct, {
+          _tail: tailPct,
+          pricePct,
+          label: `${pricePct}%`,
+          moic: c.mean_moic || c.e_moic || 0,
+          irr: c.expected_xirr ?? c.mean_xirr ?? c.e_irr ?? 0,
+          pLoss: c.p_loss || c.prob_loss || 0,
+          pHurdle: c.p_hurdle || c.prob_hurdle || 0,
+          medianMoic: c.median_moic || c.p50_moic || 0,
+          var1: c.var_1 || 0,
+          cvar1: c.cvar_1 || 0,
+        });
+      }
+    }
+    return [...byPrice.values()].sort((a, b) => a.pricePct - b.pricePct);
   }, [grid, gridKeys]);
 
   // Find breakeven: from V2 data or where MOIC crosses 1.0

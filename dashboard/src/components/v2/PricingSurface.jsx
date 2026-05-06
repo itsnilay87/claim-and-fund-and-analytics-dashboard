@@ -351,7 +351,7 @@ py -m TATA_code_v2.v2_pricing_surface --n 10000 --seed 42 \\
           {/* Tail slider */}
           <div style={{ flex: 1, minWidth: 260 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600 }}>Tata Tail %</span>
+              <span style={{ color: COLORS.textMuted, fontSize: ui.sizes.sm, fontWeight: 600 }}>Tail %</span>
               <span style={{ color: COLORS.accent2, fontSize: ui.sizes.lg, fontWeight: 800 }}>{selectedTail.toFixed(1)}%</span>
             </div>
             <input

@@ -384,8 +384,8 @@ export function getAxisMeta(structureType, hybridParams) {
   // Default: upfront-tail semantics
   return {
     isHybrid: false,
-    secondAxisLabel: 'Tata Tail %',
-    secondAxisFullLabel: 'Tata Tail % (1 − award share)',
+    secondAxisLabel: 'Tail %',
+    secondAxisFullLabel: 'Tail % (1 − award share)',
     formatSecond: (v) => `${((+v) * 100).toFixed(0)}%`,
     formatSecondShort: (v) => `${((+v) * 100).toFixed(0)}%`,
     rowToSecond: (row) => row.tata_tail_pct ?? +(1 - (row.award_share_pct || 0)).toFixed(2),
