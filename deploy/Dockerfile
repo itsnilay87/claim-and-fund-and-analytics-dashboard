@@ -36,9 +36,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Python engine
+# Python engines
 COPY engine/ ./engine/
 RUN pip install --no-cache-dir -r engine/requirements.txt
+
+COPY engine_fund/ ./engine_fund/
+RUN pip install --no-cache-dir -r engine_fund/requirements.txt
 
 # Node server
 COPY server/package*.json ./server/

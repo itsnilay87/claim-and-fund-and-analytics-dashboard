@@ -1,0 +1,356 @@
+{
+  "scenarios": {
+    "failure": {
+      "fund": {
+        "average_prob_success": 0.30,
+        "prob_success_std_dev": 0.15,
+        "average_duration": 78.0,
+        "duration_std_dev": 18.0,
+        "payout_multiple": 2.5,
+        "award_ratio": 0.20
+      },
+      "claims": {
+        "average_prob_success": 0.30,
+        "prob_success_std_dev": 0.16,
+        "average_duration": 58,
+        "duration_std_dev": 14,
+        "average_settlement_probability": 0.15,
+        "average_settlement_recovery_pct": 0.40,
+        "average_dismissal_probability": 0.15,
+        "initiate_challenge_probability": 0.55
+      }
+    },
+    "stress": {
+      "fund": {
+        "average_prob_success": 0.45,
+        "prob_success_std_dev": 0.12,
+        "average_duration": 70.0,
+        "duration_std_dev": 16.0,
+        "payout_multiple": 3.2,
+        "award_ratio": 0.25
+      },
+      "claims": {
+        "average_prob_success": 0.45,
+        "prob_success_std_dev": 0.14,
+        "average_duration": 54,
+        "duration_std_dev": 12,
+        "average_settlement_probability": 0.20,
+        "average_settlement_recovery_pct": 0.45,
+        "average_dismissal_probability": 0.10
+      }
+    },
+    "downside": {
+      "fund": {
+        "average_prob_success": 0.55,
+        "prob_success_std_dev": 0.10,
+        "average_duration": 64.0,
+        "duration_std_dev": 14.0,
+        "average_quantum": 3200000000.0,
+        "quantum_std_dev": 1100000000.0
+      },
+      "claims": {
+        "average_prob_success": 0.55,
+        "prob_success_std_dev": 0.12,
+        "average_duration": 50,
+        "duration_std_dev": 10,
+        "average_settlement_probability": 0.25,
+        "settlement_recovery_pct_std_dev": 0.15
+      }
+    },
+    "base": {},
+    "upside": {
+      "fund": {
+        "average_prob_success": 0.72,
+        "prob_success_std_dev": 0.07,
+        "average_duration": 48.0,
+        "duration_std_dev": 10.0,
+        "average_quantum": 3800000000.0,
+        "quantum_std_dev": 950000000.0
+      },
+      "claims": {
+        "average_prob_success": 0.72,
+        "prob_success_std_dev": 0.08,
+        "average_duration": 38,
+        "duration_std_dev": 7,
+        "average_settlement_probability": 0.35,
+        "average_settlement_recovery_pct": 0.55
+      }
+    }
+  },
+  "fund": {
+    "name": "5R Fund I",
+    "committed_capital": 5000000000.0,
+    "fund_size": 5000000000.0,
+    "capital_reserve": -0.05,
+    "regulatory_concentration_limit": 0.25,
+    "fund_concentration_limit": 0.15,
+    "deployment_limit_tolerance": 0.05,
+    "monetisation_ratio": 0.5,
+    "case_origination_rate": 1.0,
+    "average_quantum": 3520000000.0,
+    "quantum_std_dev": 1027835864.0,
+    "average_prob_success": 0.65,
+    "prob_success_std_dev": 0.0827,
+    "average_duration": 55.2,
+    "duration_std_dev": 12.56,
+    "audit_base_fee_inr": 1400000.0,
+    "audit_fee_per_case_inr": 250000.0,
+    "fiscal_year_end_month": 3,
+    "fiscal_year_end_day": 31,
+    "organizational_costs_inr": 9000000.0,
+    "origination_cost_per_case_inr": 1800000.0,
+    "trustee_fee_monthly_inr": 8333.33,
+    "compliance_cost_monthly_inr": 183333.33,
+    "fundraising_cost_inr": 9000000.0,
+    "insurance_cost_monthly_inr": 110000.0,
+    "marketing_cost_monthly_inr": 366667.67,
+    "management_fee_frequency": "quarterly",
+    "management_fee_timing": "advance",
+    "investment_date": "2026-01-01",
+    "initial_closing_date": "2026-01-01",
+    "unit_classes": [
+      {
+        "class_name": "A1",
+        "management_fee_rate": 0.02,
+        "performance_fee_rate": 0.2,
+        "unit_face_value": 1000
+      },
+      {
+        "class_name": "B",
+        "management_fee_rate": 0.0,
+        "performance_fee_rate": 0.2,
+        "unit_face_value": 1000
+      }
+    ],
+    "investors": [
+      {
+        "name": "Sponsor",
+        "class_name": "B",
+        "commitment": 102000000.0,
+        "unit_price": 1000,
+        "management_fee_rate": 0.0,
+        "carry_rate": 0.0,
+        "carry_recipient_rate": 0.2
+      },
+      {
+        "name": "Anchor Investor",
+        "class_name": "A1",
+        "commitment": 898887000.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 1",
+        "class_name": "A1",
+        "commitment": 100000000.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 2",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 3",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 4",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 5",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 6",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 7",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 8",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 9",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 10",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 11",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 12",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 13",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 14",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 15",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 16",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 17",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 18",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 19",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 20",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      },
+      {
+        "name": "LP Investor 21",
+        "class_name": "A1",
+        "commitment": 194955650.0,
+        "unit_price": 1000,
+        "carry_rate": 0.2
+      }
+    ]
+  },
+  "portfolio": {
+    "total_cases": 20,
+    "portfolio_seed": 42,
+    "fund_start_date": "2026-01-01"
+  },
+  "simulation": {
+    "forecast_start_date": "2025-12-31",
+    "num_simulations": 500,
+    "alpha_seed": 0,
+    "deposit_rate": 0.07,
+    "sensitivity_sample_divisor": 4
+  },
+  "reporting": {
+    "rebasing_commitment": 100000000.0
+  },
+  "currency": {
+    "usd_inr": 90.0
+  },
+  "claims": {
+    "average_claims_per_case": 3,
+    "claims_per_case_std_dev": 1.0,
+    "min_claims_per_case": 1,
+    "max_claims_per_case": 6,
+    "claim_quantum_distribution": "dirichlet",
+    "dirichlet_alpha": 2.0,
+    "average_prob_success": 0.65,
+    "prob_success_std_dev": 0.10,
+    "average_duration": 42,
+    "duration_std_dev": 8,
+    "average_settlement_probability": 0.30,
+    "settlement_probability_std_dev": 0.10,
+    "average_settlement_recovery_pct": 0.50,
+    "settlement_recovery_pct_std_dev": 0.10,
+    "average_dismissal_probability": 0.05,
+    "dismissal_probability_std_dev": 0.03,
+    "dismissal_stage_months": 12,
+    "timeline_type": "india_section_34_37",
+    "initiate_challenge_probability": 0.40,
+    "challenge_stages": [
+      {
+        "stage_type": "section_34",
+        "description": "Section 34: Setting aside application",
+        "duration_months": 6,
+        "success_probability": 0.15,
+        "time_limit_months": 4,
+        "discretionary": false
+      },
+      {
+        "stage_type": "section_37",
+        "description": "Section 37: Appeal on questions of law",
+        "duration_months": 8,
+        "success_probability": 0.20,
+        "time_limit_months": 3,
+        "discretionary": false
+      },
+      {
+        "stage_type": "discretionary_appeal",
+        "description": "Discretionary Supreme Court appeal",
+        "duration_months": 12,
+        "success_probability": 0.10,
+        "time_limit_months": 0,
+        "discretionary": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fund Analytics Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+  <style>
+{{STYLES}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-content">
+      <div class="logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="56" height="56">
+          <defs>
+            <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#1a3a5c"/>
+              <stop offset="100%" style="stop-color:#0d2038"/>
+            </linearGradient>
+          </defs>
+          <rect width="100" height="100" rx="16" fill="url(#bg-grad)"/>
+          <text x="50" y="70" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="50" font-weight="700" fill="#4a9ead">5R</text>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h1>Fund Analytics Dashboard</h1>
+        <p class="description">Interactive overview of the stochastic model covering capital deployment (J curve), return distribution, and the most material single-variable sensitivities.</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- KPI Cards Section -->
+  <section class="kpi-grid" id="kpi-cards">
+    <div class="kpi-card" data-kpi="net_irr">
+      <div class="kpi-label">Net IRR</div>
+      <div class="kpi-value" id="kpi-net-irr">—</div>
+      <div class="kpi-sublabel">Annualised</div>
+    </div>
+    <div class="kpi-card" data-kpi="tvpi">
+      <div class="kpi-label">ROIC</div>
+      <div class="kpi-value" id="kpi-tvpi">—</div>
+      <div class="kpi-sublabel">Multiple</div>
+    </div>
+    <div class="kpi-card" data-kpi="dpi">
+      <div class="kpi-label">Gross ROIC</div>
+      <div class="kpi-value" id="kpi-dpi">—</div>
+      <div class="kpi-sublabel">Multiple</div>
+    </div>
+    <div class="kpi-card" data-kpi="rvpi">
+      <div class="kpi-label">Hybrid CAGR</div>
+      <div class="kpi-value" id="kpi-rvpi">—</div>
+      <div class="kpi-sublabel">Blended Return</div>
+    </div>
+    <div class="kpi-card" data-kpi="capital_called">
+      <div class="kpi-label">Outflows</div>
+      <div class="kpi-value" id="kpi-capital-called">—</div>
+      <div class="kpi-sublabel">Total Deployed</div>
+    </div>
+    <div class="kpi-card" data-kpi="current_nav">
+      <div class="kpi-label">Inflows</div>
+      <div class="kpi-value" id="kpi-current-nav">—</div>
+      <div class="kpi-sublabel">Total Received</div>
+    </div>
+  </section>
+
+  <section class="panel panel-wide collapsible" data-section="metrics">
+    <h2>
+      <span class="section-title">Fund Metrics (Alpha)</span>
+      <button class="collapse-toggle" aria-label="Toggle section">
+        <svg class="collapse-icon" viewBox="0 0 24 24" width="18" height="18">
+          <path d="M7 10l5 5 5-5z" fill="currentColor"/>
+        </svg>
+      </button>
+    </h2>
+    <table class="grouped-table" id="metrics-table"></table>
+  </section>
+
+  <section class="panel panel-wide collapsible" data-section="parameters">
+    <h2>
+      <span class="section-title">Fund Parameters (Alpha)</span>
+      <button class="collapse-toggle" aria-label="Toggle section">
+        <svg class="collapse-icon" viewBox="0 0 24 24" width="18" height="18">
+          <path d="M7 10l5 5 5-5z" fill="currentColor"/>
+        </svg>
+      </button>
+    </h2>
+    <table class="grouped-table" id="metadata-table"></table>
+  </section>
+
+  <section class="panel panel-wide collapsible" data-section="nav">
+    <h2>
+      <span class="section-title">NAV Trajectory (Rebased to 10 Cr)</span>
+      <button class="collapse-toggle" aria-label="Toggle section">
+        <svg class="collapse-icon" viewBox="0 0 24 24" width="18" height="18">
+          <path d="M7 10l5 5 5-5z" fill="currentColor"/>
+        </svg>
+      </button>
+    </h2>
+    <div class="legend">
+      <span><span class="swatch" style="background:#3b82f6"></span>Market NAV (Deposit Only)</span>
+      <span><span class="swatch" style="background:#22d3ee"></span>Fund Total NAV</span>
+      <span><span class="swatch" style="background:#fbbf24"></span>Hybrid NAV</span>
+    </div>
+    <div class="chart-container" style="height: 400px;">
+      <svg id="nav-comparison"></svg>
+    </div>
+  </section>
+
+  <section class="panel panel-wide collapsible" data-section="jcurve">
+    <h2>
+      <span class="section-title">Cash Flow J Curve</span>
+      <button class="collapse-toggle" aria-label="Toggle section">
+        <svg class="collapse-icon" viewBox="0 0 24 24" width="18" height="18">
+          <path d="M7 10l5 5 5-5z" fill="currentColor"/>
+        </svg>
+      </button>
+    </h2>
+    <div class="legend">
+      <span><span class="swatch" style="background:#1e3a8a"></span>5th / 95th Percentile</span>
+      <span><span class="swatch" style="background:#60a5fa"></span>25th / 75th Percentile</span>
+      <span><span class="swatch" style="background:#fbbf24"></span>Median</span>
+    </div>
+    <div class="chart-container" style="height: 450px;">
+      <svg id="j-curve-chart"></svg>
+    </div>
+  </section>
+
+  <section class="panel panel-wide collapsible" data-section="alphacashflow">
+    <h2>
+      <span class="section-title">Alpha Cash Flow Overlay</span>
+      <button class="collapse-toggle" aria-label="Toggle section">
+        <svg class="collapse-icon" viewBox="0 0 24 24" width="18" height="18">
+          <path d="M7 10l5 5 5-5z" fill="currentColor"/>
+        </svg>
+      </button>
+    </h2>
+    <div class="legend">
+      <span><span class="swatch" style="background:#f87171"></span>Capital Deployments</span>
+      <span><span class="swatch" style="background:#34d399"></span>Case Payouts</span>
+      <span><span class="swatch" style="background:#fbbf24"></span>Cumulative Net</span>
+    </div>
+    <div class="chart-container" style="height: 500px;">
+      <svg id="alpha-cashflow-chart"></svg>
+    </div>
+  </section>
+
+  <section class="panel panel-wide collapsible" data-section="irr">
+    <h2>
+      <span class="section-title">Net Annualised IRR Distribution</span>
+      <button class="collapse-toggle" aria-label="Toggle section">
+        <svg class="collapse-icon" viewBox="0 0 24 24" width="18" height="18">
+          <path d="M7 10l5 5 5-5z" fill="currentColor"/>
+        </svg>
+      </button>
+    </h2>
+    <div class="chart-container" style="height: 380px;">
+      <svg id="irr-histogram"></svg>
+    </div>
+  </section>
+
+  <section class="panel panel-wide collapsible" data-section="simstats">
+    <h2>
+      <span class="section-title">Simulation Summary Statistics</span>
+      <button class="collapse-toggle" aria-label="Toggle section">
+        <svg class="collapse-icon" viewBox="0 0 24 24" width="18" height="18">
+          <path d="M7 10l5 5 5-5z" fill="currentColor"/>
+        </svg>
+      </button>
+    </h2>
+    <table class="stats-table" id="simulation-summary-table"></table>
+  </section>
+
+  <section class="panel panel-wide collapsible" data-section="distribution">
+    <h2>
+      <span class="section-title">Simulation Distribution Explorer</span>
+      <button class="collapse-toggle" aria-label="Toggle section">
+        <svg class="collapse-icon" viewBox="0 0 24 24" width="18" height="18">
+          <path d="M7 10l5 5 5-5z" fill="currentColor"/>
+        </svg>
+      </button>
+    </h2>
+    <div class="distribution-controls">
+      <label for="distribution-select">Metric</label>
+      <select id="distribution-select"></select>
+    </div>
+    <div class="distribution-legend">
+      <span><span class="marker" style="background:#3b82f6"></span>Mean</span>
+      <span><span class="marker" style="background:#22d3ee"></span>Median</span>
+      <span><span class="marker" style="background:#fbbf24"></span>25th / 75th Percentiles</span>
+      <span><span class="marker" style="background:#f87171"></span>Alpha Scenario</span>
+    </div>
+    <div class="chart-container" style="height: 380px;">
+      <svg id="distribution-chart"></svg>
+    </div>
+  </section>
+
+  <section class="panel panel-wide collapsible" data-section="sensitivity">
+    <h2>
+      <span class="section-title">Sensitivity Explorer</span>
+      <button class="collapse-toggle" aria-label="Toggle section">
+        <svg class="collapse-icon" viewBox="0 0 24 24" width="18" height="18">
+          <path d="M7 10l5 5 5-5z" fill="currentColor"/>
+        </svg>
+      </button>
+    </h2>
+    <div id="sensitivity-wrapper"></div>
+  </section>
+
+  <section class="footer">
+    <p>Generated via D3.js — data exported directly from the simulation model. Values are illustrative and depend on the chosen random seed and scenario counts.</p>
+  </section>
+
+  <!-- Global tooltip element -->
+  <div class="chart-tooltip" id="chart-tooltip"></div>
+
+  <!-- Data placeholders (replaced at generation time) -->
+  <script id="j-curve-data" type="application/json">{{J_CURVE_DATA}}</script>
+  <script id="irr-data" type="application/json">{{IRR_DATA}}</script>
+  <script id="metadata-data" type="application/json">{{METADATA_DATA}}</script>
+  <script id="metrics-data" type="application/json">{{METRICS_DATA}}</script>
+  <script id="sensitivity-data" type="application/json">{{SENSITIVITY_DATA}}</script>
+  <script id="nav-data" type="application/json">{{NAV_DATA}}</script>
+  <script id="alpha-cashflow-data" type="application/json">{{ALPHA_CASHFLOW_DATA}}</script>
+  <script id="simulation-stats-data" type="application/json">{{SIM_STATS_DATA}}</script>
+  <script id="simulation-distributions-data" type="application/json">{{SIM_DISTRIBUTIONS_DATA}}</script>
+
+  <script>
+{{CHARTS_JS}}
+  </script>
+</body>
+</html>

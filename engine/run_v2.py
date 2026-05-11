@@ -667,59 +667,6 @@ def _postprocess_dashboard_json(
             "n_paths": n,
             "expected_irr": round(ref.get("expected_xirr", ref.get("mean_xirr", 0.0)), 4),
         }
-
-        # ── Override risk.{moic,irr}_distribution + add duration_distribution ──
-        # The grid-based percentiles computed earlier (over ig_dict aggregate
-        # means) describe variation across pricing scenarios, not the MC
-        # distribution at the user-selected reference combo. The dashboard
-        # (RiskAnalytics tab) expects path-level percentiles keyed
-        # p1/p5/p10/p25/p50/p75/p90/p95/p99 plus `mean`, and a
-        # `duration_distribution` with `portfolio` and `per_claim`
-        # percentile dicts. Populate these from the per-path arrays we just
-        # built so MOIC / IRR / Duration distribution charts render
-        # correctly for upfront-tail (and any other) structures.
-        def _path_percentiles(values):
-            if not values:
-                return {}
-            srt = sorted(float(v) for v in values)
-            out = {f"p{p}": round(_percentile(srt, p / 100.0), 4)
-                   for p in (1, 5, 10, 25, 50, 75, 90, 95, 99)}
-            out["mean"] = round(sum(srt) / len(srt), 4)
-            return out
-
-        try:
-            mc_moic = _path_percentiles(path_moics)
-            mc_irr = _path_percentiles(path_irrs)
-            mc_dur = _path_percentiles(path_durations)
-
-            per_claim_dur = {}
-            for cid in sim.claim_ids:
-                durs = [
-                    float(getattr(p, "total_duration_months", 0.0) or 0.0)
-                    for p in sim.results.get(cid, [])
-                ]
-                per_claim_dur[cid] = _path_percentiles(durs)
-
-            risk_section = data.get("risk") or {}
-            if mc_moic:
-                # Preserve analytical mean from grid reference
-                mc_moic["mean"] = round(ref.get("mean_moic", mc_moic.get("mean", 0.0)), 4)
-                risk_section["moic_distribution"] = mc_moic
-            if mc_irr:
-                mc_irr["mean_of_paths"] = mc_irr.get("mean", 0.0)
-                mc_irr["mean"] = round(
-                    ref.get("expected_xirr", ref.get("mean_xirr", mc_irr["mean_of_paths"])), 4,
-                )
-                risk_section["irr_distribution"] = mc_irr
-            if mc_dur:
-                risk_section["duration_distribution"] = {
-                    "portfolio": mc_dur,
-                    "per_claim": per_claim_dur,
-                }
-            data["risk"] = risk_section
-        except Exception as exc:  # pragma: no cover - defensive
-            print(f"  Warning: risk path-level distributions failed ({exc})")
-
         per_path_built = True
         print(f"  mc_distributions: built from {n} per-path outcomes")
     except Exception as exc:

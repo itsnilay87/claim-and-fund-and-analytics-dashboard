@@ -9,7 +9,7 @@
  * Route guards: ProtectedRoute redirects to /login, GuestRoute redirects to /workspaces.
  * Layout: DashboardLayout wraps all authenticated routes with TopBar + WorkspaceSidebar.
  */
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import DashboardLayout from './layouts/DashboardLayout';
@@ -30,6 +30,20 @@ import PortfolioList from './pages/PortfolioList';
 import PortfolioBuilder from './pages/PortfolioBuilder';
 import PortfolioResults from './pages/PortfolioResults';
 import { ArrowLeft, BarChart3 } from 'lucide-react';
+
+const FundAnalyticsLayout = lazy(() => import('./layouts/FundAnalyticsLayout'));
+const FundDashboard = lazy(() => import('./pages/fund/FundDashboard'));
+const FundParameterEditor = lazy(() => import('./pages/fund/FundParameterEditor'));
+const FundSimulate = lazy(() => import('./pages/fund/FundSimulate'));
+const FundHistory = lazy(() => import('./pages/fund/FundHistory'));
+const FundResults = lazy(() => import('./pages/fund/FundResults'));
+const FundCaseEditor = lazy(() => import('./pages/fund/FundCaseEditor'));
+const FundCaseHistory = lazy(() => import('./pages/fund/FundCaseHistory'));
+const FundCaseResults = lazy(() => import('./pages/fund/FundCaseResults'));
+
+function LazyFallback() {
+  return <div className="min-h-screen flex items-center justify-center bg-slate-950"><div className="w-8 h-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" /></div>;
+}
 
 function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -103,6 +117,22 @@ export default function App() {
         path="/account"
         element={<ProtectedRoute><AccountLayout /></ProtectedRoute>}
       />
+
+      {/* Fund Analytics */}
+      <Route
+        path="/fund-analytics"
+        element={<ProtectedRoute><Suspense fallback={<LazyFallback />}><FundAnalyticsLayout /></Suspense></ProtectedRoute>}
+      >
+        <Route index element={<FundDashboard />} />
+        <Route path="parameters" element={<FundParameterEditor />} />
+        <Route path="parameters/:id" element={<FundParameterEditor />} />
+        <Route path="simulate" element={<FundSimulate />} />
+        <Route path="history" element={<FundHistory />} />
+        <Route path="results/:id" element={<FundResults />} />
+        <Route path="case/new" element={<FundCaseEditor />} />
+        <Route path="case/history" element={<FundCaseHistory />} />
+        <Route path="case/:id/results" element={<FundCaseResults />} />
+      </Route>
 
       {/* Inside a workspace */}
       <Route

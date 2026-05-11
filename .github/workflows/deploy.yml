@@ -35,6 +35,20 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install fund engine dependencies
+        run: pip install -r engine_fund/requirements.txt
+
+      - name: Verify fund engine imports
+        run: |
+          python -c "from engine_fund.core.simulation import CashFlowModel; print('CashFlowModel OK')"
+          python -c "from engine_fund.api.celery_app import celery_app; print('Celery app OK')"
+          python -c "from engine_fund.api.sidecar import app; print('Sidecar app OK')"
+
       - name: Install server dependencies
         working-directory: server
         run: npm ci

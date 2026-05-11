@@ -46,6 +46,7 @@ const workspacesRouter = require('./routes/workspaces');
 const templatesRouter = require('./routes/templates');
 const authRouter = require('./routes/auth');
 const runsRouter = require('./routes/runs');
+const fundRouter = require('./routes/fund');
 const { authenticateToken } = require('./middleware/auth');
 const { getDefaults } = require('./services/configService');
 const { listRuns } = require('./services/simulationRunner');
@@ -129,6 +130,7 @@ app.use('/api/workspaces', authenticateToken, workspacesRouter);
 app.use('/api/claims', authenticateToken, claimsRouter);
 app.use('/api/portfolios', authenticateToken, portfoliosRouter);
 app.use('/api/runs', authenticateToken, runsRouter);
+app.use('/api/fund', authenticateToken, fundRouter);
 app.use('/api/templates', templatesRouter);
 app.use('/api', resultsRouter);
 
@@ -158,8 +160,18 @@ app.get('/api/health', async (_req, res) => {
   } catch {
     checks.database = 'error';
   }
+  try {
+    const fundSidecar = require('./services/fundSidecarClient');
+    const sidecarHealth = await fundSidecar.healthCheck();
+    checks.fundSidecar = sidecarHealth.status === 'ok' ? 'ok' : 'degraded';
+    checks.redis = sidecarHealth.redis || 'unknown';
+    checks.celery = sidecarHealth.celery || 'unknown';
+  } catch {
+    checks.fundSidecar = 'unavailable';
+  }
+  const allOk = Object.values(checks).every(v => v === 'ok');
   res.json({
-    status: checks.database === 'ok' ? 'ok' : 'degraded',
+    status: allOk ? 'ok' : 'degraded',
     ...checks,
     timestamp: new Date().toISOString(),
   });
@@ -182,9 +194,11 @@ app.use((err, _req, res, _next) => {
 
 // ── Start server (skip when imported for testing) ──
 if (process.env.NODE_ENV !== 'test') app.listen(PORT, () => {
-  console.log(`[Claim Analytics Server] Running on http://localhost:${PORT}`);
-  console.log(`[Claim Analytics Server] Engine dir: ${path.resolve(__dirname, '..', 'engine')}`);
-  console.log(`[Claim Analytics Server] Runs dir:   ${path.resolve(__dirname, 'runs')}`);
+  console.log(`[Analytics Platform] Running on http://localhost:${PORT}`);
+  console.log(`[Analytics Platform] Claim engine: ${path.resolve(__dirname, '..', 'engine')}`);
+  console.log(`[Analytics Platform] Fund engine:  ${path.resolve(__dirname, '..', 'engine_fund')}`);
+  console.log(`[Analytics Platform] Runs dir:     ${path.resolve(__dirname, 'runs')}`);
+  console.log(`[Analytics Platform] Fund sidecar: ${process.env.FUND_SIDECAR_URL || 'http://localhost:8000'}`);
 
   // Non-blocking DB connectivity check + auto-migration
   pool.query('SELECT 1')

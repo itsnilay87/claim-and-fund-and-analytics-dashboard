@@ -13,6 +13,7 @@ import { api, setAccessToken, clearAccessToken } from '../services/api';
 import { useWorkspaceStore } from './workspaceStore';
 import { useClaimStore } from './claimStore';
 import { usePortfolioStore } from './portfolioStore';
+import { useFundStore } from './fundStore';
 
 export const useAuthStore = create((set, get) => ({
   user: null,
@@ -126,6 +127,7 @@ export const useAuthStore = create((set, get) => ({
     useWorkspaceStore.getState().reset();
     useClaimStore.getState().reset();
     usePortfolioStore.getState().reset();
+    useFundStore.getState().reset();
     set({ user: null, isAuthenticated: false, error: null });
   },
 

@@ -21,6 +21,20 @@ services:
       timeout: 3s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
   web:
     # In production, pull the prebuilt image from GHCR (set WEB_IMAGE in .env).
     # For local dev, override with: docker compose -f docker-compose.yml -f docker-compose.dev.yml ...
@@ -38,6 +52,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -49,6 +65,8 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
+      - REDIS_URL=redis://redis:6379/0
+      - FUND_SIDECAR_URL=http://localhost:8000
     networks:
       - internal
       - default
@@ -56,6 +74,7 @@ services:
 volumes:
   runs-data:
   pgdata:
+  redis-data:
 
 networks:
   internal:

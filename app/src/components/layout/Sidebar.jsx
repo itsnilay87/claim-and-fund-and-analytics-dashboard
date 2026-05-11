@@ -2,6 +2,7 @@
 import { useAuthStore } from '../../store/authStore'
 import { Home, Scale, Briefcase, History, User, HelpCircle, LogOut, ChevronLeft, ChevronRight, FolderOpen } from 'lucide-react'
 import { useState } from 'react'
+import ProductSwitcher from './ProductSwitcher'
 
 function useNavItems() {
   const { wsId } = useParams()
@@ -33,8 +34,9 @@ export default function Sidebar() {
         {!collapsed && <span className="ml-3 text-sm font-bold text-slate-900 dark:text-white whitespace-nowrap">Claim Analytics</span>}
       </div>
 
-      {/* Workspace switcher */}
-      <div className="px-2 pt-4 pb-2">
+      {/* Product switcher + workspace link */}
+      <div className="px-2 pt-4 pb-2 space-y-1">
+        <ProductSwitcher collapsed={collapsed} />
         <NavLink to="/workspaces"
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
         >

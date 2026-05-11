@@ -1,0 +1,108 @@
+{
+  "case": {
+    "name": "Sample Infrastructure Dispute",
+    "case_id": "CASE-2026-001",
+    "description": "Infrastructure construction dispute with multiple claims",
+    "case_type": "Cost Financing",
+    "start_date": "2026-01-01",
+    "seat": "Mumbai, India",
+    "governing_law": "Indian Arbitration & Conciliation Act, 1996"
+  },
+  "financial": {
+    "monthly_base_cost": 13833333.33,
+    "excess_cost_threshold": 1666666666.67,
+    "excess_cost_rate": 0.05,
+    "initial_payment_pct": 0.10,
+    "monetisation_multiples": [2.5, 3.0, 3.5, 4.0],
+    "payout_cap_pct": 1.0,
+    "payout_multiple": 4.0
+  },
+  "claims": [
+    {
+      "claim_id": "CLAIM-001",
+      "description": "Delay damages and liquidated damages",
+      "quantum": 6250000000.0,
+      "quantum_usd": 75000000.0,
+      "prob_success": 0.70,
+      "duration_months": 42,
+      "settlement_probability": 0.20,
+      "settlement_recovery_pct": 0.50,
+      "dismissal_probability": 0.05,
+      "dismissal_stage_months": 12
+    },
+    {
+      "claim_id": "CLAIM-002",
+      "description": "Defective work and remediation costs",
+      "quantum": 10000000000.0,
+      "quantum_usd": 120000000.0,
+      "prob_success": 0.60,
+      "duration_months": 50,
+      "settlement_probability": 0.35,
+      "settlement_recovery_pct": 0.45,
+      "dismissal_probability": 0.03,
+      "dismissal_stage_months": 12
+    },
+    {
+      "claim_id": "CLAIM-003",
+      "description": "Unpaid milestone payments",
+      "quantum": 5000000000.0,
+      "quantum_usd": 60000000.0,
+      "prob_success": 0.85,
+      "duration_months": 36,
+      "settlement_probability": 0.30,
+      "settlement_recovery_pct": 0.60,
+      "dismissal_probability": 0.02,
+      "dismissal_stage_months": 12
+    },
+    {
+      "claim_id": "CLAIM-004",
+      "description": "Additional work outside scope",
+      "quantum": 3750000000.0,
+      "quantum_usd": 45000000.0,
+      "prob_success": 0.50,
+      "duration_months": 44,
+      "settlement_probability": 0.40,
+      "settlement_recovery_pct": 0.40,
+      "dismissal_probability": 0.08,
+      "dismissal_stage_months": 12
+    }
+  ],
+  "timeline": {
+    "timeline_type": "india_section_34_37",
+    "initiate_challenge_probability": 0.40,
+    "challenge_stages": [
+      {
+        "stage_type": "section_34",
+        "description": "Section 34: Setting aside application",
+        "duration_months": 6,
+        "success_probability": 0.15,
+        "time_limit_months": 4,
+        "discretionary": false
+      },
+      {
+        "stage_type": "section_37",
+        "description": "Section 37: Appeal on questions of law",
+        "duration_months": 8,
+        "success_probability": 0.20,
+        "time_limit_months": 3,
+        "discretionary": false
+      },
+      {
+        "stage_type": "discretionary_appeal",
+        "description": "Discretionary Supreme Court appeal",
+        "duration_months": 12,
+        "success_probability": 0.10,
+        "time_limit_months": 0,
+        "discretionary": true
+      }
+    ]
+  },
+  "simulation": {
+    "num_simulations": 1000,
+    "seed": 42
+  },
+  "currency": {
+    "base_currency": "INR",
+    "usd_inr": 83.33
+  }
+}
