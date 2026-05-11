@@ -169,7 +169,10 @@ app.get('/api/health', async (_req, res) => {
   } catch {
     checks.fundSidecar = 'unavailable';
   }
-  const allOk = Object.values(checks).every(v => v === 'ok');
+  const allOk = Object.entries(checks).every(([k, v]) => {
+    if (k === 'celery') return v === 'ok' || v === 'busy';
+    return v === 'ok';
+  });
   res.json({
     status: allOk ? 'ok' : 'degraded',
     ...checks,
