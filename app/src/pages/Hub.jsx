@@ -71,8 +71,12 @@ export default function Hub() {
   const [showMenu, setShowMenu] = useState(false)
   const menuRef = useRef(null)
 
-  useEffect(() => { fetchWorkspaces?.() }, [fetchWorkspaces])
-  useEffect(() => { fetchSimulations?.('limit=10') }, [fetchSimulations])
+  useEffect(() => {
+    try { fetchWorkspaces?.()?.catch?.(() => {}) } catch { /* noop */ }
+  }, [fetchWorkspaces])
+  useEffect(() => {
+    try { fetchSimulations?.('limit=10')?.catch?.(() => {}) } catch { /* noop */ }
+  }, [fetchSimulations])
 
   useEffect(() => {
     function handler(e) {
@@ -82,13 +86,15 @@ export default function Hub() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const claimSeries = useMemo(() => syntheticSeries((workspaces?.length || 1) * 7 + 11), [workspaces])
-  const fundSeries = useMemo(() => syntheticSeries((simulations?.length || 1) * 5 + 3), [simulations])
+  const claimSeries = useMemo(() => syntheticSeries(((workspaces && workspaces.length) || 1) * 7 + 11), [workspaces])
+  const fundSeries = useMemo(() => syntheticSeries(((simulations && simulations.length) || 1) * 5 + 3), [simulations])
 
-  const completedSims = (simulations || []).filter((s) => s.status === 'completed').length
-  const runningSims = (simulations || []).filter((s) => s.status === 'running' || s.status === 'queued').length
+  const safeSims = Array.isArray(simulations) ? simulations : []
+  const completedSims = safeSims.filter((s) => s && s.status === 'completed').length
+  const runningSims = safeSims.filter((s) => s && (s.status === 'running' || s.status === 'queued')).length
 
-  const displayName = user?.full_name || user?.name || user?.email || 'there'
+  const displayName = (user && (user.full_name || user.name || user.email)) || 'there'
+  const firstName = String(displayName).split(' ')[0] || 'there'
   const greeting = greetingFor(new Date())
 
   const handleLogout = async () => {
@@ -167,7 +173,7 @@ export default function Hub() {
             All systems operational
           </div>
           <h1 className="mt-4 text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-            {greeting}, {displayName.split(' ')[0]}
+            {greeting}, {firstName}
           </h1>
           <p className="mt-2 text-slate-500 dark:text-slate-400 max-w-2xl">
             Pick a workspace to continue. You can switch between Claim Analytics and Fund Analytics any time
@@ -177,8 +183,8 @@ export default function Hub() {
 
         {/* Mini stats row */}
         <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-          <StatTile icon={Briefcase} label="Workspaces" value={workspaces?.length ?? 0} color="from-teal-500 to-cyan-500" />
-          <StatTile icon={Activity} label="Fund Simulations" value={simulations?.length ?? 0} color="from-blue-500 to-indigo-500" />
+          <StatTile icon={Briefcase} label="Workspaces" value={Array.isArray(workspaces) ? workspaces.length : 0} color="from-teal-500 to-cyan-500" />
+          <StatTile icon={Activity} label="Fund Simulations" value={safeSims.length} color="from-blue-500 to-indigo-500" />
           <StatTile icon={TrendingUp} label="Completed" value={completedSims} color="from-emerald-500 to-green-500" />
           <StatTile icon={Sparkles} label="Running" value={runningSims} color="from-amber-500 to-orange-500" />
         </section>
@@ -194,7 +200,7 @@ export default function Hub() {
             sparkColor={{ stroke: '#14b8a6', fill: 'rgba(20,184,166,0.18)' }}
             data={claimSeries}
             chips={[
-              { k: 'Workspaces', v: workspaces?.length ?? 0 },
+              { k: 'Workspaces', v: Array.isArray(workspaces) ? workspaces.length : 0 },
               { k: 'Engine', v: 'Monte Carlo' },
             ]}
             cta="Open Claim Analytics"
@@ -208,7 +214,7 @@ export default function Hub() {
             sparkColor={{ stroke: '#6366f1', fill: 'rgba(99,102,241,0.20)' }}
             data={fundSeries}
             chips={[
-              { k: 'Simulations', v: simulations?.length ?? 0 },
+              { k: 'Simulations', v: safeSims.length },
               { k: 'Sidecar', v: 'Online' },
             ]}
             cta="Open Fund Analytics"

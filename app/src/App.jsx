@@ -19,6 +19,7 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import ForgotPassword from './pages/ForgotPassword';
 import Hub from './pages/Hub';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import WorkspaceHome from './pages/WorkspaceHome';
 import WorkspaceDashboard from './pages/WorkspaceDashboard';
 import Home from './pages/Home';
@@ -110,7 +111,7 @@ export default function App() {
       {/* Hub: post-login product picker */}
       <Route
         path="/hub"
-        element={<ProtectedRoute><Hub /></ProtectedRoute>}
+        element={<ProtectedRoute><ErrorBoundary><Hub /></ErrorBoundary></ProtectedRoute>}
       />
 
       {/* Workspace list */}
