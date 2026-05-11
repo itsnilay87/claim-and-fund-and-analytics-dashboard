@@ -74,9 +74,17 @@ export const useFundStore = create((set, get) => ({
     set({ loading: true, error: null })
     try {
       const { data } = await fundApi.listSimulations(query)
-      set({ simulations: data || [], loading: false })
+      // Server returns { data: { runs: [...], total: N } }; tolerate other shapes too.
+      const runs = Array.isArray(data?.runs)
+        ? data.runs
+        : Array.isArray(data)
+          ? data
+          : Array.isArray(data?.simulations)
+            ? data.simulations
+            : []
+      set({ simulations: runs, loading: false })
     } catch (err) {
-      set({ error: err.message, loading: false })
+      set({ error: err.message, loading: false, simulations: [] })
     }
   },
 

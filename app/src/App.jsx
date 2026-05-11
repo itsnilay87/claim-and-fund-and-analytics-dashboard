@@ -129,7 +129,7 @@ export default function App() {
       {/* Fund Analytics */}
       <Route
         path="/fund-analytics"
-        element={<ProtectedRoute><Suspense fallback={<LazyFallback />}><FundAnalyticsLayout /></Suspense></ProtectedRoute>}
+        element={<ProtectedRoute><ErrorBoundary><Suspense fallback={<LazyFallback />}><FundAnalyticsLayout /></Suspense></ErrorBoundary></ProtectedRoute>}
       >
         <Route index element={<FundDashboard />} />
         <Route path="parameters" element={<FundParameterEditor />} />

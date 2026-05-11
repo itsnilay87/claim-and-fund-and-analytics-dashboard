@@ -4,18 +4,19 @@ import { useFundStore } from '../../store/fundStore'
 import { Play, History, Settings2, FlaskConical, BarChart3, Loader2, TrendingUp, ArrowRight } from 'lucide-react'
 
 export default function FundDashboard() {
-  const { simulations, fetchSimulations, loading } = useFundStore()
+  const { simulations: rawSimulations, fetchSimulations, loading } = useFundStore()
+  const simulations = Array.isArray(rawSimulations) ? rawSimulations : []
   const [recentLoaded, setRecentLoaded] = useState(false)
 
   const loadRecent = useCallback(async () => {
-    await fetchSimulations('limit=5')
+    try { await fetchSimulations('limit=5') } catch { /* noop */ }
     setRecentLoaded(true)
   }, [fetchSimulations])
 
   useEffect(() => { loadRecent() }, [loadRecent])
 
-  const completedCount = simulations.filter((s) => s.status === 'completed').length
-  const runningCount = simulations.filter((s) => s.status === 'running' || s.status === 'queued').length
+  const completedCount = simulations.filter((s) => s && s.status === 'completed').length
+  const runningCount = simulations.filter((s) => s && (s.status === 'running' || s.status === 'queued')).length
 
   const quickActions = [
     { to: '/fund-analytics/simulate', icon: Play, label: 'New Simulation', desc: 'Run a fund Monte Carlo simulation', color: 'from-blue-500 to-cyan-500' },
