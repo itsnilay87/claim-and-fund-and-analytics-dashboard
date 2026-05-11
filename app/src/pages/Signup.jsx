@@ -51,9 +51,9 @@ export default function Signup() {
     try {
       const result = await requestOtp(form.email, form.password, form.name)
       // If the server skipped email verification (SMTP unavailable), the
-      // user is already signed in — go straight to workspaces.
+      // user is already signed in — go straight to the hub.
       if (result && result.skipped) {
-        navigate('/workspaces')
+        navigate('/hub')
         return
       }
       setStep(2)
@@ -109,7 +109,7 @@ export default function Signup() {
     setLoading(true)
     try {
       await verifyOtp(form.email, otp)
-      navigate('/workspaces')
+      navigate('/hub')
     } catch (err) {
       setError(err.message || 'Verification failed')
       setOtpDigits(['', '', '', '', '', ''])

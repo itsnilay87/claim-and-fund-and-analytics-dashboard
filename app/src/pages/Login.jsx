@@ -21,7 +21,7 @@ export default function Login() {
     setLoading(true)
     try {
       await login(form.email, form.password)
-      navigate('/workspaces')
+      navigate('/hub')
     } catch (err) {
       setError(err.message || 'Login failed')
     } finally {

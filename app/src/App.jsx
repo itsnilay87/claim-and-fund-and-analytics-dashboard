@@ -18,6 +18,7 @@ import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import ForgotPassword from './pages/ForgotPassword';
+import Hub from './pages/Hub';
 import WorkspaceHome from './pages/WorkspaceHome';
 import WorkspaceDashboard from './pages/WorkspaceDashboard';
 import Home from './pages/Home';
@@ -86,7 +87,7 @@ function GuestRoute({ children }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-950"><div className="w-8 h-8 border-2 border-teal-500/30 border-t-teal-500 rounded-full animate-spin" /></div>;
-  if (isAuthenticated) return <Navigate to="/workspaces" replace />;
+  if (isAuthenticated) return <Navigate to="/hub" replace />;
   return children;
 }
 
@@ -105,6 +106,12 @@ export default function App() {
         <Route path="/reset-password" element={<GuestRoute><ForgotPassword /></GuestRoute>} />
         <Route path="/forgot" element={<GuestRoute><ForgotPassword /></GuestRoute>} />
       </Route>
+
+      {/* Hub: post-login product picker */}
+      <Route
+        path="/hub"
+        element={<ProtectedRoute><Hub /></ProtectedRoute>}
+      />
 
       {/* Workspace list */}
       <Route

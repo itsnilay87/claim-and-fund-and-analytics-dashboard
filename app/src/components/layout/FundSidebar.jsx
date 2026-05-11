@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
-import { BarChart3, Settings2, Play, History, FlaskConical, FileText, HelpCircle, LogOut, ChevronLeft, ChevronRight } from 'lucide-react'
+import { BarChart3, Settings2, Play, History, FlaskConical, FileText, HelpCircle, LogOut, ChevronLeft, ChevronRight, LayoutGrid } from 'lucide-react'
 import { useState } from 'react'
 import ProductSwitcher from './ProductSwitcher'
 
@@ -31,7 +31,13 @@ export default function FundSidebar() {
       </div>
 
       {/* Product switcher */}
-      <div className="px-2 pt-4 pb-2">
+      <div className="px-2 pt-4 pb-2 space-y-1">
+        <NavLink to="/hub"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
+        >
+          <LayoutGrid size={18} className="flex-shrink-0" />
+          {!collapsed && <span>Home</span>}
+        </NavLink>
         <ProductSwitcher collapsed={collapsed} />
       </div>
 

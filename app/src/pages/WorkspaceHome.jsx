@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import WorkspaceCard from '../components/workspace/WorkspaceCard';
-import { Plus, LogOut, BarChart3, X, Download, UserCircle, Settings } from 'lucide-react';
+import { Plus, LogOut, BarChart3, X, Download, UserCircle, Settings, LayoutGrid } from 'lucide-react';
 import { DEMO_WORKSPACES, importDemoWorkspace } from '../utils/demoLoader';
 
 export default function WorkspaceHome() {
@@ -80,6 +80,13 @@ export default function WorkspaceHome() {
             <span className="text-lg font-bold text-white">Claim Analytics</span>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => navigate('/hub')}
+              className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700 text-sm text-slate-200 hover:bg-slate-800 transition-colors"
+            >
+              <LayoutGrid className="w-4 h-4" /> Home
+            </button>
             <button
               type="button"
               onClick={() => navigate('/account')}
