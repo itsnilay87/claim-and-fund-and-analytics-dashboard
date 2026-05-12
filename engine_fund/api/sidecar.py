@@ -114,31 +114,54 @@ async def get_simulation_status(task_id: str):
     """Poll Celery task progress."""
     result = AsyncResult(task_id, app=celery_app)
 
-    if result.state == "PENDING":
+    # Reading state/info can raise if the result backend has a corrupted or
+    # legacy exception payload (e.g. KeyError: 'exc_type' for tasks killed
+    # mid-run by a container restart). Treat any such failure as a failed
+    # task so the caller can mark the row failed instead of polling 500s
+    # forever.
+    try:
+        state = result.state
+    except Exception as exc:
+        return ProgressResponse(
+            status="failed",
+            progress=0,
+            message=f"Task result unreadable ({type(exc).__name__}); likely killed mid-run.",
+        )
+
+    def _safe_info():
+        try:
+            return result.info or {}
+        except Exception:
+            return {}
+
+    if state == "PENDING":
         return ProgressResponse(status="queued", progress=0, message="Waiting in queue")
-    elif result.state == "STARTED":
-        meta = result.info or {}
+    elif state == "STARTED":
+        meta = _safe_info()
         return ProgressResponse(
             status="running",
             progress=0,
             message=meta.get("message", "Starting..."),
         )
-    elif result.state == "PROGRESS":
-        meta = result.info or {}
+    elif state == "PROGRESS":
+        meta = _safe_info()
         return ProgressResponse(
             status="running",
             progress=meta.get("percent", 0),
             stage=meta.get("message", ""),
             message=meta.get("message", ""),
         )
-    elif result.state == "SUCCESS":
+    elif state == "SUCCESS":
         return ProgressResponse(status="completed", progress=100, message="Done")
-    elif result.state == "FAILURE":
-        meta = result.info or {}
-        msg = str(meta) if not isinstance(meta, dict) else meta.get("message", str(meta))
+    elif state == "FAILURE":
+        meta = _safe_info()
+        if isinstance(meta, dict):
+            msg = meta.get("message", str(meta) or "Task failed")
+        else:
+            msg = str(meta) or "Task failed"
         return ProgressResponse(status="failed", progress=0, message=msg)
     else:
-        return ProgressResponse(status=result.state.lower(), progress=0)
+        return ProgressResponse(status=str(state).lower(), progress=0)
 
 
 @app.get("/fund-api/simulations/{task_id}")
