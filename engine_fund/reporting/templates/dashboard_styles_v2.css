@@ -1,0 +1,725 @@
+/* Dashboard V2 CSS Styles - Blue-dominant color scheme with improved readability */
+
+:root {
+  color-scheme: light dark;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  
+  /* Blue-dominant color palette */
+  --bg: #0a0f1a;
+  --bg-secondary: #0d1526;
+  --card: rgba(30, 58, 138, 0.08);
+  --card-hover: rgba(30, 58, 138, 0.12);
+  --border: rgba(59, 130, 246, 0.15);
+  --border-highlight: rgba(59, 130, 246, 0.3);
+  --text: #f0f4fc;
+  --text-secondary: rgba(240, 244, 252, 0.75);
+  --text-muted: rgba(240, 244, 252, 0.55);
+  
+  /* Blue accent hierarchy */
+  --accent-primary: #3b82f6;
+  --accent-secondary: #60a5fa;
+  --accent-tertiary: #93c5fd;
+  --accent-dark: #1e3a8a;
+  
+  /* Chart colors - blue-based palette */
+  --chart-blue-1: #3b82f6;
+  --chart-blue-2: #60a5fa;
+  --chart-blue-3: #93c5fd;
+  --chart-teal: #22d3ee;
+  --chart-amber: #fbbf24;
+  --chart-red: #f87171;
+  --chart-green: #34d399;
+  --chart-purple: #a78bfa;
+  
+  /* Grid colors */
+  --grid-line: rgba(59, 130, 246, 0.08);
+  --axis-line: rgba(59, 130, 246, 0.25);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0 2rem 4rem;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+header {
+  padding: 2.5rem 0 2rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2rem;
+}
+
+.header-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+
+.logo {
+  flex-shrink: 0;
+}
+
+.logo svg {
+  display: block;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+}
+
+.header-text {
+  flex: 1;
+}
+
+h1 {
+  margin: 0;
+  font-size: 2.4rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+p.description {
+  max-width: 60rem;
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+  margin-top: 0.75rem;
+}
+
+/* Panel styles */
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem 1.75rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(59, 130, 246, 0.05);
+  transition: border-color 0.2s ease;
+}
+
+.panel:hover {
+  border-color: var(--border-highlight);
+}
+
+.panel-wide {
+  margin-bottom: 2rem;
+}
+
+.panel h2 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-secondary);
+}
+
+/* SVG charts - fill container */
+svg {
+  width: 100%;
+  display: block;
+}
+
+/* Resizable chart containers */
+.chart-container {
+  position: relative;
+  overflow: auto;
+  resize: vertical;
+  min-height: 250px;
+  max-height: 1200px;
+}
+
+.chart-container svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.chart-container::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50px;
+  height: 5px;
+  background: var(--border);
+  border-radius: 3px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.chart-container:hover::after {
+  background: var(--accent-primary);
+  opacity: 0.7;
+}
+
+/* Default heights for non-container SVGs */
+#alpha-cashflow-chart:not(.chart-container svg) {
+  height: 500px;
+}
+
+#j-curve-chart:not(.chart-container svg) {
+  height: 450px;
+}
+
+#nav-comparison:not(.chart-container svg) {
+  height: 400px;
+}
+
+#irr-histogram:not(.chart-container svg) {
+  height: 380px;
+}
+
+/* Grouped key-value tables */
+.grouped-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.grouped-table .group-header {
+  background: rgba(59, 130, 246, 0.12);
+  border-top: 2px solid var(--accent-primary);
+}
+
+.grouped-table .group-header td {
+  padding: 0.6rem 1rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-secondary);
+}
+
+.grouped-table tbody tr:not(.group-header):nth-child(even) {
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.grouped-table td {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.08);
+  vertical-align: top;
+}
+
+.grouped-table td.key {
+  font-weight: 500;
+  width: 40%;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.grouped-table td.value {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Stats table */
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.stats-table thead {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.stats-table th {
+  padding: 0.65rem 0.75rem;
+  text-align: right;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent-secondary);
+  border-bottom: 2px solid var(--accent-primary);
+}
+
+.stats-table td {
+  padding: 0.55rem 0.75rem;
+  text-align: right;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.08);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-table th.metric,
+.stats-table td.metric {
+  text-align: left;
+  width: 22%;
+}
+
+.stats-table tbody tr:nth-child(even) {
+  background: rgba(59, 130, 246, 0.04);
+}
+
+/* Distribution controls */
+.distribution-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.distribution-controls label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.distribution-controls select {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.85rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.distribution-controls select:hover {
+  border-color: var(--border-highlight);
+}
+
+.distribution-controls select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.distribution-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.75rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.distribution-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.distribution-legend .marker {
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  display: inline-block;
+}
+
+/* Chart legends */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend .swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+/* Footer */
+.footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Tooltip styles */
+.chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(13, 21, 38, 0.95);
+  border: 1px solid var(--accent-primary);
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.82rem;
+  color: var(--text);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  max-width: 280px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.chart-tooltip.visible {
+  opacity: 1;
+}
+
+.chart-tooltip .tooltip-title {
+  font-weight: 600;
+  color: var(--accent-secondary);
+  margin-bottom: 0.35rem;
+}
+
+.chart-tooltip .tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.chart-tooltip .tooltip-row .label {
+  color: var(--text-secondary);
+}
+
+.chart-tooltip .tooltip-row .value {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Cursor tracker lines */
+.cursor-line {
+  stroke: var(--accent-primary);
+  stroke-width: 1;
+  stroke-dasharray: 4, 3;
+  opacity: 0.6;
+}
+
+.cursor-circle {
+  fill: var(--accent-primary);
+  stroke: var(--bg);
+  stroke-width: 2;
+}
+
+/* Cursor value label */
+.cursor-value-label {
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* Axis styling overrides */
+.axis-label {
+  font-size: 11px;
+  fill: var(--text-muted);
+}
+
+.tick line {
+  stroke: var(--grid-line);
+}
+
+.tick text {
+  fill: var(--text-secondary);
+  font-size: 11px;
+}
+
+.domain {
+  stroke: var(--axis-line);
+}
+
+/* Grid lines */
+.grid-line {
+  stroke: var(--grid-line);
+  stroke-dasharray: 2, 4;
+}
+
+/* Zero line styling */
+.zero-line {
+  stroke: var(--axis-line);
+  stroke-width: 1.5;
+  stroke-dasharray: 6, 4;
+}
+
+/* ========================================
+   KPI Cards Section
+   ======================================== */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.kpi-card {
+  background: linear-gradient(135deg, rgba(30, 58, 138, 0.15) 0%, rgba(59, 130, 246, 0.08) 100%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  text-align: center;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-highlight);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.15);
+}
+
+.kpi-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.kpi-value {
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.kpi-sublabel {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* KPI value states */
+.kpi-value.positive {
+  background: linear-gradient(135deg, var(--chart-green), #10b981);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.kpi-value.negative {
+  background: linear-gradient(135deg, var(--chart-red), #ef4444);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ========================================
+   Collapsible Sections
+   ======================================== */
+.panel.collapsible h2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+.panel.collapsible h2 .section-title {
+  flex: 1;
+}
+
+.collapse-toggle {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.collapse-toggle:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: var(--border-highlight);
+  color: var(--accent-secondary);
+}
+
+.collapse-icon {
+  transition: transform 0.25s ease;
+}
+
+/* Collapsed state */
+.panel.collapsed .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+.panel.collapsed > *:not(h2) {
+  display: none;
+}
+
+.panel.collapsed {
+  padding-bottom: 1rem;
+}
+
+/* ========================================
+   Print Styles
+   ======================================== */
+@media print {
+  :root {
+    --bg: #ffffff;
+    --bg-secondary: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --accent-primary: #2563eb;
+    --accent-secondary: #3b82f6;
+  }
+
+  body {
+    background: white;
+    color: black;
+    padding: 0.5rem;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  header {
+    padding: 1rem 0;
+    margin-bottom: 1rem;
+    page-break-after: avoid;
+  }
+
+  h1 {
+    font-size: 1.8rem;
+    color: var(--accent-primary);
+    background: none;
+    -webkit-text-fill-color: var(--accent-primary);
+  }
+
+  /* Expand all collapsed sections */
+  .panel.collapsed > *:not(h2) {
+    display: block !important;
+  }
+
+  .panel.collapsed {
+    padding-bottom: 1.75rem !important;
+  }
+
+  .collapse-toggle {
+    display: none !important;
+  }
+
+  /* KPI cards print styling */
+  .kpi-grid {
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .kpi-card {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    padding: 0.75rem;
+  }
+
+  .kpi-card::before {
+    background: var(--accent-primary);
+  }
+
+  .kpi-value {
+    font-size: 1.4rem;
+    color: var(--accent-primary);
+    background: none;
+    -webkit-text-fill-color: var(--accent-primary);
+  }
+
+  .kpi-value.positive {
+    color: #059669;
+    -webkit-text-fill-color: #059669;
+  }
+
+  .kpi-value.negative {
+    color: #dc2626;
+    -webkit-text-fill-color: #dc2626;
+  }
+
+  /* Panel print styling */
+  .panel {
+    background: white;
+    border: 1px solid #e2e8f0;
+    box-shadow: none;
+    margin-bottom: 1rem;
+    page-break-inside: avoid;
+  }
+
+  .panel h2 {
+    color: var(--accent-primary);
+  }
+
+  /* Chart container print styling */
+  .chart-container {
+    resize: none !important;
+    height: auto !important;
+    min-height: 280px;
+    max-height: 400px;
+  }
+
+  .chart-container::after {
+    display: none;
+  }
+
+  /* Hide interactive elements */
+  .chart-tooltip,
+  .cursor-line,
+  .cursor-circle,
+  .cursor-value-label {
+    display: none !important;
+  }
+
+  /* Tables print styling */
+  .grouped-table td,
+  .stats-table td,
+  .stats-table th {
+    border-color: #e2e8f0;
+  }
+
+  .grouped-table .group-header {
+    background: #f1f5f9;
+    border-top-color: var(--accent-primary);
+  }
+
+  /* Legends */
+  .legend,
+  .distribution-legend {
+    font-size: 0.75rem;
+  }
+
+  /* Footer */
+  .footer {
+    border-top-color: #e2e8f0;
+    page-break-before: avoid;
+  }
+
+  /* Page breaks */
+  .panel-wide:nth-child(4),
+  .panel-wide:nth-child(7) {
+    page-break-before: always;
+  }
+
+  /* Hide distribution controls in print */
+  .distribution-controls select {
+    border: 1px solid #cbd5e1;
+    background: white;
+  }
+}

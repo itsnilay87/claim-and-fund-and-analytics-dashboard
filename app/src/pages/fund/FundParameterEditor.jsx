@@ -56,7 +56,7 @@ export default function FundParameterEditor() {
   const [activeRunId, setActiveRunId] = useState(null)
   const [runError, setRunError] = useState(null)
 
-  const { status: runStatus, progress: runProgress, stage: runStage, isTerminal: runTerminal } =
+  const { status: runStatus, progress: runProgress, stage: runStage, message: runMessage, isTerminal: runTerminal } =
     useFundSimulationPolling(activeRunId, { enabled: !!activeRunId })
 
   useEffect(() => {
@@ -310,7 +310,7 @@ export default function FundParameterEditor() {
               {activeRunId && runTerminal && runStatus === 'failed' && (
                 <div className="text-center py-4 space-y-3">
                   <p className="text-red-500 text-sm font-medium">Simulation failed.</p>
-                  <p className="text-xs text-slate-400">{runStage || storeError || 'See logs for details.'}</p>
+                  <p className="text-xs text-slate-400">{runStage || runMessage || storeError || 'See logs for details.'}</p>
                 </div>
               )}
             </div>
