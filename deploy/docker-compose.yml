@@ -49,6 +49,11 @@ services:
     volumes:
       - runs-data:/app/server/runs
     restart: unless-stopped
+    # Give supervisord up to 4 minutes to drain the celery worker on
+    # SIGTERM (its stopwaitsecs=180), so in-flight simulations either
+    # finish or get re-queued cleanly via task_acks_late instead of being
+    # SIGKILLed and orphaned.
+    stop_grace_period: 240s
     depends_on:
       db:
         condition: service_healthy

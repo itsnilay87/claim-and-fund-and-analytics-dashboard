@@ -18,7 +18,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .celery_app import celery_app
-from .celery_tasks import run_case_simulation, run_simulation_task
+from .celery_tasks import (
+    HEARTBEAT_KEY_PREFIX,
+    HEARTBEAT_TTL_SECONDS,
+    run_case_simulation,
+    run_simulation_task,
+)
 from .schemas import SimulationInput
 
 app = FastAPI(
@@ -83,6 +88,78 @@ async def health_check():
 
     all_ok = all(v in ("ok", "busy") for v in checks.values())
     return {"status": "ok" if all_ok else "degraded", **checks}
+
+
+# ── Internal: liveness of in-flight tasks (used by Node reaper) ────────────
+
+
+@app.get("/fund-api/_internal/active-tasks")
+async def internal_active_tasks():
+    """Return celery-known live task IDs and Redis heartbeat IDs.
+
+    Consumed by the Node-side reaper to decide whether a `running`/`queued`
+    DB row corresponds to a task that is still alive. Trusts the sidecar's
+    network position (loopback only via supervisord). NOT exposed externally
+    by the nginx config.
+    """
+    active_ids: set[str] = set()
+    reserved_ids: set[str] = set()
+    scheduled_ids: set[str] = set()
+    inspect_ok = False
+
+    try:
+        inspect = celery_app.control.inspect(timeout=2)
+        active = inspect.active() or {}
+        reserved = inspect.reserved() or {}
+        scheduled = inspect.scheduled() or {}
+        for tasks in active.values():
+            for t in tasks:
+                if t.get("id"):
+                    active_ids.add(t["id"])
+        for tasks in reserved.values():
+            for t in tasks:
+                if t.get("id"):
+                    reserved_ids.add(t["id"])
+        for tasks in scheduled.values():
+            for t in tasks:
+                request = t.get("request") if isinstance(t, dict) else None
+                tid = (request or t).get("id") if isinstance(request or t, dict) else None
+                if tid:
+                    scheduled_ids.add(tid)
+        inspect_ok = True
+    except Exception:
+        # During long solo-worker runs, ping/inspect may time out. The
+        # heartbeat list below remains the authoritative liveness signal.
+        inspect_ok = False
+
+    heartbeat_ids: List[str] = []
+    try:
+        import redis as redis_lib
+
+        r = redis_lib.from_url(
+            os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+            socket_timeout=2,
+            socket_connect_timeout=2,
+        )
+        cursor = 0
+        while True:
+            cursor, keys = r.scan(cursor=cursor, match=f"{HEARTBEAT_KEY_PREFIX}*", count=200)
+            for k in keys:
+                key_str = k.decode() if isinstance(k, (bytes, bytearray)) else str(k)
+                heartbeat_ids.append(key_str[len(HEARTBEAT_KEY_PREFIX):])
+            if cursor == 0:
+                break
+    except Exception:
+        pass
+
+    return {
+        "inspect_ok": inspect_ok,
+        "active": sorted(active_ids),
+        "reserved": sorted(reserved_ids),
+        "scheduled": sorted(scheduled_ids),
+        "heartbeats": heartbeat_ids,
+        "heartbeat_ttl_seconds": HEARTBEAT_TTL_SECONDS,
+    }
 
 
 # ── Simulations ─────────────────────────────────────────────

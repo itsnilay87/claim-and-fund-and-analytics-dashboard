@@ -53,6 +53,7 @@ const { listRuns } = require('./services/simulationRunner');
 const { pool } = require('./db/pool');
 const { runMigrations } = require('./db/migrate');
 const RefreshToken = require('./db/models/RefreshToken');
+const { startFundReaper } = require('./services/fundReaper');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -225,6 +226,11 @@ if (process.env.NODE_ENV !== 'test') app.listen(PORT, () => {
       console.warn('[Cleanup] Failed to purge expired tokens:', err.message);
     }
   }, 60 * 60 * 1000);
+
+  // Fund simulation orphan reaper — recovers rows whose Celery worker died
+  // (deploy, OOM, SIGKILL). Idempotent and fail-safe (no-ops if the sidecar
+  // is unreachable, so we never falsely fail an in-flight run).
+  startFundReaper();
 });
 
 // ── Unhandled rejection / exception safety net ──

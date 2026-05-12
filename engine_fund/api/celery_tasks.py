@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import math
+import os
 import shutil
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
@@ -18,25 +20,90 @@ from .schemas import SimulationStatus
 from ..storage.factory import get_storage_backend
 
 
+logger = logging.getLogger(__name__)
+
+
+# ── Heartbeat infrastructure ───────────────────────────────────────────────
+# A worker writes a short-TTL key to Redis on every progress update. The Node
+# reaper checks whether this key exists; if a row in `fund_simulations` is
+# `running`/`queued` for more than the TTL with no heartbeat AND the celery
+# task isn't in the broker's active/reserved set, the row is marked `failed`.
+# This is what catches tasks killed by SIGKILL / container recreate.
+
+HEARTBEAT_KEY_PREFIX = "fund:hb:"
+HEARTBEAT_TTL_SECONDS = 180  # 3 minutes — must comfortably exceed reaper cadence
+
+_redis_client = None
+
+
+def _get_redis():
+    """Lazy Redis client — uses the same broker/result URL as Celery."""
+    global _redis_client
+    if _redis_client is None:
+        try:
+            import redis as redis_lib
+
+            _redis_client = redis_lib.from_url(
+                os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+                socket_timeout=2,
+                socket_connect_timeout=2,
+                socket_keepalive=True,
+            )
+        except Exception as exc:  # pragma: no cover — defensive
+            logger.warning("Heartbeat Redis client unavailable: %s", exc)
+            _redis_client = False  # sentinel: tried & failed
+    return _redis_client or None
+
+
+def _heartbeat(task_id: str, payload: Optional[Dict[str, Any]] = None) -> None:
+    """Refresh the heartbeat key for a task. Never raises."""
+    if not task_id:
+        return
+    client = _get_redis()
+    if client is None:
+        return
+    try:
+        body = json.dumps({"ts": datetime.now(tz=__import__("datetime").timezone.utc).isoformat(), **(payload or {})})
+        client.set(HEARTBEAT_KEY_PREFIX + task_id, body, ex=HEARTBEAT_TTL_SECONDS)
+    except Exception as exc:  # pragma: no cover — defensive
+        logger.debug("Heartbeat write failed for %s: %s", task_id, exc)
+
+
+def _heartbeat_clear(task_id: str) -> None:
+    """Remove the heartbeat key on terminal state. Never raises."""
+    if not task_id:
+        return
+    client = _get_redis()
+    if client is None:
+        return
+    try:
+        client.delete(HEARTBEAT_KEY_PREFIX + task_id)
+    except Exception:
+        pass
+
+
 class SimulationProgressTask(Task):
     """Custom task class with progress callback support."""
 
     def update_progress(self, current: int, total: int, message: str = "") -> None:
-        """Update task progress state."""
+        """Update task progress state and refresh the Redis heartbeat."""
         if total > 0:
             percent = int((current / total) * 100)
         else:
             percent = 0
 
-        self.update_state(
-            state="PROGRESS",
-            meta={
-                "current": current,
-                "total": total,
-                "percent": percent,
-                "message": message,
-            },
-        )
+        meta = {
+            "current": current,
+            "total": total,
+            "percent": percent,
+            "message": message,
+        }
+        self.update_state(state="PROGRESS", meta=meta)
+        # Best-effort heartbeat — never let a Redis blip kill a long sim.
+        try:
+            _heartbeat(self.request.id, {"percent": percent, "message": message})
+        except Exception:
+            pass
 
 
 def apply_funding_profile(inputs: dict, profile: str) -> dict:
@@ -140,7 +207,10 @@ def run_simulation_task(
     try:
         # Get Celery's auto-generated task ID
         task_id = self.request.id
-        
+
+        # Initial heartbeat — proves the worker actually picked up the task.
+        _heartbeat(task_id, {"percent": 0, "message": "Initializing simulation..."})
+
         # Update state to running
         self.update_state(state="STARTED", meta={"message": "Initializing simulation..."})
 
@@ -415,6 +485,10 @@ def run_simulation_task(
         error_msg = f"Simulation failed: {str(e)}"
         self.update_state(state="FAILURE", meta={"message": error_msg, "error": str(e)})
         raise
+    finally:
+        # Always clear heartbeat on terminal state so the reaper doesn't
+        # see a stale key for a task that has already finished.
+        _heartbeat_clear(self.request.id)
 
 
 @celery_app.task(bind=True, base=SimulationProgressTask, name="run_case_simulation")
@@ -438,6 +512,7 @@ def run_case_simulation(self, case_parameters: Dict[str, Any]) -> Dict[str, Any]
     """
     try:
         task_id = self.request.id
+        _heartbeat(task_id, {"percent": 0, "message": "Initializing case simulation..."})
         self.update_state(state="STARTED", meta={"message": "Initializing case simulation..."})
         
         # Import dependencies
@@ -610,3 +685,5 @@ def run_case_simulation(self, case_parameters: Dict[str, Any]) -> Dict[str, Any]
         error_msg = f"Case simulation failed: {str(e)}"
         self.update_state(state="FAILURE", meta={"message": error_msg, "error": str(e)})
         raise
+    finally:
+        _heartbeat_clear(self.request.id)
